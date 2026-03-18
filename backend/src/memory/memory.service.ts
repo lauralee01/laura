@@ -61,9 +61,7 @@ export class MemoryService implements OnModuleDestroy {
       `,
       [input.userId, content, embeddingVectorLiteral]
     );
-    console.log('res-writeMemory', res);
-    // For a bigserial primary key, pg typically returns a number-like value.
-    // If this ever returns a string in your environment, we can normalize it.
+
     return Number(res.rows[0]?.id);
   }
 
