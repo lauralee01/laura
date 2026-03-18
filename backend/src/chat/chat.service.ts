@@ -15,4 +15,3 @@ export class ChatService {
     return this.llmService.generate({ systemPrompt, userMessage: message });
   }
 }
-

@@ -5,6 +5,19 @@ type GenerateInput = {
   userMessage: string;
 };
 
+type GeminiGenerateResponse = {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{
+        text?: string;
+        inlineData?: {
+          data?: string;
+        };
+      }>;
+    };
+  }>;
+};
+
 @Injectable()
 export class LlmService {
   async generate(input: GenerateInput): Promise<string> {
@@ -62,10 +75,17 @@ export class LlmService {
       );
     }
 
-    const json = (await res.json()) as any;
+    // `res.json()` returns `unknown` at runtime; we validate minimally
+    // by checking it's an object, then safely read optional fields.
+    const jsonUnknown: unknown = await res.json();
+    if (typeof jsonUnknown !== 'object' || jsonUnknown === null) {
+      throw new Error('Gemini API returned an unexpected response shape');
+    }
+
+    const json = jsonUnknown as GeminiGenerateResponse;
     const reply =
-      json?.candidates?.[0]?.content?.parts?.[0]?.text ??
-      json?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      json.candidates?.[0]?.content?.parts?.[0]?.text ??
+      json.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
 
     return String(reply ?? 'Sorry—no response generated.');
   }
