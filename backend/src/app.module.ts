@@ -3,11 +3,12 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ChatModule } from './chat/chat.module';
 import { ConfigModule } from '@nestjs/config';
+import { MemoryModule } from './memory/memory.module';
 
 @Module({
   // Loads `backend/.env` into `process.env` for the whole application.
   // `isGlobal: true` means we don't need to import ConfigModule in every feature module.
-  imports: [ConfigModule.forRoot({ isGlobal: true }), ChatModule],
+  imports: [ConfigModule.forRoot({ isGlobal: true }), ChatModule, MemoryModule],
   controllers: [AppController],
   providers: [AppService],
 })

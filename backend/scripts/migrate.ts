@@ -1,8 +1,13 @@
+import dotenv from 'dotenv';
 import { Pool } from 'pg';
 import * as fs from 'fs';
 import * as path from 'path';
 
 async function main(): Promise<void> {
+  // Load `backend/.env` when running this script directly (outside NestJS).
+  // This prevents "DATABASE_URL is missing" surprises.
+  dotenv.config({ path: path.join(process.cwd(), '.env') });
+
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
     throw new Error('DATABASE_URL is missing. Set it in backend/.env');
@@ -16,7 +21,6 @@ async function main(): Promise<void> {
       .readdirSync(migrationsDir)
       .filter((f) => f.endsWith('.sql'))
       .sort();
-    console.log('files', files);
 
     if (files.length === 0) {
       console.log('No SQL migrations found in backend/migrations');
