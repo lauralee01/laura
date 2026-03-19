@@ -47,9 +47,7 @@ export class MemoryService implements OnModuleDestroy {
       content,
       'RETRIEVAL_DOCUMENT'
     );
-    console.log('embeddingValues', embeddingValues);
     const embeddingVectorLiteral = this.toVectorLiteral(embeddingValues);
-    console.log('embeddingVectorLiteral', embeddingVectorLiteral);
 
     const res = await this.pool.query<{
       id: number;
