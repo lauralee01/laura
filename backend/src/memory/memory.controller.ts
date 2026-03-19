@@ -53,6 +53,7 @@ export class MemoryController {
       topK,
     });
 
+    console.log('results-search', results);
     return { results };
   }
 }

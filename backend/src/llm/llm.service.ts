@@ -58,7 +58,9 @@ export class LlmService {
         },
       ],
       generationConfig: {
+        // how creative the model is
         temperature: 0.4,
+        // max number of tokens to generate (how long the response is)
         maxOutputTokens: 900,
       },
     };
@@ -75,8 +77,6 @@ export class LlmService {
       );
     }
 
-    // `res.json()` returns `unknown` at runtime; we validate minimally
-    // by checking it's an object, then safely read optional fields.
     const jsonUnknown: unknown = await res.json();
     if (typeof jsonUnknown !== 'object' || jsonUnknown === null) {
       throw new Error('Gemini API returned an unexpected response shape');
