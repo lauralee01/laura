@@ -35,7 +35,6 @@ export class MemoryController {
       userId: body.userId,
       content: body.content,
     });
-    console.log('id-write', id);
     return { id };
   }
 

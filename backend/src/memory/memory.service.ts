@@ -73,9 +73,7 @@ export class MemoryService implements OnModuleDestroy {
       queryText,
       'RETRIEVAL_QUERY'
     );
-    console.log('embeddingValues-searchMemories', embeddingValues);
     const embeddingVectorLiteral = this.toVectorLiteral(embeddingValues);
-    console.log('embeddingVectorLiteral-searchMemories', embeddingVectorLiteral);
 
     const res = await this.pool.query<{
       id: number;
@@ -96,7 +94,6 @@ export class MemoryService implements OnModuleDestroy {
       `,
       [embeddingVectorLiteral, input.userId, input.topK]
     );
-    console.log('res-searchMemories', res);
 
     return res.rows.map((r) => ({
       id: Number(r.id),

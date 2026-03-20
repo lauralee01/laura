@@ -47,7 +47,6 @@ export class ChatService {
         const memoryContext = memories
           .map((m) => `- ${m.content}`)
           .join('\n');
-        console.log('memoryContext', memoryContext);
 
         systemPrompt =
           systemBasePrompt +
@@ -55,7 +54,6 @@ export class ChatService {
           memoryContext +
           '\n\nWhen generating your reply, follow these constraints exactly. ' +
           'If a requested detail conflicts with a constraint, ask a clarifying question.';
-        console.log('systemPrompt', systemPrompt);
       } else {
         systemPrompt =
           systemBasePrompt +

@@ -23,7 +23,6 @@ async function main(): Promise<void> {
       .sort();
 
     if (files.length === 0) {
-      console.log('No SQL migrations found in backend/migrations');
       return;
     }
 
@@ -32,7 +31,6 @@ async function main(): Promise<void> {
     for (const file of files) {
       const fullPath = path.join(migrationsDir, file);
       const sql = fs.readFileSync(fullPath, 'utf8');
-      console.log(`Running migration: ${file}`);
       await pool.query(sql);
     }
 

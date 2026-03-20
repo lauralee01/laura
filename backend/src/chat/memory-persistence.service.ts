@@ -17,7 +17,6 @@ export class MemoryPersistenceService {
     // We intentionally ignore extraction failures so chat remains robust.
     try {
       const memoriesToWrite = await this.extractMemoriesToWrite(message);
-      console.log('memoriesToWrite', memoriesToWrite);
 
       const uniqueCandidates = Array.from(
         new Set(memoriesToWrite.map((m) => m.trim()).filter((m) => m.length > 0))
@@ -38,7 +37,6 @@ export class MemoryPersistenceService {
   }
 
   private async extractMemoriesToWrite(latestUserMessage: string): Promise<string[]> {
-    console.log('latestUserMessage', latestUserMessage);
     const extractionSystemPrompt = `
 You are a memory extraction assistant for laura.
 
