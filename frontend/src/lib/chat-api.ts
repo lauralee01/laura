@@ -18,6 +18,12 @@ export type ChatHistoryResponse = {
   messages: StoredChatMessage[];
 };
 
+export type ConversationSummary = {
+  id: string;
+  updatedAt: string;
+  preview: string;
+};
+
 /**
  * Calls `POST /chat` on the NestJS backend.
  *
@@ -75,14 +81,20 @@ export async function sendChatMessage(input: {
 }
 
 export async function fetchChatHistory(
-  sessionId: string
+  sessionId: string,
+  conversationId?: string
 ): Promise<ChatHistoryResponse> {
   const sid = sessionId.trim();
   if (!sid) {
     return { messages: [] };
   }
 
-  const url = `${getApiBaseUrl()}/chat/history?sessionId=${encodeURIComponent(sid)}`;
+  const cid = conversationId?.trim();
+  const params = new URLSearchParams({ sessionId: sid });
+  if (cid) {
+    params.set('conversationId', cid);
+  }
+  const url = `${getApiBaseUrl()}/chat/history?${params.toString()}`;
   const res = await fetch(url, { method: 'GET' });
   const rawText = await res.text();
   if (!res.ok) {
@@ -118,10 +130,102 @@ export async function fetchChatHistory(
   }
 
   const conversationIdRaw = (data as { conversationId?: unknown }).conversationId;
-  const conversationId =
+  const conversationIdFromResponse =
     typeof conversationIdRaw === 'string' && conversationIdRaw.trim()
       ? conversationIdRaw
       : undefined;
 
-  return { conversationId, messages: out };
+  return { conversationId: conversationIdFromResponse, messages: out };
+}
+
+export async function fetchConversations(
+  sessionId: string
+): Promise<ConversationSummary[]> {
+  const sid = sessionId.trim();
+  if (!sid) {
+    return [];
+  }
+
+  const url = `${getApiBaseUrl()}/chat/conversations?sessionId=${encodeURIComponent(sid)}`;
+  const res = await fetch(url, { method: 'GET' });
+  const rawText = await res.text();
+  if (!res.ok) {
+    throw new Error(
+      `Conversations request failed (${res.status}). ${rawText ? rawText.slice(0, 200) : ''}`
+    );
+  }
+
+  let data: unknown;
+  try {
+    data = JSON.parse(rawText) as unknown;
+  } catch {
+    throw new Error('Conversations response was not valid JSON.');
+  }
+
+  if (typeof data !== 'object' || data === null) {
+    throw new Error('Conversations response was not an object.');
+  }
+
+  const list = (data as { conversations?: unknown }).conversations;
+  const out: ConversationSummary[] = [];
+  if (!Array.isArray(list)) {
+    return [];
+  }
+
+  for (const item of list) {
+    if (typeof item !== 'object' || item === null) {
+      continue;
+    }
+    const id = (item as { id?: unknown }).id;
+    const updatedAt = (item as { updatedAt?: unknown }).updatedAt;
+    const preview = (item as { preview?: unknown }).preview;
+    if (
+      typeof id === 'string' &&
+      typeof updatedAt === 'string' &&
+      typeof preview === 'string'
+    ) {
+      out.push({ id, updatedAt, preview });
+    }
+  }
+
+  return out;
+}
+
+export async function createConversation(sessionId: string): Promise<string> {
+  const sid = sessionId.trim();
+  if (!sid) {
+    throw new Error('sessionId is required');
+  }
+
+  const url = `${getApiBaseUrl()}/chat/conversations`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionId: sid }),
+  });
+
+  const rawText = await res.text();
+  if (!res.ok) {
+    throw new Error(
+      `Create conversation failed (${res.status}). ${rawText ? rawText.slice(0, 200) : ''}`
+    );
+  }
+
+  let data: unknown;
+  try {
+    data = JSON.parse(rawText) as unknown;
+  } catch {
+    throw new Error('Create conversation response was not valid JSON.');
+  }
+
+  if (typeof data !== 'object' || data === null) {
+    throw new Error('Create conversation response was not an object.');
+  }
+
+  const cid = (data as { conversationId?: unknown }).conversationId;
+  if (typeof cid !== 'string' || !cid.trim()) {
+    throw new Error('Missing conversationId in response.');
+  }
+
+  return cid.trim();
 }

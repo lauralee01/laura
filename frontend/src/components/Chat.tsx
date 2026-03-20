@@ -8,40 +8,132 @@ import {
   useState,
   type FormEvent,
 } from 'react';
-import { fetchChatHistory, sendChatMessage } from '@/lib/chat-api';
 import {
-  getOrCreateSessionId,
-  rotateSessionId,
-  type StoredChatMessage,
-} from '@/lib/session';
+  createConversation,
+  fetchChatHistory,
+  fetchConversations,
+  sendChatMessage,
+  type ConversationSummary,
+} from '@/lib/chat-api';
+import { getOrCreateSessionId, type StoredChatMessage } from '@/lib/session';
 import { LauraMark } from '@/components/LauraMark';
 
+function formatChatDate(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+    });
+  } catch {
+    return '';
+  }
+}
+
+function SidebarContent(props: {
+  conversations: ConversationSummary[];
+  activeId: string | undefined;
+  onSelect: (id: string) => void;
+  onNewChat: () => void;
+  disabled: boolean;
+}) {
+  const { conversations, activeId, onSelect, onNewChat, disabled } = props;
+
+  return (
+    <>
+      <div className="flex items-center justify-between gap-2 px-3 py-3">
+        <span className="text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+          Chats
+        </span>
+        <button
+          type="button"
+          onClick={onNewChat}
+          disabled={disabled}
+          className="rounded-lg p-2 text-zinc-600 transition hover:bg-zinc-200/80 hover:text-zinc-900 disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          aria-label="New chat"
+        >
+          <svg
+            className="h-5 w-5"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            aria-hidden
+          >
+            <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+          </svg>
+        </button>
+      </div>
+      <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+        <ul className="flex flex-col gap-0.5">
+          {conversations.map((c) => {
+            const active = c.id === activeId;
+            return (
+              <li key={c.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelect(c.id)}
+                  className={`flex w-full flex-col gap-0.5 rounded-lg px-3 py-2.5 text-left text-sm transition ${
+                    active
+                      ? 'bg-zinc-200/90 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50'
+                      : 'text-zinc-700 hover:bg-zinc-200/50 dark:text-zinc-300 dark:hover:bg-zinc-800/60'
+                  }`}
+                >
+                  <span className="line-clamp-2 font-medium leading-snug">
+                    {c.preview}
+                  </span>
+                  <span className="text-[11px] text-zinc-500 dark:text-zinc-500">
+                    {formatChatDate(c.updatedAt)}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+    </>
+  );
+}
 
 export function Chat() {
   const [sessionId, setSessionId] = useState('');
   const [conversationId, setConversationId] = useState<string | undefined>();
+  const [conversations, setConversations] = useState<ConversationSummary[]>(
+    []
+  );
   const [messages, setMessages] = useState<StoredChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  // Session id in localStorage; messages only from backend (Postgres).
+  const reloadSidebar = useCallback(async (sid: string) => {
+    try {
+      const list = await fetchConversations(sid);
+      setConversations(list);
+    } catch {
+      /* keep existing list */
+    }
+  }, []);
+
   useEffect(() => {
     const sid = getOrCreateSessionId();
     setSessionId(sid);
     setMessages([]);
     setInitializing(true);
     setError(null);
-    fetchChatHistory(sid)
-      .then((data) => {
-        setMessages(data.messages);
-        setConversationId(data.conversationId);
+
+    Promise.all([fetchConversations(sid), fetchChatHistory(sid)])
+      .then(([convs, hist]) => {
+        setConversations(convs);
+        setMessages(hist.messages);
+        setConversationId(hist.conversationId);
       })
       .catch(() => {
         setMessages([]);
-        setError('Could not load chat history. Is the API running?');
+        setError('Could not load data. Is the API running?');
       })
       .finally(() => {
         setInitializing(false);
@@ -50,16 +142,56 @@ export function Chat() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, loading]);
+  }, [messages, loading, initializing]);
 
-  const handleNewChat = useCallback(() => {
-    const sid = rotateSessionId();
-    setSessionId(sid);
-    setConversationId(undefined);
-    setMessages([]);
-    setError(null);
-    setInput('');
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSidebarOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  const openThread = useCallback(
+    async (id: string) => {
+      if (!sessionId) {
+        return;
+      }
+      setInitializing(true);
+      setError(null);
+      setConversationId(id);
+      try {
+        const hist = await fetchChatHistory(sessionId, id);
+        setMessages(hist.messages);
+        setConversationId(hist.conversationId ?? id);
+      } catch {
+        setError('Could not load this chat.');
+      } finally {
+        setInitializing(false);
+      }
+    },
+    [sessionId]
+  );
+
+  const handleNewChat = useCallback(async () => {
+    if (!sessionId || loading) {
+      return;
+    }
+    setError(null);
+    setSidebarOpen(false);
+    try {
+      const id = await createConversation(sessionId);
+      setConversationId(id);
+      setMessages([]);
+      await reloadSidebar(sessionId);
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : 'Could not start a new chat.'
+      );
+    }
+  }, [loading, reloadSidebar, sessionId]);
 
   const handleSubmit = useCallback(
     async (e: FormEvent) => {
@@ -83,7 +215,10 @@ export function Chat() {
         });
         setConversationId(idFromSend ?? conversationId);
         try {
-          const refreshed = await fetchChatHistory(sessionId);
+          const refreshed = await fetchChatHistory(
+            sessionId,
+            idFromSend ?? conversationId
+          );
           setMessages(refreshed.messages);
           setConversationId(
             refreshed.conversationId ?? idFromSend ?? conversationId
@@ -97,18 +232,18 @@ export function Chat() {
             { role: 'assistant', content: reply },
           ]);
         }
+        await reloadSidebar(sessionId);
       } catch (err) {
         const msg =
           err instanceof Error ? err.message : 'Something went wrong.';
         setError(msg);
-        // Remove the optimistic user message if the request failed completely
         setMessages((prev) => prev.slice(0, -1));
         setInput(text);
       } finally {
         setLoading(false);
       }
     },
-    [conversationId, input, loading, sessionId]
+    [conversationId, input, loading, reloadSidebar, sessionId]
   );
 
   const showThinking = useMemo(
@@ -116,100 +251,182 @@ export function Chat() {
     [initializing, loading]
   );
 
+  const sidebarProps = {
+    conversations,
+    activeId: conversationId,
+    onSelect: (id: string) => {
+      void openThread(id);
+      setSidebarOpen(false);
+    },
+    onNewChat: () => {
+      void handleNewChat();
+    },
+    disabled: loading || !sessionId,
+  };
+
   return (
-    <div className="flex h-[100dvh] flex-col bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50">
-      <header className="flex shrink-0 items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-        <div className="flex items-center gap-3">
+    <div className="flex h-[100dvh] bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
+      {/* Desktop sidebar */}
+      <aside className="hidden w-[min(100%,18rem)] shrink-0 flex-col border-r border-zinc-200/80 bg-zinc-100/90 dark:border-zinc-800/80 dark:bg-zinc-950 md:flex">
+        <div className="flex items-center gap-2 border-b border-zinc-200/80 px-4 py-3 dark:border-zinc-800/80">
           <LauraMark className="h-7 w-7 shrink-0" />
-          <h1 className="text-lg font-semibold tracking-tight">laura</h1>
+          <span className="font-semibold tracking-tight">laura</span>
         </div>
-        <button
-          type="button"
-          onClick={handleNewChat}
-          className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-900"
+        <SidebarContent {...sidebarProps} />
+      </aside>
+
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-50 md:hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Chat history"
         >
-          New chat
-        </button>
-      </header>
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        {messages.length === 0 && !showThinking && (
-          <p className="mx-auto p-6 text-center text-sm text-zinc-600 dark:text-zinc-300">
-            Start a conversation
-          </p>
-        )}
-
-        <ul className="mx-auto flex max-w-3xl flex-col gap-3">
-          {messages.map((m, i) => (
-            <li
-              key={`${i}-${m.role}-${m.content.slice(0, 12)}`}
-              className={`flex ${
-                m.role === 'user' ? 'justify-end' : 'justify-start'
-              }`}
-            >
-              <div
-                className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
-                  m.role === 'user'
-                    ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
-                    : ' text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100'
-                }`}
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"
+            aria-label="Close menu"
+            onClick={() => setSidebarOpen(false)}
+          />
+          <aside className="absolute left-0 top-0 flex h-full w-[min(100%,18rem)] flex-col border-r border-zinc-200/80 bg-zinc-100 shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
+            <div className="flex items-center justify-between gap-2 border-b border-zinc-200/80 px-3 py-3 dark:border-zinc-800/80">
+              <div className="flex items-center gap-2">
+                <LauraMark className="h-7 w-7" />
+                <span className="font-semibold">laura</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSidebarOpen(false)}
+                className="rounded-lg p-2 text-zinc-600 hover:bg-zinc-200/80 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                aria-label="Close"
               >
-                {m.content}
-              </div>
-            </li>
-          ))}
-          {showThinking && (
-            <li className="flex justify-start">
-              <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-500 italic dark:border-zinc-700 dark:bg-zinc-900">
-                laura is thinking…
-              </div>
-            </li>
-          )}
-        </ul>
-        <div ref={bottomRef} />
-      </div>
-
-      {error && (
-        <div className="shrink-0 border-t border-red-200 bg-red-50 px-4 py-2 text-center text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
-          {error}
+                <svg
+                  className="h-5 w-5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+            <SidebarContent {...sidebarProps} />
+          </aside>
         </div>
       )}
 
-      <form
-        onSubmit={handleSubmit}
-        className="shrink-0 border-t border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950"
-      >
-        <div className="mx-auto flex max-w-3xl items-center gap-2">
-          <input
-            className="min-h-11 flex-1 rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm outline-none ring-zinc-400 focus:ring-2 dark:border-zinc-600 dark:bg-zinc-900"
-            placeholder="Talk to laura…"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            disabled={loading || !sessionId}
-            autoComplete="off"
-            aria-label="Message"
-          />
+      {/* Main column */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex shrink-0 items-center gap-3 border-b border-zinc-200/80 px-3 py-2.5 dark:border-zinc-800/80 md:hidden">
           <button
-            type="submit"
-            disabled={loading || !sessionId || !input.trim()}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-            aria-label="Send message"
+            type="button"
+            onClick={() => setSidebarOpen(true)}
+            className="rounded-lg p-2 text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            aria-label="Open chat history"
           >
             <svg
-              className="h-5 w-5"
+              className="h-6 w-6"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
             >
-              <path d="M12 19V5M5 12l7-7 7 7" />
+              <path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" />
             </svg>
           </button>
+          <div className="flex items-center gap-2">
+            <LauraMark className="h-6 w-6" />
+            <h1 className="text-base font-semibold tracking-tight">laura</h1>
+          </div>
+        </header>
+
+        <header className="hidden shrink-0 border-b border-zinc-200/80 px-6 py-4 dark:border-zinc-800/80 md:block">
+          <h1 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+            Chat
+          </h1>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 md:px-6">
+          {messages.length === 0 && !showThinking && (
+            <p className="mx-auto max-w-2xl py-12 text-center text-sm text-zinc-500 dark:text-zinc-400">
+              Hi, I'm laura. How can I help you today?
+            </p>
+          )}
+
+          <ul className="mx-auto flex max-w-2xl flex-col gap-3">
+            {messages.map((m, i) => (
+              <li
+                key={`${i}-${m.role}-${m.content.slice(0, 12)}`}
+                className={`flex ${
+                  m.role === 'user' ? 'justify-end' : 'justify-start'
+                }`}
+              >
+                <div
+                  className={`max-w-[min(100%,42rem)] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
+                    m.role === 'user'
+                      ? 'bg-zinc-900 text-zinc-50 dark:bg-zinc-100 dark:text-zinc-900'
+                      : 'border border-zinc-200/90 bg-white/90 text-zinc-800 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/80 dark:text-zinc-100'
+                  }`}
+                >
+                  {m.content}
+                </div>
+              </li>
+            ))}
+            {showThinking && (
+              <li className="flex justify-start">
+                <div className="rounded-2xl border border-zinc-200/80 bg-white/90 px-4 py-2.5 text-sm text-zinc-500 italic dark:border-zinc-800 dark:bg-zinc-900/80">
+                  laura is thinking…
+                </div>
+              </li>
+            )}
+          </ul>
+          <div ref={bottomRef} />
         </div>
-      </form>
+
+        {error && (
+          <div className="shrink-0 border-t border-red-200/90 bg-red-50/90 px-4 py-2 text-center text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-200">
+            {error}
+          </div>
+        )}
+
+        <form
+          onSubmit={handleSubmit}
+          className="shrink-0 bg-zinc-50/95 px-3 py-3 dark:border-zinc-800/80 dark:bg-zinc-950/95 md:px-6"
+        >
+          <div className="relative mx-auto max-w-2xl">
+            <input
+              className="w-full rounded-2xl bg-white/90 py-3.5 pl-4 pr-14 text-base text-zinc-900 shadow-sm outline-none ring-0 placeholder:text-zinc-400 focus:border-zinc-300 focus:bg-white dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-700 dark:focus:bg-zinc-900"
+              placeholder="Message laura…"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              disabled={loading || !sessionId}
+              autoComplete="off"
+              aria-label="Message"
+            />
+            <button
+              type="submit"
+              disabled={loading || !sessionId || !input.trim()}
+              className="absolute bottom-2 right-2 top-2 flex w-10 items-center justify-center rounded-xl bg-zinc-900 text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-30 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+              aria-label="Send message"
+            >
+              <svg
+                className="h-4 w-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="M12 19V5M5 12l7-7 7 7" />
+              </svg>
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

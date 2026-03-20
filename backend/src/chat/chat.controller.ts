@@ -1,4 +1,11 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { ChatHistoryService } from './chat-history.service';
 
@@ -23,6 +30,24 @@ type ChatResponse = {
 type ChatHistoryResponse = {
   conversationId?: string;
   messages: ChatMessage[];
+};
+
+type ConversationListItem = {
+  id: string;
+  updatedAt: string;
+  preview: string;
+};
+
+type ConversationListResponse = {
+  conversations: ConversationListItem[];
+};
+
+type CreateConversationBody = {
+  sessionId?: string;
+};
+
+type CreateConversationResponse = {
+  conversationId: string;
 };
 
 function normalizeHistory(
@@ -58,14 +83,19 @@ export class ChatController {
 
   @Get('history')
   async history(
-    @Query('sessionId') sessionIdRaw: string
+    @Query('sessionId') sessionIdRaw: string,
+    @Query('conversationId') conversationIdRaw?: string
   ): Promise<ChatHistoryResponse> {
     const sessionId = (sessionIdRaw ?? '').trim();
     if (!sessionId) {
       return { messages: [] };
     }
 
-    const history = await this.chatHistoryService.getLatestConversation(sessionId);
+    const conversationId = (conversationIdRaw ?? '').trim();
+    const history = await this.chatHistoryService.getConversationHistory(
+      sessionId,
+      conversationId || undefined
+    );
     if (!history) {
       return { messages: [] };
     }
@@ -77,6 +107,41 @@ export class ChatController {
         content: m.content,
       })),
     };
+  }
+
+  @Get('conversations')
+  async conversations(
+    @Query('sessionId') sessionIdRaw: string
+  ): Promise<ConversationListResponse> {
+    const sessionId = (sessionIdRaw ?? '').trim();
+    if (!sessionId) {
+      return { conversations: [] };
+    }
+
+    const rows = await this.chatHistoryService.listConversations(sessionId);
+    return {
+      conversations: rows.map((r) => ({
+        id: r.id,
+        updatedAt: r.updatedAt,
+        preview: r.preview,
+      })),
+    };
+  }
+
+  @Post('conversations')
+  async createConversation(
+    @Body() body: CreateConversationBody
+  ): Promise<CreateConversationResponse> {
+    const sessionId = (body?.sessionId ?? '').trim();
+    if (!sessionId) {
+      throw new BadRequestException('sessionId is required');
+    }
+
+    const id = await this.chatHistoryService.createEmptyConversation(sessionId);
+    if (!id) {
+      throw new BadRequestException('Could not create conversation');
+    }
+    return { conversationId: id };
   }
 
   @Post()
