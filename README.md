@@ -48,4 +48,16 @@ Planned top‑level structure:
 
 ---
 
+## Running locally
+
+1. **Database** (optional for chat UI only; needed for memory): `docker compose up -d` from the repo root, then in `backend/` run `npm run db:migrate` with `DATABASE_URL` set.
+
+2. **Backend** (`backend/`): copy `.env.example` → `.env`, set `GEMINI_API_KEY` and `DATABASE_URL` if using memory. Run `npm run start:dev` (default port **4000**).
+
+3. **Frontend** (`frontend/`): copy `.env.local.example` → `.env.local` and set `NEXT_PUBLIC_API_BASE_URL=http://localhost:4000`. Run `npm run dev` (default port **3000**).
+
+Open [http://localhost:3000](http://localhost:3000). The app stores a **session id** in `localStorage` and sends it with each `POST /chat` request; chat messages are saved in the browser so a refresh keeps the thread.
+
+---
+
 

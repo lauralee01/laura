@@ -1,8 +1,16 @@
 import { Injectable } from '@nestjs/common';
 
+/** One turn in the visible chat (matches frontend naming: assistant = model in Gemini). */
+export type LlmChatTurn = {
+  role: 'user' | 'assistant';
+  content: string;
+};
+
 type GenerateInput = {
   systemPrompt: string;
   userMessage: string;
+  /** Prior turns only (optional). The current user turn is always `userMessage`. */
+  history?: LlmChatTurn[];
 };
 
 type GeminiGenerateResponse = {
@@ -20,6 +28,36 @@ type GeminiGenerateResponse = {
 
 @Injectable()
 export class LlmService {
+  /**
+   * Maps our chat turns to Gemini's `contents` array.
+   * Gemini uses role `model` for assistant replies (not `assistant`).
+   */
+  private buildGeminiContents(input: GenerateInput): Array<{
+    role: 'user' | 'model';
+    parts: Array<{ text: string }>;
+  }> {
+    const contents: Array<{
+      role: 'user' | 'model';
+      parts: Array<{ text: string }>;
+    }> = [];
+
+    if (input.history) {
+      for (const turn of input.history) {
+        contents.push({
+          role: turn.role === 'user' ? 'user' : 'model',
+          parts: [{ text: turn.content }],
+        });
+      }
+    }
+
+    contents.push({
+      role: 'user',
+      parts: [{ text: input.userMessage }],
+    });
+
+    return contents;
+  }
+
   async generate(input: GenerateInput): Promise<string> {
     const geminiKey = process.env.GEMINI_API_KEY?.trim();
     if (geminiKey) {
@@ -44,19 +82,12 @@ export class LlmService {
       encodeURIComponent(apiKey);
 
     const payload = {
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            {
-              text:
-                input.systemPrompt +
-                '\n\nUser request:\n' +
-                input.userMessage,
-            },
-          ],
-        },
-      ],
+      // System rules + memory context live here (not repeated every turn).
+      systemInstruction: {
+        parts: [{ text: input.systemPrompt }],
+      },
+      // Conversation so far + the latest user message as the final user turn.
+      contents: this.buildGeminiContents(input),
       generationConfig: {
         // how creative the model is
         temperature: 0.4,

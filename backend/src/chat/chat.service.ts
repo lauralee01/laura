@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { LlmService } from '../llm/llm.service';
+import { LlmChatTurn, LlmService } from '../llm/llm.service';
 import { MemoryService } from '../memory/memory.service';
 import { ToolOrchestratorService } from './tool-orchestrator.service';
 import { MemoryPersistenceService } from './memory-persistence.service';
@@ -13,7 +13,11 @@ export class ChatService {
     private readonly memoryPersistenceService: MemoryPersistenceService
   ) {}
 
-  async replyTo(sessionId: string, message: string): Promise<string> {
+  async replyTo(
+    sessionId: string,
+    message: string,
+    history?: LlmChatTurn[]
+  ): Promise<string> {
     const toolReply = await this.toolOrchestrator.tryHandle(sessionId, message);
     if (toolReply) {
       // Keep implicit memory write even for tool paths.
@@ -63,6 +67,7 @@ export class ChatService {
     const reply = await this.llmService.generate({
       systemPrompt,
       userMessage: message,
+      history,
     });
 
     await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
