@@ -56,7 +56,7 @@ Planned top‑level structure:
 
 3. **Frontend** (`frontend/`): copy `.env.local.example` → `.env.local` and set `NEXT_PUBLIC_API_BASE_URL=http://localhost:4000`. Run `npm run dev` (default port **3000**).
 
-Open [http://localhost:3000](http://localhost:3000). The app stores a **session id** in `localStorage` and sends it with each `POST /chat` request; chat messages are saved in the browser so a refresh keeps the thread.
+Open [http://localhost:3000](http://localhost:3000). The app stores a **session id** in `localStorage` (so the backend can tie memory + conversations to the same browser profile); **chat messages** are loaded from the API / database, not from the browser cache.
 
 ---
 

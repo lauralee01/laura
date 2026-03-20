@@ -3,6 +3,12 @@ import { LlmChatTurn, LlmService } from '../llm/llm.service';
 import { MemoryService } from '../memory/memory.service';
 import { ToolOrchestratorService } from './tool-orchestrator.service';
 import { MemoryPersistenceService } from './memory-persistence.service';
+import { ChatHistoryService } from './chat-history.service';
+
+type ChatReply = {
+  reply: string;
+  conversationId?: string;
+};
 
 @Injectable()
 export class ChatService {
@@ -10,22 +16,35 @@ export class ChatService {
     private readonly llmService: LlmService,
     private readonly memoryService: MemoryService,
     private readonly toolOrchestrator: ToolOrchestratorService,
-    private readonly memoryPersistenceService: MemoryPersistenceService
+    private readonly memoryPersistenceService: MemoryPersistenceService,
+    private readonly chatHistoryService: ChatHistoryService
   ) {}
 
   async replyTo(
     sessionId: string,
     message: string,
-    history?: LlmChatTurn[]
-  ): Promise<string> {
+    history?: LlmChatTurn[],
+    conversationId?: string
+  ): Promise<ChatReply> {
+    const dbConversationId = await this.chatHistoryService.ensureConversation(
+      sessionId,
+      conversationId
+    );
+    await this.chatHistoryService.appendMessage(dbConversationId ?? '', 'user', message);
+
     const toolReply = await this.toolOrchestrator.tryHandle(sessionId, message);
     if (toolReply) {
+      await this.chatHistoryService.appendMessage(
+        dbConversationId ?? '',
+        'assistant',
+        toolReply
+      );
       // Keep implicit memory write even for tool paths.
       await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
         sessionId,
         message
       );
-      return toolReply;
+      return { reply: toolReply, conversationId: dbConversationId ?? undefined };
     }
 
     // Phase 1 MVP: single-turn chat with retrieved memory (if sessionId is present).
@@ -62,17 +81,24 @@ export class ChatService {
     }
 
     // Phase 1 (user-visible): generate the reply using retrieved memory context.
+    let priorTurns: LlmChatTurn[] | undefined = history;
+    if (!priorTurns && dbConversationId) {
+      const turns = await this.chatHistoryService.listTurnsForLlm(dbConversationId);
+      priorTurns = turns.slice(0, Math.max(0, turns.length - 1));
+    }
+
     const reply = await this.llmService.generate({
       systemPrompt,
       userMessage: message,
-      history,
+      history: priorTurns,
     });
+    await this.chatHistoryService.appendMessage(dbConversationId ?? '', 'assistant', reply);
 
     await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
       sessionId,
       message
     );
 
-    return reply;
+    return { reply, conversationId: dbConversationId ?? undefined };
   }
 }

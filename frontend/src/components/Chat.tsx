@@ -3,45 +3,50 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type FormEvent,
 } from 'react';
-import { sendChatMessage } from '@/lib/chat-api';
+import { fetchChatHistory, sendChatMessage } from '@/lib/chat-api';
 import {
   getOrCreateSessionId,
-  loadMessages,
   rotateSessionId,
-  saveMessages,
   type StoredChatMessage,
 } from '@/lib/session';
 import { LauraMark } from '@/components/LauraMark';
 
-/**
- * Main chat surface: shows thread, keeps `sessionId` for backend memory,
- * and sends `history` so Gemini gets multi-turn context.
- */
+
 export function Chat() {
   const [sessionId, setSessionId] = useState('');
+  const [conversationId, setConversationId] = useState<string | undefined>();
   const [messages, setMessages] = useState<StoredChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [initializing, setInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  // Hydrate session + saved messages on the client only (localStorage isn’t on the server).
+  // Session id in localStorage; messages only from backend (Postgres).
   useEffect(() => {
     const sid = getOrCreateSessionId();
     setSessionId(sid);
-    setMessages(loadMessages(sid));
+    setMessages([]);
+    setInitializing(true);
+    setError(null);
+    fetchChatHistory(sid)
+      .then((data) => {
+        setMessages(data.messages);
+        setConversationId(data.conversationId);
+      })
+      .catch(() => {
+        setMessages([]);
+        setError('Could not load chat history. Is the API running?');
+      })
+      .finally(() => {
+        setInitializing(false);
+      });
   }, []);
-
-  useEffect(() => {
-    if (!sessionId) {
-      return;
-    }
-    saveMessages(sessionId, messages);
-  }, [sessionId, messages]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -50,6 +55,7 @@ export function Chat() {
   const handleNewChat = useCallback(() => {
     const sid = rotateSessionId();
     setSessionId(sid);
+    setConversationId(undefined);
     setMessages([]);
     setError(null);
     setInput('');
@@ -66,24 +72,31 @@ export function Chat() {
       setError(null);
       setInput('');
 
-      // History = everything already in the thread *before* this new user line.
-      const historyForApi = [...messages];
-      console.log('historyForApi', historyForApi);
-
       setMessages((prev) => [...prev, { role: 'user', content: text }]);
       setLoading(true);
-      console.log('text', text);
 
       try {
-        const { reply } = await sendChatMessage({
+        const { reply, conversationId: idFromSend } = await sendChatMessage({
           sessionId,
+          conversationId,
           message: text,
-          history: historyForApi,
         });
-        setMessages((prev) => [
-          ...prev,
-          { role: 'assistant', content: reply },
-        ]);
+        setConversationId(idFromSend ?? conversationId);
+        try {
+          const refreshed = await fetchChatHistory(sessionId);
+          setMessages(refreshed.messages);
+          setConversationId(
+            refreshed.conversationId ?? idFromSend ?? conversationId
+          );
+        } catch {
+          setError(
+            'Message was saved, but the thread could not be refreshed. Try reloading the page.'
+          );
+          setMessages((prev) => [
+            ...prev,
+            { role: 'assistant', content: reply },
+          ]);
+        }
       } catch (err) {
         const msg =
           err instanceof Error ? err.message : 'Something went wrong.';
@@ -95,7 +108,12 @@ export function Chat() {
         setLoading(false);
       }
     },
-    [input, loading, messages, sessionId]
+    [conversationId, input, loading, sessionId]
+  );
+
+  const showThinking = useMemo(
+    () => loading || initializing,
+    [initializing, loading]
   );
 
   return (
@@ -115,10 +133,9 @@ export function Chat() {
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        {messages.length === 0 && !loading && (
-          <p className="mx-auto max-w-xl rounded-xl border border-dashed border-zinc-300 bg-white/80 p-6 text-center text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/50 dark:text-zinc-300">
-            Say hi — laura keeps context in this chat and learns what matters
-            to you over time.
+        {messages.length === 0 && !showThinking && (
+          <p className="mx-auto p-6 text-center text-sm text-zinc-600 dark:text-zinc-300">
+            Start a conversation
           </p>
         )}
 
@@ -141,7 +158,7 @@ export function Chat() {
               </div>
             </li>
           ))}
-          {loading && (
+          {showThinking && (
             <li className="flex justify-start">
               <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-500 italic dark:border-zinc-700 dark:bg-zinc-900">
                 laura is thinking…
