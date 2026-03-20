@@ -16,7 +16,7 @@ import {
   type ConversationSummary,
 } from '@/lib/chat-api';
 import { getOrCreateSessionId, type StoredChatMessage } from '@/lib/session';
-import { LauraMark } from '@/components/LauraMark';
+import { BrandLockup } from '@/components/BrandLockup';
 
 function formatChatDate(iso: string): string {
   try {
@@ -108,6 +108,26 @@ export function Chat() {
   const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
+
+  /** Max height before the composer scrolls (~max-h-48). */
+  const COMPOSER_MAX_HEIGHT_PX = 192;
+
+  const adjustComposerHeight = useCallback(() => {
+    const el = composerRef.current;
+    if (!el) {
+      return;
+    }
+    el.style.height = 'auto';
+    const next = Math.min(el.scrollHeight, COMPOSER_MAX_HEIGHT_PX);
+    el.style.height = `${next}px`;
+    el.style.overflowY =
+      el.scrollHeight > COMPOSER_MAX_HEIGHT_PX ? 'auto' : 'hidden';
+  }, []);
+
+  useEffect(() => {
+    adjustComposerHeight();
+  }, [input, adjustComposerHeight]);
 
   const reloadSidebar = useCallback(async (sid: string) => {
     try {
@@ -268,9 +288,8 @@ export function Chat() {
     <div className="flex h-[100dvh] bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
       {/* Desktop sidebar */}
       <aside className="hidden w-[min(100%,18rem)] shrink-0 flex-col border-r border-zinc-200/80 bg-zinc-100/90 dark:border-zinc-800/80 dark:bg-zinc-950 md:flex">
-        <div className="flex items-center gap-2 border-b border-zinc-200/80 px-4 py-3 dark:border-zinc-800/80">
-          <LauraMark className="h-7 w-7 shrink-0" />
-          <span className="font-semibold tracking-tight">laura</span>
+        <div className="border-b border-zinc-200/80 px-4 py-3 dark:border-zinc-800/80">
+          <BrandLockup size="md" />
         </div>
         <SidebarContent {...sidebarProps} />
       </aside>
@@ -291,10 +310,7 @@ export function Chat() {
           />
           <aside className="absolute left-0 top-0 flex h-full w-[min(100%,18rem)] flex-col border-r border-zinc-200/80 bg-zinc-100 shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
             <div className="flex items-center justify-between gap-2 border-b border-zinc-200/80 px-3 py-3 dark:border-zinc-800/80">
-              <div className="flex items-center gap-2">
-                <LauraMark className="h-7 w-7" />
-                <span className="font-semibold">laura</span>
-              </div>
+              <BrandLockup size="md" />
               <button
                 type="button"
                 onClick={() => setSidebarOpen(false)}
@@ -336,22 +352,13 @@ export function Chat() {
               <path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" />
             </svg>
           </button>
-          <div className="flex items-center gap-2">
-            <LauraMark className="h-6 w-6" />
-            <h1 className="text-base font-semibold tracking-tight">laura</h1>
-          </div>
-        </header>
-
-        <header className="hidden shrink-0 border-b border-zinc-200/80 px-6 py-4 dark:border-zinc-800/80 md:block">
-          <h1 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-            Chat
-          </h1>
+          <BrandLockup size="sm" />
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 md:px-6">
           {messages.length === 0 && !showThinking && (
-            <p className="mx-auto max-w-2xl py-12 text-center text-sm text-zinc-500 dark:text-zinc-400">
-              Hi, I'm laura. How can I help you today?
+            <p className="mx-auto max-w-2xl py-12 text-center text-base text-zinc-500 dark:text-zinc-400">
+              Hi, I&apos;m laura. How can I help you today?
             </p>
           )}
 
@@ -395,12 +402,20 @@ export function Chat() {
           onSubmit={handleSubmit}
           className="shrink-0 bg-zinc-50/95 px-3 py-3 dark:border-zinc-800/80 dark:bg-zinc-950/95 md:px-6"
         >
-          <div className="relative mx-auto max-w-2xl">
-            <input
-              className="w-full rounded-2xl bg-white/90 py-3.5 pl-4 pr-14 text-base text-zinc-900 shadow-sm outline-none ring-0 placeholder:text-zinc-400 focus:border-zinc-300 focus:bg-white dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-700 dark:focus:bg-zinc-900"
+          <div className="mx-auto flex max-w-2xl items-center gap-2 rounded-2xl border border-zinc-200/90 bg-white/90 px-3 py-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/70">
+            <textarea
+              ref={composerRef}
+              rows={1}
+              className="max-h-48 min-h-[2.75rem] min-w-0 flex-1 resize-none rounded-xl bg-transparent py-2 pl-1 text-base leading-relaxed text-zinc-900 outline-none ring-0 placeholder:text-zinc-400 dark:text-zinc-100 dark:placeholder:text-zinc-500"
               placeholder="Message laura…"
               value={input}
               onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  e.currentTarget.form?.requestSubmit();
+                }
+              }}
               disabled={loading || !sessionId}
               autoComplete="off"
               aria-label="Message"
@@ -408,7 +423,7 @@ export function Chat() {
             <button
               type="submit"
               disabled={loading || !sessionId || !input.trim()}
-              className="absolute bottom-2 right-2 top-2 flex w-10 items-center justify-center rounded-xl bg-zinc-900 text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-30 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+              className="flex h-10 w-10 shrink-0 items-center justify-center self-center rounded-xl bg-zinc-900 text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-30 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
               aria-label="Send message"
             >
               <svg

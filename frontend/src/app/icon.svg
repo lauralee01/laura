@@ -1,0 +1,95 @@
+<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient
+      id="lm-main"
+      x1="2"
+      y1="2"
+      x2="38"
+      y2="38"
+      gradientUnits="userSpaceOnUse"
+    >
+      <stop stop-color="#a855f7" />
+      <stop offset="0.15" stop-color="#d946ef" />
+      <stop offset="0.32" stop-color="#f472b6" />
+      <stop offset="0.48" stop-color="#fb7185" />
+      <stop offset="0.62" stop-color="#22d3ee" />
+      <stop offset="0.78" stop-color="#34d399" />
+      <stop offset="0.9" stop-color="#fbbf24" />
+      <stop offset="1" stop-color="#fb923c" />
+    </linearGradient>
+    <linearGradient id="lm-shine" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.75" />
+      <stop offset="28%" stop-color="#ffffff" stop-opacity="0.15" />
+      <stop offset="55%" stop-color="#ffffff" stop-opacity="0" />
+      <stop offset="100%" stop-color="#fef08a" stop-opacity="0.35" />
+    </linearGradient>
+    <linearGradient id="lm-gold" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#fef08a" />
+      <stop offset="0.5" stop-color="#fbbf24" />
+      <stop offset="1" stop-color="#f59e0b" />
+    </linearGradient>
+    <linearGradient id="lm-cyan" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#a5f3fc" />
+      <stop offset="0.5" stop-color="#22d3ee" />
+      <stop offset="1" stop-color="#0284c7" />
+    </linearGradient>
+    <linearGradient id="lm-pink" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#fbcfe8" />
+      <stop offset="0.45" stop-color="#f472b6" />
+      <stop offset="1" stop-color="#db2777" />
+    </linearGradient>
+  </defs>
+  <g transform="translate(20 20) scale(2.1) translate(-12 -5)">
+    <path
+      d="M12 0L11.5 4.5L8 5L11.5 5.5L12 10L12.5 5.5L16 5L12.5 4.5L12 0Z"
+      fill="url(#lm-main)"
+    />
+    <path
+      d="M12 0L11.5 4.5L8 5L11.5 5.5L12 10L12.5 5.5L16 5L12.5 4.5L12 0Z"
+      fill="url(#lm-shine)"
+      opacity="0.85"
+    />
+    <path
+      d="M12 0L11.5 4.5L8 5L11.5 5.5L12 10L12.5 5.5L16 5L12.5 4.5L12 0Z"
+      fill="none"
+      stroke="white"
+      stroke-opacity="0.35"
+      stroke-width="0.4"
+    />
+  </g>
+  <g transform="translate(7 9) scale(0.42) translate(-12 -5)">
+    <path
+      d="M12 0L11.5 4.5L8 5L11.5 5.5L12 10L12.5 5.5L16 5L12.5 4.5L12 0Z"
+      fill="url(#lm-gold)"
+    />
+    <path
+      d="M12 0L11.5 4.5L8 5L11.5 5.5L12 10L12.5 5.5L16 5L12.5 4.5L12 0Z"
+      fill="url(#lm-shine)"
+      opacity="0.5"
+    />
+  </g>
+  <g transform="translate(33 10) scale(0.38) translate(-12 -5)">
+    <path
+      d="M12 0L11.5 4.5L8 5L11.5 5.5L12 10L12.5 5.5L16 5L12.5 4.5L12 0Z"
+      fill="url(#lm-cyan)"
+      stroke="#e0f2fe"
+      stroke-width="0.35"
+    />
+    <path
+      d="M12 0L11.5 4.5L8 5L11.5 5.5L12 10L12.5 5.5L16 5L12.5 4.5L12 0Z"
+      fill="url(#lm-shine)"
+      opacity="0.45"
+    />
+  </g>
+  <g transform="translate(21 31) scale(0.36) translate(-12 -5)">
+    <path
+      d="M12 0L11.5 4.5L8 5L11.5 5.5L12 10L12.5 5.5L16 5L12.5 4.5L12 0Z"
+      fill="url(#lm-pink)"
+    />
+    <path
+      d="M12 0L11.5 4.5L8 5L11.5 5.5L12 10L12.5 5.5L16 5L12.5 4.5L12 0Z"
+      fill="url(#lm-shine)"
+      opacity="0.5"
+    />
+  </g>
+</svg>
