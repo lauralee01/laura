@@ -12,8 +12,8 @@ type Props = {
 
 export function ChatDesktopSidebar(props: Props) {
   return (
-    <aside className="hidden w-[min(100%,18rem)] shrink-0 flex-col border-r border-zinc-200/80 bg-zinc-100/90 dark:border-zinc-800/80 dark:bg-zinc-950 md:flex">
-      <div className="border-b border-zinc-200/80 px-4 py-3 dark:border-zinc-800/80">
+    <aside className="hidden w-[min(100%,18rem)] shrink-0 flex-col bg-[#181818] md:flex">
+      <div className=" px-4 py-3 d">
         <BrandLockup size="md" />
       </div>
       <SidebarConversationList {...props} />

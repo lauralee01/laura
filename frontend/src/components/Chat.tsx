@@ -43,7 +43,7 @@ export function Chat() {
   };
 
   return (
-    <div className="flex h-[100dvh] bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
+    <div className="flex h-[100dvh]text-zinc-900 dark:text-zinc-100">
       <ChatDesktopSidebar {...sidebarProps} />
 
       <ChatMobileDrawer
