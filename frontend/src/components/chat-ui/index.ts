@@ -4,3 +4,4 @@ export { MobileChatHeader } from './MobileChatHeader';
 export { ChatMessageList } from './ChatMessageList';
 export { ChatComposer } from './ChatComposer';
 export { ChatErrorBanner } from './ChatErrorBanner';
+export { GoogleConnectButton } from './GoogleConnectButton';

@@ -58,7 +58,7 @@ Planned top‑level structure:
 
 Open [http://localhost:3000](http://localhost:3000). The app stores a **session id** in `localStorage` (so the backend can tie memory + conversations to the same browser profile); **chat messages** are loaded from the API / database, not from the browser cache.
 
-4. **Google OAuth (optional)** — To connect Gmail + Calendar for your session, follow **`docs/oauth-google-setup.md`**, set the Google vars in `backend/.env`, run `npm run db:migrate`, then open [http://localhost:3000/connect-google](http://localhost:3000/connect-google).
+4. **Google OAuth (optional)** — To connect Gmail + Calendar for your session, follow **`docs/oauth-google-setup.md`**, set the Google vars in `backend/.env`, run `npm run db:migrate`, then use **Connect Google** on the chat screen.
 
 ---
 
