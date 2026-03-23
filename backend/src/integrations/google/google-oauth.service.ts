@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   OnModuleDestroy,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -33,6 +34,7 @@ export type GoogleCredentials = {
 
 @Injectable()
 export class GoogleOAuthService implements OnModuleDestroy {
+  private readonly logger = new Logger(GoogleOAuthService.name);
   private readonly pool: Pool;
 
   constructor(private readonly config: ConfigService) {
@@ -109,6 +111,7 @@ export class GoogleOAuthService implements OnModuleDestroy {
       this.config.get<string>('GOOGLE_OAUTH_SCOPES')?.trim() || DEFAULT_SCOPES;
 
     const state = randomBytes(32).toString('hex');
+    const fp = this.sessionFingerprint(sid);
 
     await this.pool.query(`DELETE FROM oauth_states WHERE expires_at < now()`);
 
@@ -121,6 +124,10 @@ export class GoogleOAuthService implements OnModuleDestroy {
       [state, sid, expiresAt],
     );
 
+    this.logger.log(
+      `[OAuth] start → Google consent session=${fp} statePrefix=${state.slice(0, 8)}… stateExpiresAt=${expiresAt.toISOString()} redirectHost=${tryHost(redirectUri)}`,
+    );
+
     const params = new URLSearchParams({
       client_id: clientId,
       redirect_uri: redirectUri,
@@ -131,7 +138,6 @@ export class GoogleOAuthService implements OnModuleDestroy {
       prompt: 'consent',
       include_granted_scopes: 'true',
     });
-    console.log('params', params.toString());
 
     return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
   }
@@ -146,12 +152,18 @@ export class GoogleOAuthService implements OnModuleDestroy {
   ): Promise<{ sessionId: string }> {
     this.assertOAuthConfig();
 
+    this.logger.log(
+      `[OAuth] callback hit hasCode=${Boolean(code?.trim())} statePrefix=${state?.trim().slice(0, 8) ?? '∅'}… googleError=${oauthError ?? 'none'}`,
+    );
+
     if (oauthError) {
+      this.logger.warn(`[OAuth] Google returned error: ${oauthError}`);
       throw new BadRequestException(
         `Google OAuth error: ${oauthError || 'unknown'}`,
       );
     }
     if (!code?.trim() || !state?.trim()) {
+      this.logger.warn('[OAuth] callback missing code or state');
       throw new BadRequestException('Missing code or state');
     }
 
@@ -161,11 +173,23 @@ export class GoogleOAuthService implements OnModuleDestroy {
     );
     const sessionId = st.rows[0]?.session_id;
     if (!sessionId) {
+      this.logger.warn(
+        `[OAuth] invalid or expired state statePrefix=${state.trim().slice(0, 8)}…`,
+      );
       throw new BadRequestException('Invalid or expired OAuth state');
     }
 
+    const fp = this.sessionFingerprint(sessionId);
+    this.logger.log(
+      `[OAuth] state OK, exchanging code session=${fp}`,
+    );
+
     const tokens = await this.exchangeCodeForTokens(code.trim());
     await this.saveTokens(sessionId, tokens);
+
+    this.logger.log(
+      `[OAuth] flow complete session=${fp} — user can return to app`,
+    );
 
     return { sessionId };
   }
@@ -202,13 +226,22 @@ export class GoogleOAuthService implements OnModuleDestroy {
 
     if (!res.ok) {
       const msg = json.error_description || json.error || `HTTP ${res.status}`;
+      this.logger.error(
+        `[OAuth] token exchange failed http=${res.status} error=${json.error ?? 'unknown'} desc=${(json.error_description ?? '').slice(0, 120)}`,
+      );
       throw new InternalServerErrorException(`Token exchange failed: ${msg}`);
     }
     if (!json.access_token) {
+      this.logger.error('[OAuth] token response missing access_token');
       throw new InternalServerErrorException(
         'Token response missing access_token',
       );
     }
+
+    this.logger.log(
+      `[OAuth] token exchange OK expires_in=${json.expires_in ?? '?'}s hasRefresh=${Boolean(json.refresh_token)} tokenType=${json.token_type ?? 'Bearer'}`,
+    );
+
     return json;
   }
 
@@ -244,6 +277,11 @@ export class GoogleOAuthService implements OnModuleDestroy {
         expiresAt,
       ],
     );
+
+    const fp = this.sessionFingerprint(sessionId);
+    this.logger.log(
+      `[OAuth] tokens persisted session=${fp} accessExpiresAt=${expiresAt?.toISOString() ?? 'unknown'} refreshStored=${Boolean(tokens.refresh_token)} scopePreview=${(tokens.scope ?? '').slice(0, 48)}${(tokens.scope?.length ?? 0) > 48 ? '…' : ''}`,
+    );
   }
 
   private assertOAuthConfig(): void {
@@ -260,5 +298,13 @@ export class GoogleOAuthService implements OnModuleDestroy {
   /** Stable fingerprint of session id for logs (never log raw session id). */
   sessionFingerprint(sessionId: string): string {
     return createHash('sha256').update(sessionId).digest('hex').slice(0, 12);
+  }
+}
+
+function tryHost(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return '(invalid URL)';
   }
 }
