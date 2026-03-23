@@ -51,7 +51,8 @@ export class EmailService {
   private buildDefaultSubject(context: string): string {
     const trimmed = context.replace(/\s+/g, ' ').trim();
     const snippet = trimmed.slice(0, 40);
-    return snippet.length > 0 ? `Re: ${snippet}${snippet.length >= 40 ? '…' : ''}` : 'Draft';
+    return snippet.length > 0
+      ? `Re: ${snippet}${snippet.length >= 40 ? '…' : ''}`
+      : 'Draft';
   }
 }
-

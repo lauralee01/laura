@@ -6,6 +6,7 @@ import { ConfigModule } from '@nestjs/config';
 import { MemoryModule } from './memory/memory.module';
 import { EmailModule } from './integrations/email/email.module';
 import { CalendarModule } from './integrations/calendar/calendar.module';
+import { GoogleOAuthModule } from './integrations/google/google-oauth.module';
 
 @Module({
   // Loads `backend/.env` into `process.env` for the whole application.
@@ -16,6 +17,7 @@ import { CalendarModule } from './integrations/calendar/calendar.module';
     MemoryModule,
     EmailModule,
     CalendarModule,
+    GoogleOAuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -36,7 +36,9 @@ export class ChatHistoryService implements OnModuleDestroy {
     await this.pool.end().catch(() => undefined);
   }
 
-  async getLatestConversation(sessionId: string): Promise<ConversationHistory | null> {
+  async getLatestConversation(
+    sessionId: string,
+  ): Promise<ConversationHistory | null> {
     return this.getConversationHistory(sessionId, undefined);
   }
 
@@ -46,7 +48,7 @@ export class ChatHistoryService implements OnModuleDestroy {
    */
   async getConversationHistory(
     sessionId: string,
-    conversationId?: string
+    conversationId?: string,
   ): Promise<ConversationHistory | null> {
     const sid = sessionId.trim();
     if (!sid) {
@@ -64,7 +66,7 @@ export class ChatHistoryService implements OnModuleDestroy {
         WHERE id = $1 AND session_id = $2
         LIMIT 1;
         `,
-        [requested, sid]
+        [requested, sid],
       );
       resolvedId = check.rows[0]?.id;
     } else {
@@ -76,7 +78,7 @@ export class ChatHistoryService implements OnModuleDestroy {
         ORDER BY updated_at DESC
         LIMIT 1;
         `,
-        [sid]
+        [sid],
       );
       resolvedId = conversationRes.rows[0]?.id;
     }
@@ -119,7 +121,7 @@ export class ChatHistoryService implements OnModuleDestroy {
       ORDER BY c.updated_at DESC
       LIMIT 50;
       `,
-      [sid]
+      [sid],
     );
 
     return res.rows.map((row) => ({
@@ -141,12 +143,15 @@ export class ChatHistoryService implements OnModuleDestroy {
       INSERT INTO conversations (id, session_id)
       VALUES ($1, $2);
       `,
-      [newId, sid]
+      [newId, sid],
     );
     return newId;
   }
 
-  async ensureConversation(sessionId: string, conversationId?: string): Promise<string | null> {
+  async ensureConversation(
+    sessionId: string,
+    conversationId?: string,
+  ): Promise<string | null> {
     const sid = sessionId.trim();
     if (!sid) {
       return null;
@@ -161,7 +166,7 @@ export class ChatHistoryService implements OnModuleDestroy {
         WHERE id = $1 AND session_id = $2
         LIMIT 1;
         `,
-        [incomingId, sid]
+        [incomingId, sid],
       );
       if (existing.rows[0]?.id) {
         return incomingId;
@@ -179,7 +184,7 @@ export class ChatHistoryService implements OnModuleDestroy {
       INSERT INTO conversations (id, session_id)
       VALUES ($1, $2);
       `,
-      [newId, sid]
+      [newId, sid],
     );
     return newId;
   }
@@ -187,7 +192,7 @@ export class ChatHistoryService implements OnModuleDestroy {
   async appendMessage(
     conversationId: string,
     role: 'user' | 'assistant',
-    content: string
+    content: string,
   ): Promise<void> {
     const cid = conversationId.trim();
     const trimmed = content.trim();
@@ -200,7 +205,7 @@ export class ChatHistoryService implements OnModuleDestroy {
       INSERT INTO messages (conversation_id, role, content)
       VALUES ($1, $2, $3);
       `,
-      [cid, role, trimmed]
+      [cid, role, trimmed],
     );
 
     await this.pool.query(
@@ -209,11 +214,14 @@ export class ChatHistoryService implements OnModuleDestroy {
       SET updated_at = now()
       WHERE id = $1;
       `,
-      [cid]
+      [cid],
     );
   }
 
-  async listMessages(conversationId: string, limit: number): Promise<StoredMessage[]> {
+  async listMessages(
+    conversationId: string,
+    limit: number,
+  ): Promise<StoredMessage[]> {
     const capped = Math.max(1, Math.min(limit, 200));
     const res = await this.pool.query<{
       role: 'user' | 'assistant';
@@ -227,7 +235,7 @@ export class ChatHistoryService implements OnModuleDestroy {
       ORDER BY created_at ASC
       LIMIT $2;
       `,
-      [conversationId, capped]
+      [conversationId, capped],
     );
 
     return res.rows.map((row) => ({

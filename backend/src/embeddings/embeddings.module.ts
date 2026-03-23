@@ -6,4 +6,3 @@ import { EmbeddingsService } from './embeddings.service';
   exports: [EmbeddingsService],
 })
 export class EmbeddingsModule {}
-

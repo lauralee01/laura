@@ -19,4 +19,3 @@ export class CalendarController {
     return this.calendarService.createEvent(body);
   }
 }
-

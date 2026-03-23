@@ -22,7 +22,7 @@ export type CreateCalendarEventOutput = {
 @Injectable()
 export class CalendarService {
   async createEvent(
-    input: CreateCalendarEventInput
+    input: CreateCalendarEventInput,
   ): Promise<CreateCalendarEventOutput> {
     const title = input.title.trim();
     if (!title) {
@@ -59,4 +59,3 @@ export class CalendarService {
     };
   }
 }
-

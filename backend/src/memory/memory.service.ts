@@ -45,7 +45,7 @@ export class MemoryService implements OnModuleDestroy {
 
     const embeddingValues = await this.embeddingsService.embedText(
       content,
-      'RETRIEVAL_DOCUMENT'
+      'RETRIEVAL_DOCUMENT',
     );
     const embeddingVectorLiteral = this.toVectorLiteral(embeddingValues);
 
@@ -57,13 +57,15 @@ export class MemoryService implements OnModuleDestroy {
       VALUES ($1, $2, $3::vector)
       RETURNING id;
       `,
-      [input.userId, content, embeddingVectorLiteral]
+      [input.userId, content, embeddingVectorLiteral],
     );
 
     return Number(res.rows[0]?.id);
   }
 
-  async searchMemories(input: MemorySearchInput): Promise<MemorySearchResult[]> {
+  async searchMemories(
+    input: MemorySearchInput,
+  ): Promise<MemorySearchResult[]> {
     const queryText = input.query.trim();
     if (!queryText) {
       throw new Error('query must not be empty');
@@ -71,7 +73,7 @@ export class MemoryService implements OnModuleDestroy {
 
     const embeddingValues = await this.embeddingsService.embedText(
       queryText,
-      'RETRIEVAL_QUERY'
+      'RETRIEVAL_QUERY',
     );
     const embeddingVectorLiteral = this.toVectorLiteral(embeddingValues);
 
@@ -92,7 +94,7 @@ export class MemoryService implements OnModuleDestroy {
       ORDER BY embedding <=> $1::vector ASC
       LIMIT $3;
       `,
-      [embeddingVectorLiteral, input.userId, input.topK]
+      [embeddingVectorLiteral, input.userId, input.topK],
     );
 
     return res.rows.map((r) => ({
@@ -114,4 +116,3 @@ export class MemoryService implements OnModuleDestroy {
     return `[${values.join(',')}]`;
   }
 }
-

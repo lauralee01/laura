@@ -6,10 +6,13 @@ import { MemoryService } from '../memory/memory.service';
 export class MemoryPersistenceService {
   constructor(
     private readonly llmService: LlmService,
-    private readonly memoryService: MemoryService
+    private readonly memoryService: MemoryService,
   ) {}
 
-  async writeExtractedMemoriesIfAny(sessionId: string, message: string): Promise<void> {
+  async writeExtractedMemoriesIfAny(
+    sessionId: string,
+    message: string,
+  ): Promise<void> {
     if (!sessionId) {
       return;
     }
@@ -19,13 +22,18 @@ export class MemoryPersistenceService {
       const memoriesToWrite = await this.extractMemoriesToWrite(message);
 
       const uniqueCandidates = Array.from(
-        new Set(memoriesToWrite.map((m) => m.trim()).filter((m) => m.length > 0))
+        new Set(
+          memoriesToWrite.map((m) => m.trim()).filter((m) => m.length > 0),
+        ),
       );
 
       for (const m of uniqueCandidates) {
         const shouldWrite = await this.shouldWriteMemoryCandidate(sessionId, m);
         if (shouldWrite) {
-          await this.memoryService.writeMemory({ userId: sessionId, content: m });
+          await this.memoryService.writeMemory({
+            userId: sessionId,
+            content: m,
+          });
         } else {
           console.log('memory write skipped (too similar):', m);
         }
@@ -36,7 +44,9 @@ export class MemoryPersistenceService {
     }
   }
 
-  private async extractMemoriesToWrite(latestUserMessage: string): Promise<string[]> {
+  private async extractMemoriesToWrite(
+    latestUserMessage: string,
+  ): Promise<string[]> {
     const extractionSystemPrompt = `
 You are a memory extraction assistant for laura.
 
@@ -75,7 +85,9 @@ If nothing qualifies, return { "memoriesToWrite": [] }.
       return [];
     }
 
-    return memories.filter((m): m is string => typeof m === 'string').slice(0, 2);
+    return memories
+      .filter((m): m is string => typeof m === 'string')
+      .slice(0, 2);
   }
 
   private safeParseJson(raw: string): { memoriesToWrite: unknown } | null {
@@ -87,11 +99,13 @@ If nothing qualifies, return { "memoriesToWrite": [] }.
     } catch {
       const firstBrace = raw.indexOf('{');
       const lastBrace = raw.lastIndexOf('}');
-      if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) return null;
+      if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace)
+        return null;
       try {
         const slice = raw.slice(firstBrace, lastBrace + 1);
         const jsonUnknown: unknown = JSON.parse(slice);
-        if (typeof jsonUnknown !== 'object' || jsonUnknown === null) return null;
+        if (typeof jsonUnknown !== 'object' || jsonUnknown === null)
+          return null;
         const obj = jsonUnknown as { memoriesToWrite?: unknown };
         return { memoriesToWrite: obj.memoriesToWrite };
       } catch {
@@ -102,7 +116,7 @@ If nothing qualifies, return { "memoriesToWrite": [] }.
 
   private async shouldWriteMemoryCandidate(
     sessionId: string,
-    candidate: string
+    candidate: string,
   ): Promise<boolean> {
     const thresholdRaw = process.env.MEMORY_DEDUPE_DISTANCE_THRESHOLD?.trim();
     const threshold = thresholdRaw ? Number(thresholdRaw) : 0.12;
@@ -125,4 +139,3 @@ If nothing qualifies, return { "memoriesToWrite": [] }.
     return nearestDistance > threshold;
   }
 }
-

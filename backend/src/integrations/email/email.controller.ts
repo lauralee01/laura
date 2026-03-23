@@ -18,4 +18,3 @@ export class EmailController {
     return this.emailService.draftEmail(body);
   }
 }
-

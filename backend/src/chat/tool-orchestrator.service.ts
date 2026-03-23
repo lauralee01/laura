@@ -8,7 +8,7 @@ export class ToolOrchestratorService {
   constructor(
     private readonly llmService: LlmService,
     private readonly emailService: EmailService,
-    private readonly calendarService: CalendarService
+    private readonly calendarService: CalendarService,
   ) {}
 
   async tryHandle(sessionId: string, message: string): Promise<string | null> {
@@ -59,7 +59,9 @@ export class ToolOrchestratorService {
         `Start: ${event.start}\n` +
         `End: ${event.end}\n` +
         `Reminder (minutes before): ${
-          event.reminderMinutesBefore !== undefined ? event.reminderMinutesBefore : 'none'
+          event.reminderMinutesBefore !== undefined
+            ? event.reminderMinutesBefore
+            : 'none'
         }\n` +
         `Link: ${event.url}\n` +
         `(eventId: ${event.eventId})`
@@ -110,15 +112,21 @@ Rules:
 - context must be a concise summary of what the email should say.
 `.trim();
 
-    const raw = await this.llmService.generate({ systemPrompt: prompt, userMessage: message });
+    const raw = await this.llmService.generate({
+      systemPrompt: prompt,
+      userMessage: message,
+    });
     const parsed = this.safeParseObject(raw);
     if (!parsed) return null;
 
     const recipientsUnknown = parsed['recipients'];
     const contextUnknown = parsed['context'];
-    if (!Array.isArray(recipientsUnknown) || typeof contextUnknown !== 'string') return null;
+    if (!Array.isArray(recipientsUnknown) || typeof contextUnknown !== 'string')
+      return null;
 
-    const recipients = recipientsUnknown.filter((v): v is string => typeof v === 'string');
+    const recipients = recipientsUnknown.filter(
+      (v): v is string => typeof v === 'string',
+    );
     if (recipients.length === 0) return null;
 
     const subjectUnknown = parsed['subject'];
@@ -156,7 +164,10 @@ Rules:
 - title should be short and clear.
 `.trim();
 
-    const raw = await this.llmService.generate({ systemPrompt: prompt, userMessage: message });
+    const raw = await this.llmService.generate({
+      systemPrompt: prompt,
+      userMessage: message,
+    });
     const parsed = this.safeParseObject(raw);
     if (!parsed) return null;
 
@@ -166,7 +177,11 @@ Rules:
     const description = parsed['description'];
     const reminder = parsed['reminderMinutesBefore'];
 
-    if (typeof title !== 'string' || typeof start !== 'string' || typeof end !== 'string') {
+    if (
+      typeof title !== 'string' ||
+      typeof start !== 'string' ||
+      typeof end !== 'string'
+    ) {
       return null;
     }
 
@@ -175,7 +190,8 @@ Rules:
       start,
       end,
       description: typeof description === 'string' ? description : undefined,
-      reminderMinutesBefore: typeof reminder === 'number' ? reminder : undefined,
+      reminderMinutesBefore:
+        typeof reminder === 'number' ? reminder : undefined,
     };
   }
 
@@ -187,11 +203,13 @@ Rules:
     } catch {
       const firstBrace = raw.indexOf('{');
       const lastBrace = raw.lastIndexOf('}');
-      if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) return null;
+      if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace)
+        return null;
       try {
         const slice = raw.slice(firstBrace, lastBrace + 1);
         const jsonUnknown: unknown = JSON.parse(slice);
-        if (typeof jsonUnknown !== 'object' || jsonUnknown === null) return null;
+        if (typeof jsonUnknown !== 'object' || jsonUnknown === null)
+          return null;
         return jsonUnknown as Record<string, unknown>;
       } catch {
         return null;
@@ -199,4 +217,3 @@ Rules:
     }
   }
 }
-

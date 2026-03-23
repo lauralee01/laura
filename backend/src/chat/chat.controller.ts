@@ -50,9 +50,7 @@ type CreateConversationResponse = {
   conversationId: string;
 };
 
-function normalizeHistory(
-  raw: unknown
-): ChatMessage[] | undefined {
+function normalizeHistory(raw: unknown): ChatMessage[] | undefined {
   if (!Array.isArray(raw) || raw.length === 0) {
     return undefined;
   }
@@ -78,13 +76,13 @@ function normalizeHistory(
 export class ChatController {
   constructor(
     private readonly chatService: ChatService,
-    private readonly chatHistoryService: ChatHistoryService
+    private readonly chatHistoryService: ChatHistoryService,
   ) {}
 
   @Get('history')
   async history(
     @Query('sessionId') sessionIdRaw: string,
-    @Query('conversationId') conversationIdRaw?: string
+    @Query('conversationId') conversationIdRaw?: string,
   ): Promise<ChatHistoryResponse> {
     const sessionId = (sessionIdRaw ?? '').trim();
     if (!sessionId) {
@@ -94,7 +92,7 @@ export class ChatController {
     const conversationId = (conversationIdRaw ?? '').trim();
     const history = await this.chatHistoryService.getConversationHistory(
       sessionId,
-      conversationId || undefined
+      conversationId || undefined,
     );
     if (!history) {
       return { messages: [] };
@@ -111,7 +109,7 @@ export class ChatController {
 
   @Get('conversations')
   async conversations(
-    @Query('sessionId') sessionIdRaw: string
+    @Query('sessionId') sessionIdRaw: string,
   ): Promise<ConversationListResponse> {
     const sessionId = (sessionIdRaw ?? '').trim();
     if (!sessionId) {
@@ -130,7 +128,7 @@ export class ChatController {
 
   @Post('conversations')
   async createConversation(
-    @Body() body: CreateConversationBody
+    @Body() body: CreateConversationBody,
   ): Promise<CreateConversationResponse> {
     const sessionId = (body?.sessionId ?? '').trim();
     if (!sessionId) {
@@ -154,7 +152,11 @@ export class ChatController {
     const sessionId = (body?.sessionId ?? '').trim();
     const conversationId = (body?.conversationId ?? '').trim();
     const history = normalizeHistory(body?.history);
-    return this.chatService.replyTo(sessionId, message, history, conversationId);
+    return this.chatService.replyTo(
+      sessionId,
+      message,
+      history,
+      conversationId,
+    );
   }
 }
-

@@ -8,4 +8,3 @@ import { CalendarService } from './calendar.service';
   exports: [CalendarService],
 })
 export class CalendarModule {}
-

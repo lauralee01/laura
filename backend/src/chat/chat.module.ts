@@ -20,4 +20,3 @@ import { ChatHistoryService } from './chat-history.service';
   ],
 })
 export class ChatModule {}
-

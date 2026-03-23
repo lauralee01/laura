@@ -64,17 +64,14 @@ export class LlmService {
       return this.generateWithGemini(geminiKey, input);
     }
 
-    throw new Error(
-      'No LLM API key found'
-    );
+    throw new Error('No LLM API key found');
   }
 
   private async generateWithGemini(
     apiKey: string,
-    input: GenerateInput
+    input: GenerateInput,
   ): Promise<string> {
-    const model =
-      process.env.GEMINI_MODEL?.trim() || 'gemini-flash-latest';
+    const model = process.env.GEMINI_MODEL?.trim() || 'gemini-flash-latest';
     const url =
       'https://generativelanguage.googleapis.com/v1beta/models/' +
       encodeURIComponent(model) +
@@ -104,7 +101,7 @@ export class LlmService {
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       throw new Error(
-        `Gemini API error (${res.status}). ${text ? 'Details: ' + text : ''}`
+        `Gemini API error (${res.status}). ${text ? 'Details: ' + text : ''}`,
       );
     }
 
@@ -121,4 +118,3 @@ export class LlmService {
     return String(reply ?? 'Sorry—no response generated.');
   }
 }
-

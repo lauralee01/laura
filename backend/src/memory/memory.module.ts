@@ -10,4 +10,3 @@ import { MemoryController } from './memory.controller';
   exports: [MemoryService],
 })
 export class MemoryModule {}
-

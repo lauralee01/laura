@@ -40,7 +40,7 @@ export class MemoryController {
 
   @Post('search')
   async search(
-    @Body() body: MemorySearchRequest
+    @Body() body: MemorySearchRequest,
   ): Promise<MemorySearchResponse> {
     const topK = body.topK ?? 5;
     console.log('body-search', body);
@@ -56,4 +56,3 @@ export class MemoryController {
     return { results };
   }
 }
-
