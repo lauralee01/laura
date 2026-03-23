@@ -43,7 +43,7 @@ export function Chat() {
   };
 
   return (
-    <div className="flex h-[100dvh]text-zinc-900 dark:text-zinc-100">
+    <div className="flex h-[100dvh] min-h-0 bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
       <ChatDesktopSidebar {...sidebarProps} />
 
       <ChatMobileDrawer
@@ -52,7 +52,7 @@ export function Chat() {
         {...sidebarProps}
       />
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <MobileChatHeader onOpenSidebar={() => setSidebarOpen(true)} />
 
         <ChatMessageList
