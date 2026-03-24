@@ -31,8 +31,7 @@ export class ToolOrchestratorService {
           `Draft saved in Gmail.\n\n` +
           `Recipients: ${draft.recipients.join(', ')}\n` +
           `Subject: ${draft.subject}\n\n` +
-          `${draft.body}\n\n` +
-          `(Gmail draft id: ${draft.draftId})`
+          `${draft.body}`
         );
       } catch (e: unknown) {
         return this.toolFailureMessage(
@@ -121,7 +120,8 @@ Return JSON only with this exact schema:
 Rules:
 - recipients must include only real email addresses found in the message.
 - if no email address is present, return recipients: [].
-- context must be a concise summary of what the email should say.
+- context: what to say in plain language (as if instructing a writer). Do not use the phrase "the recipient"; name people or describe the ask directly.
+- subject: optional short subject if the user implied one; otherwise null.
 `.trim();
 
     const raw = await this.llmService.generate({
