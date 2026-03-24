@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { CalendarService } from '../integrations/calendar/calendar.service';
 import { EmailService } from '../integrations/email/email.service';
 import { LlmService } from '../llm/llm.service';
@@ -18,21 +18,28 @@ export class ToolOrchestratorService {
         return 'I can draft that email, but I need at least one recipient email address (e.g. jordan@example.com).';
       }
 
-      const draft = await this.emailService.draftEmail({
-        sessionId,
-        recipients: args.recipients,
-        subject: args.subject,
-        tone: args.tone,
-        context: args.context,
-      });
+      try {
+        const draft = await this.emailService.draftEmail({
+          sessionId,
+          recipients: args.recipients,
+          subject: args.subject,
+          tone: args.tone,
+          context: args.context,
+        });
 
-      return (
-        `Draft email created.\n\n` +
-        `Recipients: ${draft.recipients.join(', ')}\n` +
-        `Subject: ${draft.subject}\n\n` +
-        `${draft.body}\n\n` +
-        `(draftId: ${draft.draftId})`
-      );
+        return (
+          `Draft saved in Gmail.\n\n` +
+          `Recipients: ${draft.recipients.join(', ')}\n` +
+          `Subject: ${draft.subject}\n\n` +
+          `${draft.body}\n\n` +
+          `(Gmail draft id: ${draft.draftId})`
+        );
+      } catch (e: unknown) {
+        return this.toolFailureMessage(
+          'create the Gmail draft',
+          e,
+        );
+      }
     }
 
     if (this.isCalendarCreateIntent(message)) {
@@ -44,28 +51,32 @@ export class ToolOrchestratorService {
         );
       }
 
-      const event = await this.calendarService.createEvent({
-        sessionId,
-        title: args.title,
-        start: args.start,
-        end: args.end,
-        description: args.description,
-        reminderMinutesBefore: args.reminderMinutesBefore,
-      });
+      try {
+        const event = await this.calendarService.createEvent({
+          sessionId,
+          title: args.title,
+          start: args.start,
+          end: args.end,
+          description: args.description,
+          reminderMinutesBefore: args.reminderMinutesBefore,
+        });
 
-      return (
-        `Calendar event created.\n\n` +
-        `Title: ${event.title}\n` +
-        `Start: ${event.start}\n` +
-        `End: ${event.end}\n` +
-        `Reminder (minutes before): ${
-          event.reminderMinutesBefore !== undefined
-            ? event.reminderMinutesBefore
-            : 'none'
-        }\n` +
-        `Link: ${event.url}\n` +
-        `(eventId: ${event.eventId})`
-      );
+        return (
+          `Event added to Google Calendar.\n\n` +
+          `Title: ${event.title}\n` +
+          `Start: ${event.start}\n` +
+          `End: ${event.end}\n` +
+          `Reminder (minutes before): ${
+            event.reminderMinutesBefore !== undefined
+              ? event.reminderMinutesBefore
+              : 'none'
+          }\n` +
+          (event.url ? `Open: ${event.url}\n` : '') +
+          `(event id: ${event.eventId})`
+        );
+      } catch (e: unknown) {
+        return this.toolFailureMessage('create the calendar event', e);
+      }
     }
 
     return null;
@@ -193,6 +204,16 @@ Rules:
       reminderMinutesBefore:
         typeof reminder === 'number' ? reminder : undefined,
     };
+  }
+
+  private toolFailureMessage(action: string, err: unknown): string {
+    if (err instanceof BadRequestException) {
+      return `I couldn’t ${action}. ${err.message}`;
+    }
+    if (err instanceof Error) {
+      return `I couldn’t ${action}. ${err.message}`;
+    }
+    return `I couldn’t ${action}. Please try again.`;
   }
 
   private safeParseObject(raw: string): Record<string, unknown> | null {

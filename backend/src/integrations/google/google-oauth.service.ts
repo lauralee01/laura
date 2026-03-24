@@ -8,6 +8,8 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes } from 'crypto';
+import { google } from 'googleapis';
+import type { OAuth2Client } from 'google-auth-library';
 import { Pool } from 'pg';
 
 const DEFAULT_SCOPES = [
@@ -23,7 +25,7 @@ type GoogleTokenResponse = {
   token_type?: string;
 };
 
-/** Tokens loaded from DB for Gmail / Calendar API calls (refresh flow comes later). */
+/** Tokens loaded from DB for Gmail / Calendar API calls. */
 export type GoogleCredentials = {
   accessToken: string;
   refreshToken: string | null;
@@ -90,6 +92,48 @@ export class GoogleOAuthService implements OnModuleDestroy {
   async isConnected(sessionId: string): Promise<boolean> {
     const tokens = await this.getCredentialsForSession(sessionId);
     return tokens !== null;
+  }
+
+  /**
+   * OAuth2 client with a valid access token (refreshes using refresh_token when close to expiry).
+   * Used by Gmail and Calendar integrations.
+   */
+  async getOAuth2ClientForSession(sessionId: string): Promise<OAuth2Client> {
+    this.assertOAuthConfig();
+
+    const sid = sessionId.trim();
+    if (!sid) {
+      throw new BadRequestException('sessionId is required');
+    }
+
+    let creds = await this.getCredentialsForSession(sid);
+    if (!creds) {
+      throw new BadRequestException(
+        'Google is not connected for this session. Use “Connect Google” in the app, then try again.',
+      );
+    }
+
+    creds = await this.ensureFreshAccessToken(sid, creds);
+
+    const clientId = this.config.getOrThrow<string>('GOOGLE_CLIENT_ID').trim();
+    const clientSecret = this.config
+      .getOrThrow<string>('GOOGLE_CLIENT_SECRET')
+      .trim();
+    const redirectUri = this.config
+      .getOrThrow<string>('GOOGLE_REDIRECT_URI')
+      .trim();
+
+    const client = new google.auth.OAuth2(
+      clientId,
+      clientSecret,
+      redirectUri,
+    );
+    client.setCredentials({
+      access_token: creds.accessToken,
+      refresh_token: creds.refreshToken ?? undefined,
+    });
+
+    return client;
   }
 
   /**
@@ -242,6 +286,92 @@ export class GoogleOAuthService implements OnModuleDestroy {
       `[OAuth] token exchange OK expires_in=${json.expires_in ?? '?'}s hasRefresh=${Boolean(json.refresh_token)} tokenType=${json.token_type ?? 'Bearer'}`,
     );
 
+    return json;
+  }
+
+  /**
+   * When `expires_at` is within this many seconds, we obtain a new access_token with the refresh_token.
+   */
+  private shouldRefreshAccessToken(expiresAt: Date | null): boolean {
+    if (!expiresAt) {
+      return false;
+    }
+    return expiresAt.getTime() < Date.now() + 90_000;
+  }
+
+  private async ensureFreshAccessToken(
+    sessionId: string,
+    creds: GoogleCredentials,
+  ): Promise<GoogleCredentials> {
+    if (!this.shouldRefreshAccessToken(creds.expiresAt)) {
+      return creds;
+    }
+    if (!creds.refreshToken) {
+      throw new BadRequestException(
+        'Your Google session expired. Please connect Google again.',
+      );
+    }
+
+    this.logger.log(
+      `[OAuth] refreshing access token session=${this.sessionFingerprint(sessionId)}`,
+    );
+
+    const tokens = await this.exchangeRefreshToken(creds.refreshToken);
+    await this.saveTokens(sessionId, tokens);
+
+    const next = await this.getCredentialsForSession(sessionId);
+    if (!next) {
+      throw new InternalServerErrorException(
+        'Could not reload credentials after refresh',
+      );
+    }
+    return next;
+  }
+
+  private async exchangeRefreshToken(
+    refreshToken: string,
+  ): Promise<GoogleTokenResponse> {
+    const clientId = this.config.getOrThrow<string>('GOOGLE_CLIENT_ID').trim();
+    const clientSecret = this.config
+      .getOrThrow<string>('GOOGLE_CLIENT_SECRET')
+      .trim();
+
+    const body = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: clientId,
+      client_secret: clientSecret,
+    });
+
+    const res = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+    });
+
+    const json = (await res.json()) as GoogleTokenResponse & {
+      error?: string;
+      error_description?: string;
+    };
+
+    if (!res.ok) {
+      const msg = json.error_description || json.error || `HTTP ${res.status}`;
+      this.logger.error(
+        `[OAuth] refresh token failed http=${res.status} error=${json.error ?? ''}`,
+      );
+      throw new BadRequestException(
+        `Google session could not be renewed: ${msg}. Please connect Google again.`,
+      );
+    }
+    if (!json.access_token) {
+      throw new InternalServerErrorException(
+        'Refresh response missing access_token',
+      );
+    }
+
+    this.logger.log(
+      `[OAuth] token refresh OK expires_in=${json.expires_in ?? '?'}s`,
+    );
     return json;
   }
 
