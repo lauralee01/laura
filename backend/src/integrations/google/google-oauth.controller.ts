@@ -26,7 +26,6 @@ export class GoogleOAuthController {
       throw new BadRequestException('sessionId query parameter is required');
     }
     const url = await this.googleOAuth.createAuthorizationUrl(sessionId);
-    console.log('url', url);
     return { url };
   }
 
@@ -48,20 +47,12 @@ export class GoogleOAuthController {
 
     try {
       if (oauthError === 'access_denied') {
-        redirectWith('/oauth/google/done?google=cancelled');
+        redirectWith('/?google=cancelled');
         return;
       }
 
-      const { sessionId } = await this.googleOAuth.handleCallback(
-        code,
-        state,
-        oauthError,
-      );
-      
-      const fp = this.googleOAuth.sessionFingerprint(sessionId);
-      redirectWith(
-        `/oauth/google/done?google=connected&fp=${encodeURIComponent(fp)}`,
-      );
+      await this.googleOAuth.handleCallback(code, state, oauthError);
+      redirectWith('/?google=connected');
     } catch (err) {
       const message =
         err instanceof BadRequestException
@@ -70,7 +61,7 @@ export class GoogleOAuthController {
             ? err.message
             : 'oauth_failed';
       redirectWith(
-        `/oauth/google/done?google=error&reason=${encodeURIComponent(message)}`,
+        `/?google=error&reason=${encodeURIComponent(message)}`,
       );
     }
   }
