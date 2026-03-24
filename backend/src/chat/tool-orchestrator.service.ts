@@ -84,11 +84,12 @@ export class ToolOrchestratorService {
 
   private isEmailDraftIntent(message: string): boolean {
     const text = message.toLowerCase();
-    return (
-      text.includes('draft email') ||
-      text.includes('write email') ||
-      text.includes('compose email')
-    );
+    if (text.includes('write email') || text.includes('compose email')) {
+      return true;
+    }
+    // Broad: "draft another email", "draft an email", "draft email to x@..."
+    // (tight regex missed "draft" + "another" + "email".)
+    return text.includes('draft') && text.includes('email');
   }
 
   private isCalendarCreateIntent(message: string): boolean {
