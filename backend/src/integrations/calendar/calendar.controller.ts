@@ -11,6 +11,14 @@ type CreateCalendarEventRequest = {
   reminderMinutesBefore?: number;
 };
 
+type ListCalendarEventsRequest = {
+  sessionId?: string;
+  timeZone: string;
+  start: string;
+  end: string;
+  maxEvents?: number;
+};
+
 @Controller('tools/calendar')
 export class CalendarController {
   constructor(private readonly calendarService: CalendarService) {}
@@ -18,5 +26,10 @@ export class CalendarController {
   @Post('create')
   async create(@Body() body: CreateCalendarEventRequest) {
     return this.calendarService.createEvent(body);
+  }
+
+  @Post('list')
+  async list(@Body() body: ListCalendarEventsRequest) {
+    return this.calendarService.listEvents(body);
   }
 }

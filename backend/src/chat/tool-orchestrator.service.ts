@@ -17,10 +17,22 @@ type PendingCalendarRequest = {
   message: string;
 };
 
+type CalendarListMode = 'week' | 'upcoming';
+
+type PendingCalendarListRequest = {
+  mode: CalendarListMode;
+  weekOffset: number; // 0 = this week, 1 = next week, -1 = last week
+  maxEvents?: number; // only for upcoming mode
+};
+
 @Injectable()
 export class ToolOrchestratorService {
   private readonly pendingCalendarBySession =
     new Map<string, PendingCalendarRequest>();
+  private readonly pendingCalendarListBySession = new Map<
+    string,
+    PendingCalendarListRequest
+  >();
 
   constructor(
     private readonly llmService: LlmService,
@@ -56,6 +68,105 @@ export class ToolOrchestratorService {
           'create the Gmail draft',
           e,
         );
+      }
+    }
+
+    if (this.isCalendarListIntent(message)) {
+      const tzCandidate = this.extractTimeZoneFromMessage(message);
+      const storedTz = await this.sessionPreferences.getTimeZone(sessionId);
+      const timeZone = tzCandidate ?? storedTz;
+
+      if (tzCandidate) {
+        await this.sessionPreferences.setTimeZone(sessionId, tzCandidate).catch(
+          () => undefined,
+        );
+      }
+
+      const weekOffset = this.extractWeekOffset(message);
+      const weekListing = this.isWeekListing(message);
+      const nextEventCount = this.extractNextEventCount(message);
+
+      const pendingListRequest: PendingCalendarListRequest = weekListing
+        ? { mode: 'week', weekOffset }
+        : { mode: 'upcoming', weekOffset, maxEvents: nextEventCount ?? 10 };
+
+      if (!timeZone) {
+        this.pendingCalendarListBySession.set(
+          sessionId,
+          pendingListRequest,
+        );
+        return (
+          'What timezone should I use for your events?\n\n' +
+          'Please reply with an IANA timezone like `America/Chicago` (Central), `America/New_York` (Eastern), or `America/Los_Angeles` (Pacific).'
+        );
+      }
+
+      try {
+        const nowLocal = DateTime.now().setZone(timeZone);
+        const { startLocal, endLocal } =
+          pendingListRequest.mode === 'week'
+            ? this.getMonToSunRangeLocal(nowLocal, timeZone, weekOffset)
+            : this.getUpcomingRangeLocal(nowLocal);
+
+        console.log('[tool-orchestrator.list] request', {
+          mode: pendingListRequest.mode,
+          timeZone,
+          weekOffset,
+          maxEvents: pendingListRequest.mode === 'upcoming' ? pendingListRequest.maxEvents : undefined,
+          rangeLocal: { start: startLocal, end: endLocal },
+        });
+
+        const events = await this.calendarService.listEvents({
+          sessionId,
+          timeZone,
+          start: startLocal,
+          end: endLocal,
+          maxEvents:
+            pendingListRequest.mode === 'upcoming'
+              ? pendingListRequest.maxEvents
+              : undefined,
+        });
+
+        if (events.length === 0) {
+          return pendingListRequest.mode === 'week'
+            ? `No events found for that Mon–Sun week in ${timeZone}.`
+            : `No upcoming events found in ${timeZone}.`;
+        }
+
+        if (pendingListRequest.mode === 'week') {
+          const range = this.formatMonToSunRange(nowLocal, weekOffset);
+          return (
+            `Here are your events for ${range} (${timeZone}):\n\n` +
+            events
+              .map((e) =>
+                e.isAllDay
+                  ? `- ${e.title} — ${e.startText}${
+                      e.endText ? ` to ${e.endText}` : ''
+                    } (All-day)`
+                  : `- ${e.title} — ${e.startText}${
+                      e.endText ? `–${e.endText}` : ''
+                    }`,
+              )
+              .join('\n')
+          );
+        }
+
+        return (
+          `Here are your next ${pendingListRequest.maxEvents ?? 10} events (${timeZone}):\n\n` +
+          events
+            .map((e) =>
+              e.isAllDay
+                ? `- ${e.title} — ${e.startText}${
+                    e.endText ? ` to ${e.endText}` : ''
+                  } (All-day)`
+                : `- ${e.title} — ${e.startText}${
+                    e.endText ? `–${e.endText}` : ''
+                  }`,
+            )
+            .join('\n')
+        );
+      } catch (e: unknown) {
+        return this.toolFailureMessage('list calendar events', e);
       }
     }
 
@@ -168,6 +279,68 @@ export class ToolOrchestratorService {
           );
         } catch (e: unknown) {
           return this.toolFailureMessage('create the calendar event', e);
+        }
+      }
+
+      const pendingList = this.pendingCalendarListBySession.get(sessionId);
+      if (pendingList) {
+        this.pendingCalendarListBySession.delete(sessionId);
+        try {
+          const nowLocal = DateTime.now().setZone(tzCandidate);
+          const { startLocal, endLocal } =
+            pendingList.mode === 'week'
+              ? this.getMonToSunRangeLocal(nowLocal, tzCandidate, pendingList.weekOffset)
+              : this.getUpcomingRangeLocal(nowLocal);
+
+          const events = await this.calendarService.listEvents({
+            sessionId,
+            timeZone: tzCandidate,
+            start: startLocal,
+            end: endLocal,
+            maxEvents:
+              pendingList.mode === 'upcoming' ? pendingList.maxEvents : undefined,
+          });
+
+          if (events.length === 0) {
+            return pendingList.mode === 'week'
+              ? `No events found for that Mon–Sun week in ${tzCandidate}.`
+              : `No upcoming events found in ${tzCandidate}.`;
+          }
+
+          if (pendingList.mode === 'week') {
+            const range = this.formatMonToSunRange(nowLocal, pendingList.weekOffset);
+            return (
+              `Here are your events for ${range} (${tzCandidate}):\n\n` +
+              events
+                .map((e) =>
+                  e.isAllDay
+                    ? `- ${e.title} — ${e.startText}${
+                        e.endText ? ` to ${e.endText}` : ''
+                      } (All-day)`
+                    : `- ${e.title} — ${e.startText}${
+                        e.endText ? `–${e.endText}` : ''
+                      }`,
+                )
+                .join('\n')
+            );
+          }
+
+          return (
+            `Here are your next ${pendingList.maxEvents ?? 10} events (${tzCandidate}):\n\n` +
+            events
+              .map((e) =>
+                e.isAllDay
+                  ? `- ${e.title} — ${e.startText}${
+                      e.endText ? ` to ${e.endText}` : ''
+                    } (All-day)`
+                  : `- ${e.title} — ${e.startText}${
+                      e.endText ? `–${e.endText}` : ''
+                    }`,
+              )
+              .join('\n')
+          );
+        } catch (e: unknown) {
+          return this.toolFailureMessage('list calendar events', e);
         }
       }
 
@@ -304,6 +477,110 @@ export class ToolOrchestratorService {
     // a date+time *and* the user either uses scheduling language or mentions
     // calendar-oriented nouns (event/meeting/appointment/visit/reminder).
     return hasDateTimeHint && (hasSchedulingVerb || hasCalendarNoun);
+  }
+
+  private isCalendarListIntent(message: string): boolean {
+    const text = message.toLowerCase();
+
+    const hasCalendarNoun =
+      text.includes('calendar') ||
+      text.includes('events') ||
+      text.includes('event') ||
+      text.includes('appointments') ||
+      text.includes('meetings') ||
+      text.includes('lined up');
+
+    const hasListVerb =
+      text.includes('list') ||
+      text.includes('show') ||
+      text.includes('go through') ||
+      text.includes('lined up') ||
+      text.includes('upcoming');
+
+    const hasWeek = text.includes('week') || (text.includes('mon') && text.includes('sun'));
+
+    const hasNumberRequest =
+      /\bnext\s+\d+\s+(events?|appointments?|meetings?)\b/.test(text) ||
+      (text.includes('next') && /\b\d+\b/.test(text) && text.includes('event'));
+
+    return hasCalendarNoun && hasListVerb && (hasWeek || hasNumberRequest);
+  }
+
+  private isWeekListing(message: string): boolean {
+    const text = message.toLowerCase();
+    return text.includes('week') || (text.includes('mon') && text.includes('sun'));
+  }
+
+  private extractWeekOffset(message: string): number {
+    const text = message.toLowerCase();
+    if (text.includes('last week')) return -1;
+    if (text.includes('next week')) return 1;
+    return 0;
+  }
+
+  private extractNextEventCount(message: string): number | null {
+    const text = message.toLowerCase();
+    const m = text.match(/\bnext\s+(\d+)\b/);
+    if (m && m[1]) return Number(m[1]);
+    return null;
+  }
+
+  private getMonToSunRangeLocal(
+    nowLocal: DateTime,
+    timeZone: string,
+    weekOffset: number,
+  ): { startLocal: string; endLocal: string } {
+    // Luxon weekday: 1(Mon) ... 7(Sun)
+    const weekday = nowLocal.weekday;
+    const daysSinceMonday = weekday - 1;
+    const startOfThisWeek = nowLocal
+      .minus({ days: daysSinceMonday })
+      .startOf('day');
+
+    const startLocal = startOfThisWeek
+      .plus({ days: weekOffset * 7 })
+      .toFormat("yyyy-MM-dd'T'HH:mm:ss");
+
+    // endLocal is exclusive: next Monday 00:00
+    const endLocal = startOfThisWeek
+      .plus({ days: (weekOffset + 1) * 7 })
+      .toFormat("yyyy-MM-dd'T'HH:mm:ss");
+
+    return { startLocal, endLocal };
+  }
+
+  private getUpcomingRangeLocal(
+    nowLocal: DateTime,
+  ): { startLocal: string; endLocal: string } {
+    // Use a bounded future window to avoid unbounded event lists.
+    // We include the rest of "today" (from 00:00) since "next events" is usually
+    // interpreted as "next in your schedule" rather than "after the current clock time".
+    const startLocal = nowLocal.startOf('day').toFormat(
+      "yyyy-MM-dd'T'HH:mm:ss",
+    );
+    // For "next N events", a 6 month window can be too short. Use ~1 year.
+    const endLocal = nowLocal
+      .plus({ days: 365 })
+      .toFormat("yyyy-MM-dd'T'HH:mm:ss");
+    return { startLocal, endLocal };
+  }
+
+  private formatMonToSunRange(
+    nowLocal: DateTime,
+    weekOffset: number,
+  ): string {
+    const weekday = nowLocal.weekday;
+    const daysSinceMonday = weekday - 1;
+    const startOfThisWeek = nowLocal
+      .minus({ days: daysSinceMonday })
+      .startOf('day');
+
+    const start = startOfThisWeek.plus({ days: weekOffset * 7 });
+    const endInclusive = startOfThisWeek
+      .plus({ days: (weekOffset + 1) * 7 })
+      .minus({ milliseconds: 1 });
+
+    return `${start.toFormat('MMM d, yyyy')} – ${endInclusive.toFormat('MMM d, yyyy')}`;
   }
 
   private async extractDraftEmailArgs(message: string): Promise<{
