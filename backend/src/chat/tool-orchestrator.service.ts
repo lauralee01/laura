@@ -2,11 +2,26 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { CalendarService } from '../integrations/calendar/calendar.service';
 import { EmailService } from '../integrations/email/email.service';
 import { LlmService } from '../llm/llm.service';
-import { IANAZone } from 'luxon';
+import { DateTime, IANAZone } from 'luxon';
 import { SessionPreferencesService } from './session-preferences.service';
+
+type CalendarArgs = {
+  title: string;
+  start: string;
+  end: string;
+  description?: string;
+  reminderMinutesBefore?: number;
+};
+
+type PendingCalendarRequest = {
+  message: string;
+};
 
 @Injectable()
 export class ToolOrchestratorService {
+  private readonly pendingCalendarBySession =
+    new Map<string, PendingCalendarRequest>();
+
   constructor(
     private readonly llmService: LlmService,
     private readonly emailService: EmailService,
@@ -47,7 +62,7 @@ export class ToolOrchestratorService {
     if (this.isCalendarCreateIntent(message)) {
       const tzCandidate = this.extractTimeZoneFromMessage(message);
 
-      // If the user’s timezone is unknown, ask once and store it when they reply.
+      // If the user’s timezone is unknown, ask once and store the event request.
       const storedTz = await this.sessionPreferences.getTimeZone(sessionId);
       const timeZone = tzCandidate ?? storedTz;
 
@@ -59,21 +74,23 @@ export class ToolOrchestratorService {
       }
 
       if (!timeZone) {
+        this.pendingCalendarBySession.set(sessionId, { message });
         return (
           'What timezone should I use for your events?\n\n' +
           'Please reply with an IANA timezone like `America/Chicago` (Central), `America/New_York` (Eastern), or `America/Los_Angeles` (Pacific).'
         );
       }
 
-      const args = await this.extractCalendarEventArgs(message);
-      if (!args) {
-        return (
-          `I can create that calendar event, but I need start and end time in your local time (${timeZone}). ` +
-          `Example: March 26 12:00 to 13:00.`
-        );
-      }
-
       try {
+        // If we’re about to create immediately, clear any stale pending request.
+        this.pendingCalendarBySession.delete(sessionId);
+        const args = await this.extractCalendarEventArgs(message, timeZone);
+        if (!args) {
+          return (
+            `I can create that calendar event, but I need start and end time in your local time (${timeZone}). ` +
+            `Example: March 26 12:00 to 13:00.`
+          );
+        }
         const event = await this.calendarService.createEvent({
           sessionId,
           title: args.title,
@@ -88,13 +105,14 @@ export class ToolOrchestratorService {
           `Event added to Google Calendar.\n\n` +
           `Title: ${event.title}\n` +
           `Time zone: ${timeZone}\n` +
-          `Start: ${event.start}\n` +
-          `End: ${event.end}\n` +
+          `Local start: ${args.start}\n` +
+          `Local end: ${args.end}\n` +
           `Reminder (minutes before): ${
             event.reminderMinutesBefore !== undefined
               ? event.reminderMinutesBefore
               : 'none'
           }\n` +
+          `Calendar: primary\n` +
           (event.url ? `Open: ${event.url}\n` : '') +
           `(event id: ${event.eventId})`
         );
@@ -114,6 +132,45 @@ export class ToolOrchestratorService {
       } catch (e: unknown) {
         return this.toolFailureMessage('set timezone', e);
       }
+
+      const pending = this.pendingCalendarBySession.get(sessionId);
+      if (pending) {
+        this.pendingCalendarBySession.delete(sessionId);
+        try {
+          const args = await this.extractCalendarEventArgs(pending.message, tzCandidate);
+          if (!args) {
+            return `I saved your timezone as ${tzCandidate}, but I still need a valid start and end time to create the event.`;
+          }
+
+          const event = await this.calendarService.createEvent({
+            sessionId,
+            title: args.title,
+            start: args.start,
+            end: args.end,
+            description: args.description,
+            reminderMinutesBefore: args.reminderMinutesBefore,
+            timeZone: tzCandidate,
+          });
+          return (
+            `Event added to Google Calendar.\n\n` +
+            `Title: ${event.title}\n` +
+            `Time zone: ${tzCandidate}\n` +
+            `Local start: ${args.start}\n` +
+            `Local end: ${args.end}\n` +
+            `Reminder (minutes before): ${
+              event.reminderMinutesBefore !== undefined
+                ? event.reminderMinutesBefore
+                : 'none'
+            }\n` +
+            `Calendar: primary\n` +
+            (event.url ? `Open: ${event.url}\n` : '') +
+            `(event id: ${event.eventId})`
+          );
+        } catch (e: unknown) {
+          return this.toolFailureMessage('create the calendar event', e);
+        }
+      }
+
       return `Got it — I’ll schedule events in ${tzCandidate}.`;
     }
 
@@ -204,12 +261,49 @@ export class ToolOrchestratorService {
 
   private isCalendarCreateIntent(message: string): boolean {
     const text = message.toLowerCase();
-    return (
-      text.includes('create calendar') ||
-      text.includes('schedule event') ||
-      text.includes('set reminder') ||
-      text.includes('add event')
+
+    const hasMonthName = /january|february|march|april|may|june|july|august|september|october|november|december/.test(
+      text,
     );
+    const hasIsoDate = /\b\d{4}-\d{2}-\d{2}\b/.test(text);
+    const hasRelativeDay =
+      text.includes('today') ||
+      text.includes('tomorrow') ||
+      text.includes('tonight') ||
+      text.includes('next week') ||
+      text.includes('next monday') ||
+      text.includes('next tuesday') ||
+      text.includes('next wednesday') ||
+      text.includes('next thursday') ||
+      text.includes('next friday') ||
+      text.includes('next saturday') ||
+      text.includes('next sunday');
+
+    const hasTime =
+      /\b\d{1,2}(:\d{2})?\s*(am|pm)\b/.test(text) ||
+      /\bat\s+\d{1,2}(:\d{2})?\b/.test(text) ||
+      /\b\d{1,2}(:\d{2})\b/.test(text);
+
+    const hasDateTimeHint = (hasMonthName || hasIsoDate || hasRelativeDay) && hasTime;
+
+    const hasSchedulingVerb =
+      text.includes('create') ||
+      text.includes('add') ||
+      text.includes('schedule') ||
+      text.includes('book') ||
+      text.includes('set up') ||
+      text.includes('plan');
+
+    const hasCalendarNoun =
+      text.includes('calendar') ||
+      /\b(event|meeting|appointment|visit)\b/.test(text) ||
+      text.includes('reminder') ||
+      text.includes('remind');
+
+    // Heuristic: treat as calendar creation if the message looks like it contains
+    // a date+time *and* the user either uses scheduling language or mentions
+    // calendar-oriented nouns (event/meeting/appointment/visit/reminder).
+    return hasDateTimeHint && (hasSchedulingVerb || hasCalendarNoun);
   }
 
   private async extractDraftEmailArgs(message: string): Promise<{
@@ -263,13 +357,18 @@ Rules:
     };
   }
 
-  private async extractCalendarEventArgs(message: string): Promise<{
+  private async extractCalendarEventArgs(
+    message: string,
+    timeZone: string,
+  ): Promise<{
     title: string;
     start: string;
     end: string;
     description?: string;
     reminderMinutesBefore?: number;
   } | null> {
+    const todayInZone = DateTime.now().setZone(timeZone).toISODate(); // YYYY-MM-DD
+
     const prompt = `
 Extract calendar event arguments from the user message.
 Return JSON only with this exact schema:
@@ -282,7 +381,9 @@ Return JSON only with this exact schema:
 }
 
 Rules:
-- start and end must be ISO datetime strings representing LOCAL time in the user's timezone.
+- Today's date in ${timeZone} is ${todayInZone}.
+- If the user provides a month+day (like "March 26") without a year, choose the NEXT occurrence of that date on/after today's date (${todayInZone}).
+- start and end must be ISO datetime strings representing LOCAL time in ${timeZone}.
 - Use this exact format: YYYY-MM-DDTHH:mm:ss (NO trailing 'Z' and NO timezone offset like '+01:00').
 - If the user provides a start time but does not provide an end time, set end = start + 1 hour.
 - If start cannot be determined, return null for both start and end.
