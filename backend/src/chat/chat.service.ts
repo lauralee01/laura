@@ -57,7 +57,9 @@ export class ChatService {
     // Phase 1 MVP: single-turn chat with retrieved memory (if sessionId is present).
     const systemBasePrompt =
       'You are laura, a helpful personalized AI agent. ' +
-      'Be concise, ask clarifying questions when needed, and follow the user’s intent.';
+      'Be concise, ask clarifying questions when needed, and follow the user’s intent. ' +
+      'Important: Never claim you created/updated external resources (Gmail drafts, Google Calendar events, etc.) unless the server explicitly confirms it via a tool response. ' +
+      'If the user asks to do something that requires an integration and it has not run yet, ask for the missing info or explain what you need next.';
 
     let systemPrompt = systemBasePrompt;
 

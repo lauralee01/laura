@@ -59,7 +59,10 @@ export class ToolOrchestratorService {
       }
 
       if (!timeZone) {
-        return 'What timezone should I use for your events? (e.g. America/Los_Angeles)';
+        return (
+          'What timezone should I use for your events?\n\n' +
+          'Please reply with an IANA timezone like `America/Chicago` (Central), `America/New_York` (Eastern), or `America/Los_Angeles` (Pacific).'
+        );
       }
 
       const args = await this.extractCalendarEventArgs(message);
@@ -131,6 +134,16 @@ export class ToolOrchestratorService {
     const trimmed = message.trim();
     const lower = message.toLowerCase();
     if (trimmed.toLowerCase() === timeZone.toLowerCase()) return true;
+
+    // Common: user replies with extra context like "`America/Chicago` (Central)".
+    // If they included a valid IANA timezone and the message is short, treat it as
+    // setting their timezone even if they didn't say "timezone" explicitly.
+    if (
+      trimmed.toLowerCase().includes(timeZone.toLowerCase()) &&
+      trimmed.length <= Math.max(48, timeZone.length + 24)
+    ) {
+      return true;
+    }
 
     // Very lightweight heuristic: only treat it as a preference update if the user
     // signals intent to set timezone.
