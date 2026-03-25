@@ -2,6 +2,8 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { CalendarService } from '../integrations/calendar/calendar.service';
 import { EmailService } from '../integrations/email/email.service';
 import { LlmService } from '../llm/llm.service';
+import { IANAZone } from 'luxon';
+import { SessionPreferencesService } from './session-preferences.service';
 
 @Injectable()
 export class ToolOrchestratorService {
@@ -9,6 +11,7 @@ export class ToolOrchestratorService {
     private readonly llmService: LlmService,
     private readonly emailService: EmailService,
     private readonly calendarService: CalendarService,
+    private readonly sessionPreferences: SessionPreferencesService,
   ) {}
 
   async tryHandle(sessionId: string, message: string): Promise<string | null> {
@@ -42,11 +45,28 @@ export class ToolOrchestratorService {
     }
 
     if (this.isCalendarCreateIntent(message)) {
+      const tzCandidate = this.extractTimeZoneFromMessage(message);
+
+      // If the user’s timezone is unknown, ask once and store it when they reply.
+      const storedTz = await this.sessionPreferences.getTimeZone(sessionId);
+      const timeZone = tzCandidate ?? storedTz;
+
+      if (tzCandidate) {
+        // Persist timezone immediately so subsequent scheduling requests don’t re-ask.
+        await this.sessionPreferences.setTimeZone(sessionId, tzCandidate).catch(
+          () => undefined,
+        );
+      }
+
+      if (!timeZone) {
+        return 'What timezone should I use for your events? (e.g. America/Los_Angeles)';
+      }
+
       const args = await this.extractCalendarEventArgs(message);
       if (!args) {
         return (
-          'I can create that calendar event, but I need start and end time in ISO format ' +
-          '(e.g. 2026-03-20T16:00:00.000Z).'
+          `I can create that calendar event, but I need start and end time in your local time (${timeZone}). ` +
+          `Example: March 26 12:00 to 13:00.`
         );
       }
 
@@ -58,11 +78,13 @@ export class ToolOrchestratorService {
           end: args.end,
           description: args.description,
           reminderMinutesBefore: args.reminderMinutesBefore,
+          timeZone,
         });
 
         return (
           `Event added to Google Calendar.\n\n` +
           `Title: ${event.title}\n` +
+          `Time zone: ${timeZone}\n` +
           `Start: ${event.start}\n` +
           `End: ${event.end}\n` +
           `Reminder (minutes before): ${
@@ -78,6 +100,20 @@ export class ToolOrchestratorService {
       }
     }
 
+    // Handle timezone-only messages (e.g. after we asked “what timezone…”).
+    const tzCandidate = this.extractTimeZoneFromMessage(message);
+    if (
+      tzCandidate &&
+      this.isTimeZoneSettingMessage(message, tzCandidate)
+    ) {
+      try {
+        await this.sessionPreferences.setTimeZone(sessionId, tzCandidate);
+      } catch (e: unknown) {
+        return this.toolFailureMessage('set timezone', e);
+      }
+      return `Got it — I’ll schedule events in ${tzCandidate}.`;
+    }
+
     return null;
   }
 
@@ -89,6 +125,68 @@ export class ToolOrchestratorService {
     // Broad: "draft another email", "draft an email", "draft email to x@..."
     // (tight regex missed "draft" + "another" + "email".)
     return text.includes('draft') && text.includes('email');
+  }
+
+  private isTimeZoneSettingMessage(message: string, timeZone: string): boolean {
+    const trimmed = message.trim();
+    const lower = message.toLowerCase();
+    if (trimmed.toLowerCase() === timeZone.toLowerCase()) return true;
+
+    // Very lightweight heuristic: only treat it as a preference update if the user
+    // signals intent to set timezone.
+    return (
+      lower.includes('timezone') ||
+      lower.includes('time zone') ||
+      lower.includes('use ') ||
+      lower.startsWith('use ') ||
+      lower.includes('my time')
+    );
+  }
+
+  private extractTimeZoneFromMessage(message: string): string | null {
+    const match = message.match(
+      // Matches:
+      // - "America/Chicago"
+      // - case-insensitive variants like "america/chicago"
+      // - "UTC"
+      // - "Etc/GMT+1" style offsets
+      /\b([A-Za-z]+(?:\/[A-Za-z0-9_\+\-]+)+|UTC)\b/i,
+    );
+    const raw = match?.[1];
+    if (!raw) return null;
+
+    const candidate = raw.toUpperCase() === 'UTC' ? 'UTC' : raw;
+    if (IANAZone.isValidZone(candidate)) return candidate;
+
+    // Try normalizing casing for the common cases where users type lowercase.
+    // We normalize each path segment individually (e.g. "america/chicago" -> "America/Chicago").
+    if (candidate.includes('/')) {
+      const normalizeSegment = (seg: string): string => {
+        const trimmed = seg.trim();
+        const m = trimmed.match(/^([a-zA-Z]+)(.*)$/);
+        if (!m) return trimmed;
+
+        const prefixLower = m[1].toLowerCase();
+        const rest = m[2];
+
+        // Some segments (GMT/UTC) are conventionally all-caps.
+        const prefix =
+          prefixLower === 'gmt' || prefixLower === 'utc'
+            ? prefixLower.toUpperCase()
+            : prefixLower.charAt(0).toUpperCase() + prefixLower.slice(1);
+
+        return prefix + rest;
+      };
+
+      const normalized = candidate
+        .split('/')
+        .map((seg) => normalizeSegment(seg))
+        .join('/');
+
+      if (IANAZone.isValidZone(normalized)) return normalized;
+    }
+
+    return null;
   }
 
   private isCalendarCreateIntent(message: string): boolean {
@@ -171,8 +269,10 @@ Return JSON only with this exact schema:
 }
 
 Rules:
-- start and end must be ISO datetime strings if present.
-- if either start or end cannot be determined, return null for that field.
+- start and end must be ISO datetime strings representing LOCAL time in the user's timezone.
+- Use this exact format: YYYY-MM-DDTHH:mm:ss (NO trailing 'Z' and NO timezone offset like '+01:00').
+- If the user provides a start time but does not provide an end time, set end = start + 1 hour.
+- If start cannot be determined, return null for both start and end.
 - title should be short and clear.
 `.trim();
 

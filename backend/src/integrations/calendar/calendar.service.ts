@@ -1,12 +1,14 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { google } from 'googleapis';
 import { GoogleOAuthService } from '../google/google-oauth.service';
+import { DateTime } from 'luxon';
 
 export type CreateCalendarEventInput = {
   sessionId?: string;
+  timeZone: string; // IANA timezone (e.g. America/Chicago)
   title: string;
-  start: string; // ISO string
-  end: string; // ISO string
+  start: string; // LOCAL ISO datetime without timezone offset (e.g. 2026-03-26T12:00:00)
+  end: string; // LOCAL ISO datetime without timezone offset
   description?: string;
   reminderMinutesBefore?: number;
 };
@@ -35,15 +37,36 @@ export class CalendarService {
       throw new BadRequestException('title must not be empty');
     }
 
-    const startDate = new Date(input.start);
-    const endDate = new Date(input.end);
-    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+    if (!input.timeZone || input.timeZone.trim().length === 0) {
+      throw new BadRequestException('timeZone must not be empty');
+    }
+
+    // We intentionally treat `start/end` as LOCAL datetimes in `input.timeZone`.
+    // If the model includes a timezone offset (e.g. `Z` or `+01:00`), converting
+    // them as "local" would be incorrect (double conversion risk).
+    const hasOffsetOrZ = (s: string): boolean =>
+      /[zZ]$/.test(s.trim()) || /[+\-]\d\d:\d\d$/.test(s.trim());
+    if (hasOffsetOrZ(input.start) || hasOffsetOrZ(input.end)) {
       throw new BadRequestException(
-        'start and end must be valid ISO date strings',
+        'start and end must be local ISO datetimes in the format YYYY-MM-DDTHH:mm:ss with NO trailing Z or timezone offset',
+      );
+    }
+    console.log('input.start', input.start);
+    console.log('input.end', input.end);
+    console.log('input.timeZone', input.timeZone);
+
+    const startLocal = DateTime.fromISO(input.start, { zone: input.timeZone });
+    const endLocal = DateTime.fromISO(input.end, { zone: input.timeZone });
+    console.log('startLocal', startLocal);
+    console.log('endLocal', endLocal);
+
+    if (!startLocal.isValid || !endLocal.isValid) {
+      throw new BadRequestException(
+        'start and end must be valid local ISO datetime strings (no timezone offset), e.g. 2026-03-26T12:00:00',
       );
     }
 
-    if (endDate.getTime() <= startDate.getTime()) {
+    if (endLocal.toMillis() <= startLocal.toMillis()) {
       throw new BadRequestException('end must be after start');
     }
 
@@ -62,6 +85,12 @@ export class CalendarService {
     const auth = await this.googleOAuth.getOAuth2ClientForSession(sessionId);
     const calendar = google.calendar({ version: 'v3', auth });
 
+    const startUtcIso = startLocal.toUTC().toISO();
+    const endUtcIso = endLocal.toUTC().toISO();
+    if (!startUtcIso || !endUtcIso) {
+      throw new BadRequestException('Could not convert local times to UTC');
+    }
+
     const requestBody: {
       summary: string;
       description?: string;
@@ -74,8 +103,8 @@ export class CalendarService {
     } = {
       summary: title,
       description: input.description?.trim() || undefined,
-      start: { dateTime: startDate.toISOString() },
-      end: { dateTime: endDate.toISOString() },
+      start: { dateTime: startUtcIso },
+      end: { dateTime: endUtcIso },
     };
 
     if (
@@ -98,12 +127,11 @@ export class CalendarService {
       return {
         eventId: data.id ?? '',
         title,
-        start: data.start?.dateTime ?? startDate.toISOString(),
-        end: data.end?.dateTime ?? endDate.toISOString(),
+        start: data.start?.dateTime ?? startUtcIso,
+        end: data.end?.dateTime ?? endUtcIso,
         reminderMinutesBefore,
         url: data.htmlLink ?? '',
       };
-      console.log('return', {data, requestBody})
     } catch (err: unknown) {
       const detail = err instanceof Error ? err.message : 'Calendar API error';
       throw new BadRequestException(

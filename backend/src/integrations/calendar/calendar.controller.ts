@@ -3,6 +3,7 @@ import { CalendarService } from './calendar.service';
 
 type CreateCalendarEventRequest = {
   sessionId?: string;
+  timeZone: string;
   title: string;
   start: string;
   end: string;

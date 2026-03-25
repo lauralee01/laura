@@ -8,6 +8,7 @@ import { CalendarModule } from '../integrations/calendar/calendar.module';
 import { ToolOrchestratorService } from './tool-orchestrator.service';
 import { MemoryPersistenceService } from './memory-persistence.service';
 import { ChatHistoryService } from './chat-history.service';
+import { SessionPreferencesService } from './session-preferences.service';
 
 @Module({
   imports: [LlmModule, MemoryModule, EmailModule, CalendarModule],
@@ -17,6 +18,7 @@ import { ChatHistoryService } from './chat-history.service';
     ToolOrchestratorService,
     MemoryPersistenceService,
     ChatHistoryService,
+    SessionPreferencesService,
   ],
 })
 export class ChatModule {}
