@@ -3,56 +3,34 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
-  OnModuleDestroy,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createHash, randomBytes } from 'crypto';
 import { google } from 'googleapis';
 import type { OAuth2Client } from 'google-auth-library';
-import { Pool } from 'pg';
+import { DEFAULT_GOOGLE_OAUTH_SCOPES } from './google-oauth.constants';
+import { GoogleOAuthPersistenceService } from './google-oauth-persistence.service';
+import {
+  exchangeAuthorizationCodeForTokens,
+  exchangeRefreshTokenForAccess,
+} from './google-oauth-token-http';
+import type { GoogleCredentials } from './google-oauth.types';
+import { sessionFingerprint as fingerprintSession, tryHost } from './google-oauth.utils';
 
-const DEFAULT_SCOPES = [
-  'https://www.googleapis.com/auth/gmail.compose',
-  'https://www.googleapis.com/auth/calendar.events',
-  // Required for `calendar.calendarList.list` (enumerate calendars for cross-calendar listing).
-  // `calendar.events` alone does not include this.
-  'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
-].join(' ');
+export type { GoogleCredentials } from './google-oauth.types';
 
-type GoogleTokenResponse = {
-  access_token: string;
-  expires_in?: number;
-  refresh_token?: string;
-  scope?: string;
-  token_type?: string;
-};
-
-/** Tokens loaded from DB for Gmail / Calendar API calls. */
-export type GoogleCredentials = {
-  accessToken: string;
-  refreshToken: string | null;
-  tokenType: string;
-  scope: string | null;
-  expiresAt: Date | null;
-};
-
+/**
+ * Orchestrates Google OAuth: consent URL, callback handling, token refresh,
+ * and building an OAuth2Client for API calls. Delegates HTTP and DB to sibling modules.
+ */
 @Injectable()
-export class GoogleOAuthService implements OnModuleDestroy {
+export class GoogleOAuthService {
   private readonly logger = new Logger(GoogleOAuthService.name);
-  private readonly pool: Pool;
 
-  constructor(private readonly config: ConfigService) {
-    const databaseUrl = process.env.DATABASE_URL;
-    if (!databaseUrl) {
-      throw new Error('DATABASE_URL is missing. Set it in backend/.env');
-    }
-    this.pool = new Pool({ connectionString: databaseUrl });
-  }
-
-  async onModuleDestroy(): Promise<void> {
-    await this.pool.end().catch(() => undefined);
-  }
+  constructor(
+    private readonly config: ConfigService,
+    private readonly persistence: GoogleOAuthPersistenceService,
+  ) {}
 
   /**
    * Returns stored Google tokens for a browser session (for Gmail / Calendar APIs).
@@ -61,35 +39,7 @@ export class GoogleOAuthService implements OnModuleDestroy {
   async getCredentialsForSession(
     sessionId: string,
   ): Promise<GoogleCredentials | null> {
-    const sid = sessionId.trim();
-    if (!sid) {
-      return null;
-    }
-    const res = await this.pool.query<{
-      access_token: string;
-      refresh_token: string | null;
-      token_type: string;
-      scope: string | null;
-      expires_at: Date | null;
-    }>(
-      `
-      SELECT access_token, refresh_token, token_type, scope, expires_at
-      FROM google_oauth_tokens
-      WHERE session_id = $1
-      `,
-      [sid],
-    );
-    const row = res.rows[0];
-    if (!row) {
-      return null;
-    }
-    return {
-      accessToken: row.access_token,
-      refreshToken: row.refresh_token,
-      tokenType: row.token_type,
-      scope: row.scope,
-      expiresAt: row.expires_at,
-    };
+    return this.persistence.loadCredentials(sessionId);
   }
 
   async isConnected(sessionId: string): Promise<boolean> {
@@ -155,22 +105,13 @@ export class GoogleOAuthService implements OnModuleDestroy {
       .getOrThrow<string>('GOOGLE_REDIRECT_URI')
       .trim();
     const scopes =
-      this.config.get<string>('GOOGLE_OAUTH_SCOPES')?.trim() || DEFAULT_SCOPES;
+      this.config.get<string>('GOOGLE_OAUTH_SCOPES')?.trim() ||
+      DEFAULT_GOOGLE_OAUTH_SCOPES;
 
-    const state = randomBytes(32).toString('hex');
-    const fp = this.sessionFingerprint(sid);
+    await this.persistence.deleteExpiredOAuthStates();
+    const { state, expiresAt } = await this.persistence.insertOAuthState(sid);
 
-    await this.pool.query(`DELETE FROM oauth_states WHERE expires_at < now()`);
-
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-    await this.pool.query(
-      `
-      INSERT INTO oauth_states (state, session_id, expires_at)
-      VALUES ($1, $2, $3)
-      `,
-      [state, sid, expiresAt],
-    );
-
+    const fp = fingerprintSession(sid);
     this.logger.log(
       `[OAuth] start → Google consent session=${fp} statePrefix=${state.slice(0, 8)}… stateExpiresAt=${expiresAt.toISOString()} redirectHost=${tryHost(redirectUri)}`,
     );
@@ -214,11 +155,7 @@ export class GoogleOAuthService implements OnModuleDestroy {
       throw new BadRequestException('Missing code or state');
     }
 
-    const st = await this.pool.query<{ session_id: string }>(
-      `DELETE FROM oauth_states WHERE state = $1 AND expires_at >= now() RETURNING session_id`,
-      [state.trim()],
-    );
-    const sessionId = st.rows[0]?.session_id;
+    const sessionId = await this.persistence.consumeOAuthState(state.trim());
     if (!sessionId) {
       this.logger.warn(
         `[OAuth] invalid or expired state statePrefix=${state.trim().slice(0, 8)}…`,
@@ -226,24 +163,9 @@ export class GoogleOAuthService implements OnModuleDestroy {
       throw new BadRequestException('Invalid or expired OAuth state');
     }
 
-    const fp = this.sessionFingerprint(sessionId);
-    this.logger.log(
-      `[OAuth] state OK, exchanging code session=${fp}`,
-    );
+    const fp = fingerprintSession(sessionId);
+    this.logger.log(`[OAuth] state OK, exchanging code session=${fp}`);
 
-    const tokens = await this.exchangeCodeForTokens(code.trim());
-    await this.saveTokens(sessionId, tokens);
-
-    this.logger.log(
-      `[OAuth] flow complete session=${fp} — user can return to app`,
-    );
-
-    return { sessionId };
-  }
-
-  private async exchangeCodeForTokens(
-    code: string,
-  ): Promise<GoogleTokenResponse> {
     const clientId = this.config.getOrThrow<string>('GOOGLE_CLIENT_ID').trim();
     const clientSecret = this.config
       .getOrThrow<string>('GOOGLE_CLIENT_SECRET')
@@ -252,44 +174,19 @@ export class GoogleOAuthService implements OnModuleDestroy {
       .getOrThrow<string>('GOOGLE_REDIRECT_URI')
       .trim();
 
-    const body = new URLSearchParams({
-      code,
-      client_id: clientId,
-      client_secret: clientSecret,
-      redirect_uri: redirectUri,
-      grant_type: 'authorization_code',
+    const tokens = await exchangeAuthorizationCodeForTokens(this.logger, {
+      code: code.trim(),
+      clientId,
+      clientSecret,
+      redirectUri,
     });
-
-    const res = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString(),
-    });
-
-    const json = (await res.json()) as GoogleTokenResponse & {
-      error?: string;
-      error_description?: string;
-    };
-
-    if (!res.ok) {
-      const msg = json.error_description || json.error || `HTTP ${res.status}`;
-      this.logger.error(
-        `[OAuth] token exchange failed http=${res.status} error=${json.error ?? 'unknown'} desc=${(json.error_description ?? '').slice(0, 120)}`,
-      );
-      throw new InternalServerErrorException(`Token exchange failed: ${msg}`);
-    }
-    if (!json.access_token) {
-      this.logger.error('[OAuth] token response missing access_token');
-      throw new InternalServerErrorException(
-        'Token response missing access_token',
-      );
-    }
+    await this.persistence.upsertTokens(sessionId, tokens);
 
     this.logger.log(
-      `[OAuth] token exchange OK expires_in=${json.expires_in ?? '?'}s hasRefresh=${Boolean(json.refresh_token)} tokenType=${json.token_type ?? 'Bearer'}`,
+      `[OAuth] flow complete session=${fp} — user can return to app`,
     );
 
-    return json;
+    return { sessionId };
   }
 
   /**
@@ -316,11 +213,20 @@ export class GoogleOAuthService implements OnModuleDestroy {
     }
 
     this.logger.log(
-      `[OAuth] refreshing access token session=${this.sessionFingerprint(sessionId)}`,
+      `[OAuth] refreshing access token session=${fingerprintSession(sessionId)}`,
     );
 
-    const tokens = await this.exchangeRefreshToken(creds.refreshToken);
-    await this.saveTokens(sessionId, tokens);
+    const clientId = this.config.getOrThrow<string>('GOOGLE_CLIENT_ID').trim();
+    const clientSecret = this.config
+      .getOrThrow<string>('GOOGLE_CLIENT_SECRET')
+      .trim();
+
+    const tokens = await exchangeRefreshTokenForAccess(this.logger, {
+      refreshToken: creds.refreshToken,
+      clientId,
+      clientSecret,
+    });
+    await this.persistence.upsertTokens(sessionId, tokens);
 
     const next = await this.getCredentialsForSession(sessionId);
     if (!next) {
@@ -329,92 +235,6 @@ export class GoogleOAuthService implements OnModuleDestroy {
       );
     }
     return next;
-  }
-
-  private async exchangeRefreshToken(
-    refreshToken: string,
-  ): Promise<GoogleTokenResponse> {
-    const clientId = this.config.getOrThrow<string>('GOOGLE_CLIENT_ID').trim();
-    const clientSecret = this.config
-      .getOrThrow<string>('GOOGLE_CLIENT_SECRET')
-      .trim();
-
-    const body = new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: clientId,
-      client_secret: clientSecret,
-    });
-
-    const res = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString(),
-    });
-
-    const json = (await res.json()) as GoogleTokenResponse & {
-      error?: string;
-      error_description?: string;
-    };
-
-    if (!res.ok) {
-      const msg = json.error_description || json.error || `HTTP ${res.status}`;
-      this.logger.error(
-        `[OAuth] refresh token failed http=${res.status} error=${json.error ?? ''}`,
-      );
-      throw new BadRequestException(
-        `Google session could not be renewed: ${msg}. Please connect Google again.`,
-      );
-    }
-    if (!json.access_token) {
-      throw new InternalServerErrorException(
-        'Refresh response missing access_token',
-      );
-    }
-
-    this.logger.log(
-      `[OAuth] token refresh OK expires_in=${json.expires_in ?? '?'}s`,
-    );
-    return json;
-  }
-
-  private async saveTokens(
-    sessionId: string,
-    tokens: GoogleTokenResponse,
-  ): Promise<void> {
-    const expiresAt =
-      tokens.expires_in !== undefined
-        ? new Date(Date.now() + Number(tokens.expires_in) * 1000)
-        : null;
-
-    await this.pool.query(
-      `
-      INSERT INTO google_oauth_tokens (
-        session_id, access_token, refresh_token, token_type, scope, expires_at, updated_at
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, now())
-      ON CONFLICT (session_id) DO UPDATE SET
-        access_token = EXCLUDED.access_token,
-        refresh_token = COALESCE(EXCLUDED.refresh_token, google_oauth_tokens.refresh_token),
-        token_type = EXCLUDED.token_type,
-        scope = EXCLUDED.scope,
-        expires_at = EXCLUDED.expires_at,
-        updated_at = now()
-      `,
-      [
-        sessionId,
-        tokens.access_token,
-        tokens.refresh_token ?? null,
-        tokens.token_type || 'Bearer',
-        tokens.scope ?? null,
-        expiresAt,
-      ],
-    );
-
-    const fp = this.sessionFingerprint(sessionId);
-    this.logger.log(
-      `[OAuth] tokens persisted session=${fp} accessExpiresAt=${expiresAt?.toISOString() ?? 'unknown'} refreshStored=${Boolean(tokens.refresh_token)} scopePreview=${(tokens.scope ?? '').slice(0, 48)}${(tokens.scope?.length ?? 0) > 48 ? '…' : ''}`,
-    );
   }
 
   private assertOAuthConfig(): void {
@@ -430,14 +250,6 @@ export class GoogleOAuthService implements OnModuleDestroy {
 
   /** Stable fingerprint of session id for logs (never log raw session id). */
   sessionFingerprint(sessionId: string): string {
-    return createHash('sha256').update(sessionId).digest('hex').slice(0, 12);
-  }
-}
-
-function tryHost(url: string): string {
-  try {
-    return new URL(url).host;
-  } catch {
-    return '(invalid URL)';
+    return fingerprintSession(sessionId);
   }
 }

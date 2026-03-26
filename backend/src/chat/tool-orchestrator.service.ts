@@ -3,6 +3,7 @@ import { CalendarService } from '../integrations/calendar/calendar.service';
 import { EmailService } from '../integrations/email/email.service';
 import { LlmService } from '../llm/llm.service';
 import { DateTime, IANAZone } from 'luxon';
+import { debugCalendarLog } from '../integrations/calendar/calendar-debug';
 import { SessionPreferencesService } from './session-preferences.service';
 
 type CalendarArgs = {
@@ -108,11 +109,14 @@ export class ToolOrchestratorService {
             ? this.getMonToSunRangeLocal(nowLocal, timeZone, weekOffset)
             : this.getUpcomingRangeLocal(nowLocal);
 
-        console.log('[tool-orchestrator.list] request', {
+        debugCalendarLog('[tool-orchestrator.list] request', {
           mode: pendingListRequest.mode,
           timeZone,
           weekOffset,
-          maxEvents: pendingListRequest.mode === 'upcoming' ? pendingListRequest.maxEvents : undefined,
+          maxEvents:
+            pendingListRequest.mode === 'upcoming'
+              ? pendingListRequest.maxEvents
+              : undefined,
           rangeLocal: { start: startLocal, end: endLocal },
         });
 

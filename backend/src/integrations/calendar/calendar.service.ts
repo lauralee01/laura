@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { google } from 'googleapis';
 import { GoogleOAuthService } from '../google/google-oauth.service';
 import { DateTime } from 'luxon';
+import { debugCalendarLog } from './calendar-debug';
 
 export type CreateCalendarEventInput = {
   sessionId?: string;
@@ -213,7 +214,7 @@ export class CalendarService {
     };
     const all: SortableEvent[] = [];
 
-    console.log('[calendar.listEvents] request', {
+    debugCalendarLog('[calendar.listEvents] request', {
       timeZone: input.timeZone,
       local: { start: input.start, end: input.end },
       utc: { timeMin: startUtcIso, timeMax: endUtcIso },
@@ -238,7 +239,9 @@ export class CalendarService {
       calPageToken = data.nextPageToken ?? undefined;
     } while (calPageToken);
 
-    console.log('[calendar.listEvents] calendars', { count: calendarIds.length });
+    debugCalendarLog('[calendar.listEvents] calendars', {
+      count: calendarIds.length,
+    });
 
     for (const calendarId of calendarIds) {
       let pageToken: string | undefined;
@@ -257,7 +260,7 @@ export class CalendarService {
         });
 
         const items = data.items ?? [];
-        console.log('[calendar.listEvents] page', {
+        debugCalendarLog('[calendar.listEvents] page', {
           calendarId,
           nextPageTokenPresent: !!data.nextPageToken,
           returnedItemCount: items.length,
@@ -358,7 +361,7 @@ export class CalendarService {
     const out =
       maxEvents !== undefined ? all.slice(0, maxEvents) : all;
 
-    console.log('[calendar.listEvents] done', {
+    debugCalendarLog('[calendar.listEvents] done', {
       returnedCount: out.length,
       maxEvents,
       totalFetched: all.length,
