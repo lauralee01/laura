@@ -18,12 +18,12 @@ type PendingCalendarRequest = {
   message: string;
 };
 
-type CalendarListMode = 'week' | 'upcoming';
+type CalendarListMode = 'week' | 'upcoming' | 'past';
 
 type PendingCalendarListRequest = {
   mode: CalendarListMode;
   weekOffset: number; // 0 = this week, 1 = next week, -1 = last week
-  maxEvents?: number; // only for upcoming mode
+  maxEvents?: number; // upcoming / past: how many events to show
 };
 
 @Injectable()
@@ -85,11 +85,14 @@ export class ToolOrchestratorService {
 
       const weekOffset = this.extractWeekOffset(message);
       const weekListing = this.isWeekListing(message);
-      const nextEventCount = this.extractNextEventCount(message);
+      const listedCount = this.extractListedEventCount(message);
+      const pastIntent = this.isPastCalendarListIntent(message);
 
       const pendingListRequest: PendingCalendarListRequest = weekListing
         ? { mode: 'week', weekOffset }
-        : { mode: 'upcoming', weekOffset, maxEvents: nextEventCount ?? 10 };
+        : pastIntent
+          ? { mode: 'past', weekOffset: 0, maxEvents: listedCount ?? 10 }
+          : { mode: 'upcoming', weekOffset, maxEvents: listedCount ?? 10 };
 
       if (!timeZone) {
         this.pendingCalendarListBySession.set(
@@ -107,18 +110,27 @@ export class ToolOrchestratorService {
         const { startLocal, endLocal } =
           pendingListRequest.mode === 'week'
             ? this.getMonToSunRangeLocal(nowLocal, timeZone, weekOffset)
-            : this.getUpcomingRangeLocal(nowLocal);
+            : pendingListRequest.mode === 'past'
+              ? this.getPastRangeLocal(nowLocal)
+              : this.getUpcomingRangeLocal(nowLocal);
 
         debugCalendarLog('[tool-orchestrator.list] request', {
           mode: pendingListRequest.mode,
           timeZone,
           weekOffset,
           maxEvents:
-            pendingListRequest.mode === 'upcoming'
+            pendingListRequest.mode === 'upcoming' ||
+            pendingListRequest.mode === 'past'
               ? pendingListRequest.maxEvents
               : undefined,
           rangeLocal: { start: startLocal, end: endLocal },
         });
+
+        const maxFetch =
+          pendingListRequest.mode === 'upcoming' ||
+          pendingListRequest.mode === 'past'
+            ? pendingListRequest.maxEvents
+            : undefined;
 
         const events = await this.calendarService.listEvents({
           sessionId,
@@ -126,10 +138,37 @@ export class ToolOrchestratorService {
           start: startLocal,
           end: endLocal,
           maxEvents:
-            pendingListRequest.mode === 'upcoming'
-              ? pendingListRequest.maxEvents
-              : undefined,
+            pendingListRequest.mode === 'past'
+              ? undefined
+              : maxFetch,
         });
+
+        const formatList = (
+          items: typeof events,
+        ): string =>
+          items
+            .map((e) =>
+              e.isAllDay
+                ? `- ${e.title} — ${e.startText}${
+                    e.endText ? ` to ${e.endText}` : ''
+                  } (All-day)`
+                : `- ${e.title} — ${e.startText}${
+                    e.endText ? `–${e.endText}` : ''
+                  }`,
+            )
+            .join('\n');
+
+        if (pendingListRequest.mode === 'past') {
+          const max = pendingListRequest.maxEvents ?? 10;
+          const recent = events.slice(-max).reverse();
+          if (recent.length === 0) {
+            return `No past events found in ${timeZone} (searched about the last year up to now).`;
+          }
+          return (
+            `Here are your last ${recent.length} events (${timeZone}), most recent first:\n\n` +
+            formatList(recent)
+          );
+        }
 
         if (events.length === 0) {
           return pendingListRequest.mode === 'week'
@@ -141,33 +180,13 @@ export class ToolOrchestratorService {
           const range = this.formatMonToSunRange(nowLocal, weekOffset);
           return (
             `Here are your events for ${range} (${timeZone}):\n\n` +
-            events
-              .map((e) =>
-                e.isAllDay
-                  ? `- ${e.title} — ${e.startText}${
-                      e.endText ? ` to ${e.endText}` : ''
-                    } (All-day)`
-                  : `- ${e.title} — ${e.startText}${
-                      e.endText ? `–${e.endText}` : ''
-                    }`,
-              )
-              .join('\n')
+            formatList(events)
           );
         }
 
         return (
           `Here are your next ${pendingListRequest.maxEvents ?? 10} events (${timeZone}):\n\n` +
-          events
-            .map((e) =>
-              e.isAllDay
-                ? `- ${e.title} — ${e.startText}${
-                    e.endText ? ` to ${e.endText}` : ''
-                  } (All-day)`
-                : `- ${e.title} — ${e.startText}${
-                    e.endText ? `–${e.endText}` : ''
-                  }`,
-            )
-            .join('\n')
+          formatList(events)
         );
       } catch (e: unknown) {
         return this.toolFailureMessage('list calendar events', e);
@@ -294,7 +313,14 @@ export class ToolOrchestratorService {
           const { startLocal, endLocal } =
             pendingList.mode === 'week'
               ? this.getMonToSunRangeLocal(nowLocal, tzCandidate, pendingList.weekOffset)
-              : this.getUpcomingRangeLocal(nowLocal);
+              : pendingList.mode === 'past'
+                ? this.getPastRangeLocal(nowLocal)
+                : this.getUpcomingRangeLocal(nowLocal);
+
+          const maxFetch =
+            pendingList.mode === 'upcoming' || pendingList.mode === 'past'
+              ? pendingList.maxEvents
+              : undefined;
 
           const events = await this.calendarService.listEvents({
             sessionId,
@@ -302,8 +328,35 @@ export class ToolOrchestratorService {
             start: startLocal,
             end: endLocal,
             maxEvents:
-              pendingList.mode === 'upcoming' ? pendingList.maxEvents : undefined,
+              pendingList.mode === 'past' ? undefined : maxFetch,
           });
+
+          const formatList = (
+            items: typeof events,
+          ): string =>
+            items
+              .map((e) =>
+                e.isAllDay
+                  ? `- ${e.title} — ${e.startText}${
+                      e.endText ? ` to ${e.endText}` : ''
+                    } (All-day)`
+                  : `- ${e.title} — ${e.startText}${
+                      e.endText ? `–${e.endText}` : ''
+                    }`,
+              )
+              .join('\n');
+
+          if (pendingList.mode === 'past') {
+            const max = pendingList.maxEvents ?? 10;
+            const recent = events.slice(-max).reverse();
+            if (recent.length === 0) {
+              return `No past events found in ${tzCandidate} (searched about the last year up to now).`;
+            }
+            return (
+              `Here are your last ${recent.length} events (${tzCandidate}), most recent first:\n\n` +
+              formatList(recent)
+            );
+          }
 
           if (events.length === 0) {
             return pendingList.mode === 'week'
@@ -315,33 +368,13 @@ export class ToolOrchestratorService {
             const range = this.formatMonToSunRange(nowLocal, pendingList.weekOffset);
             return (
               `Here are your events for ${range} (${tzCandidate}):\n\n` +
-              events
-                .map((e) =>
-                  e.isAllDay
-                    ? `- ${e.title} — ${e.startText}${
-                        e.endText ? ` to ${e.endText}` : ''
-                      } (All-day)`
-                    : `- ${e.title} — ${e.startText}${
-                        e.endText ? `–${e.endText}` : ''
-                      }`,
-                )
-                .join('\n')
+              formatList(events)
             );
           }
 
           return (
             `Here are your next ${pendingList.maxEvents ?? 10} events (${tzCandidate}):\n\n` +
-            events
-              .map((e) =>
-                e.isAllDay
-                  ? `- ${e.title} — ${e.startText}${
-                      e.endText ? ` to ${e.endText}` : ''
-                    } (All-day)`
-                  : `- ${e.title} — ${e.startText}${
-                      e.endText ? `–${e.endText}` : ''
-                    }`,
-              )
-              .join('\n')
+            formatList(events)
           );
         } catch (e: unknown) {
           return this.toolFailureMessage('list calendar events', e);
@@ -507,7 +540,16 @@ export class ToolOrchestratorService {
       /\bnext\s+\d+\s+(events?|appointments?|meetings?)\b/.test(text) ||
       (text.includes('next') && /\b\d+\b/.test(text) && text.includes('event'));
 
-    return hasCalendarNoun && hasListVerb && (hasWeek || hasNumberRequest);
+    const hasPastNumberRequest =
+      /\b(?:previous|last|past)\s+\d+\s+(?:events?|appointments?|meetings?)\b/.test(
+        text,
+      ) || /\b\d+\s+(?:previous|past)\s+events?\b/.test(text);
+
+    return (
+      hasCalendarNoun &&
+      hasListVerb &&
+      (hasWeek || hasNumberRequest || hasPastNumberRequest)
+    );
   }
 
   private isWeekListing(message: string): boolean {
@@ -522,11 +564,44 @@ export class ToolOrchestratorService {
     return 0;
   }
 
-  private extractNextEventCount(message: string): number | null {
+  /**
+   * Parses "next 5 …" (upcoming) or "previous 4 …" / "last 3 …" (past).
+   */
+  private extractListedEventCount(message: string): number | null {
     const text = message.toLowerCase();
-    const m = text.match(/\bnext\s+(\d+)\b/);
-    if (m && m[1]) return Number(m[1]);
+    const next = text.match(/\bnext\s+(\d+)\b/);
+    if (next?.[1]) return Number(next[1]);
+    const past = text.match(/\b(?:previous|last|past)\s+(\d+)\b/);
+    if (past?.[1]) return Number(past[1]);
+    const trailing = text.match(/\b(\d+)\s+(?:previous|past)\s+events?\b/);
+    if (trailing?.[1]) return Number(trailing[1]);
     return null;
+  }
+
+  /**
+   * "Previous / last / past N events" (not "next N", not week-based listings like "last week").
+   */
+  private isPastCalendarListIntent(message: string): boolean {
+    const text = message.toLowerCase();
+    if (/\bnext\s+\d+\b/.test(text)) return false;
+    if (
+      text.includes('last week') ||
+      text.includes('previous week') ||
+      text.includes('past week') ||
+      text.includes('this week') ||
+      text.includes('next week')
+    ) {
+      return false;
+    }
+    return (
+      /\b(previous|last|past)\b/.test(text) &&
+      /\d+/.test(text) &&
+      (text.includes('event') ||
+        text.includes('appointment') ||
+        text.includes('meeting') ||
+        text.includes('lined up') ||
+        text.includes('calendar'))
+    );
   }
 
   private getMonToSunRangeLocal(
@@ -550,6 +625,21 @@ export class ToolOrchestratorService {
       .plus({ days: (weekOffset + 1) * 7 })
       .toFormat("yyyy-MM-dd'T'HH:mm:ss");
 
+    return { startLocal, endLocal };
+  }
+
+  /**
+   * Window for "what already happened": roughly the last year through "now"
+   * (exclusive end is the current instant for Google’s timeMax).
+   */
+  private getPastRangeLocal(
+    nowLocal: DateTime,
+  ): { startLocal: string; endLocal: string } {
+    const startLocal = nowLocal
+      .minus({ days: 365 })
+      .startOf('day')
+      .toFormat("yyyy-MM-dd'T'HH:mm:ss");
+    const endLocal = nowLocal.toFormat("yyyy-MM-dd'T'HH:mm:ss");
     return { startLocal, endLocal };
   }
 
