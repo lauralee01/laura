@@ -15,6 +15,9 @@ import { Pool } from 'pg';
 const DEFAULT_SCOPES = [
   'https://www.googleapis.com/auth/gmail.compose',
   'https://www.googleapis.com/auth/calendar.events',
+  // Required for `calendar.calendarList.list` (enumerate calendars for cross-calendar listing).
+  // `calendar.events` alone does not include this.
+  'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
 ].join(' ');
 
 type GoogleTokenResponse = {
