@@ -23,6 +23,15 @@ export type SendDraftOutput = {
   threadId?: string;
 };
 
+export type ReviseDraftEmailInput = {
+  sessionId: string;
+  draftId: string;
+  recipients: string[];
+  currentSubject: string;
+  currentBody: string;
+  revisionInstruction: string;
+};
+
 @Injectable()
 export class EmailService {
   constructor(
@@ -129,6 +138,137 @@ export class EmailService {
     } catch (err: unknown) {
       const detail = err instanceof Error ? err.message : 'Gmail API error';
       throw new BadRequestException(`Could not send Gmail draft: ${detail}`);
+    }
+  }
+
+  /**
+   * Rewrites the pending draft with the LLM and updates the same Gmail draft
+   * (`users.drafts.update`) so the user can iterate before sending.
+   */
+  async reviseDraftEmail(
+    input: ReviseDraftEmailInput,
+  ): Promise<DraftEmailOutput> {
+    const draftId = input.draftId?.trim();
+    if (!draftId) {
+      throw new BadRequestException('draftId is required to revise a draft.');
+    }
+    const sessionId = input.sessionId?.trim();
+    if (!sessionId) {
+      throw new BadRequestException(
+        'sessionId is required to update a Gmail draft.',
+      );
+    }
+    const recipients = input.recipients.map((r) => r.trim()).filter((r) => r);
+    if (recipients.length === 0) {
+      throw new BadRequestException('recipients must not be empty');
+    }
+    const instruction = input.revisionInstruction.trim();
+    if (!instruction) {
+      throw new BadRequestException('revision instruction must not be empty');
+    }
+
+    const composed = await this.composeRevisionWithLlm({
+      recipients,
+      currentSubject: input.currentSubject,
+      currentBody: input.currentBody,
+      revisionInstruction: instruction,
+    });
+
+    const subject = composed.subject;
+    const body = composed.body;
+
+    const auth = await this.googleOAuth.getOAuth2ClientForSession(sessionId);
+    const gmail = google.gmail({ version: 'v1', auth });
+
+    const raw = this.encodeRfc822PlainText({
+      to: recipients,
+      subject,
+      body,
+    });
+
+    try {
+      await gmail.users.drafts.update({
+        userId: 'me',
+        id: draftId,
+        requestBody: {
+          message: { raw },
+        },
+      });
+
+      return {
+        draftId,
+        recipients,
+        subject,
+        body,
+      };
+    } catch (err: unknown) {
+      const detail = err instanceof Error ? err.message : 'Gmail API error';
+      throw new BadRequestException(
+        `Could not update Gmail draft: ${detail}`,
+      );
+    }
+  }
+
+  private async composeRevisionWithLlm(input: {
+    recipients: string[];
+    currentSubject: string;
+    currentBody: string;
+    revisionInstruction: string;
+  }): Promise<{ subject: string; body: string }> {
+    const systemPrompt = `
+You revise plain-text email drafts. Reply with JSON only (no markdown code fences):
+{"subject":"...","body":"..."}
+
+Rules:
+- Apply the user's revision request to the draft. Keep recipients implied by context; do not add "To:" lines in the body.
+- subject: one line, under 90 characters.
+- body: plain text only, ready to send. Preserve a natural sign-off ending with "Laura" on its own line unless the revision explicitly asks to change the signature.
+- Do not put "Subject:" in the body.
+`.trim();
+
+    const userMessage = [
+      `Recipients: ${input.recipients.join(', ')}`,
+      `Current subject: ${input.currentSubject}`,
+      `Current body:\n${input.currentBody}`,
+      `Revision request: ${input.revisionInstruction}`,
+    ].join('\n\n');
+
+    try {
+      const raw = await this.llm.generate({ systemPrompt, userMessage });
+      const parsed = this.safeParseObject(raw);
+      if (!parsed) {
+        return {
+          subject: input.currentSubject.replace(/\r?\n/g, ' '),
+          body: input.currentBody.trim(),
+        };
+      }
+
+      const subjectUnknown = parsed['subject'];
+      const bodyUnknown = parsed['body'];
+      if (typeof bodyUnknown !== 'string' || !bodyUnknown.trim()) {
+        return {
+          subject: input.currentSubject.replace(/\r?\n/g, ' '),
+          body: input.currentBody.trim(),
+        };
+      }
+
+      const body = bodyUnknown.trim();
+      const subjectFromModel =
+        typeof subjectUnknown === 'string' ? subjectUnknown.trim() : '';
+      const subject =
+        subjectFromModel ||
+        input.currentSubject.replace(/\r?\n/g, ' ') ||
+        'Draft';
+
+      return {
+        subject: subject.replace(/\r?\n/g, ' '),
+        body,
+      };
+    } catch {
+      return {
+        subject: input.currentSubject.replace(/\r?\n/g, ' '),
+        body: input.currentBody.trim(),
+      };
     }
   }
 

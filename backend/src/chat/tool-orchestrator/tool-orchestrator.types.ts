@@ -8,6 +8,8 @@ export type PendingEmailSendPayload = {
   draftId: string;
   recipients: string[];
   subject: string;
+  /** Latest plain-text body (for in-chat revisions before send). */
+  body: string;
 };
 
 export type CalendarListMode =

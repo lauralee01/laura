@@ -41,6 +41,7 @@ import {
 import {
   isCancelPendingEmailSend,
   isConfirmSendEmail,
+  isEmailDraftRevisionIntent,
   shouldClearEmailSendForNewToolIntent,
 } from './tool-orchestrator.email-send-intents';
 import type {
@@ -97,12 +98,51 @@ export class ToolOrchestratorService {
       }
       if (shouldClearEmailSendForNewToolIntent(message)) {
         this.pendingRequestService.clearPending(sessionId, 'email_send');
+      } else if (isEmailDraftRevisionIntent(message)) {
+        try {
+          const revised = await this.emailService.reviseDraftEmail({
+            sessionId,
+            draftId: pendingSend.payload.draftId,
+            recipients: pendingSend.payload.recipients,
+            currentSubject: pendingSend.payload.subject,
+            currentBody: pendingSend.payload.body,
+            revisionInstruction: message,
+          });
+
+          this.pendingRequestService.setPending<PendingEmailSendPayload>(
+            sessionId,
+            {
+              actionType: 'email_send',
+              originalMessage: pendingSend.originalMessage,
+              payload: {
+                draftId: revised.draftId,
+                recipients: revised.recipients,
+                subject: revised.subject,
+                body: revised.body,
+              },
+              missingSlots: ['confirmation'],
+              collectedSlots: {},
+            },
+          );
+
+          return (
+            `Updated your Gmail draft.\n\n` +
+            `Recipients: ${revised.recipients.join(', ')}\n` +
+            `Subject: ${revised.subject}\n\n` +
+            `${revised.body}\n\n` +
+            `---\n` +
+            `Send it? Reply send or yes to send from your Gmail now, or ask for another change, or cancel to skip sending (the draft stays in Gmail).`
+          );
+        } catch (e: unknown) {
+          return formatToolFailureMessage('update the Gmail draft', e);
+        }
       } else {
         return (
           'I still have a draft ready to send:\n' +
           `To: ${pendingSend.payload.recipients.join(', ')}\n` +
           `Subject: ${pendingSend.payload.subject}\n\n` +
-          'Reply send or yes to send it now, or cancel to dismiss this prompt (the draft stays in Gmail).'
+          `${pendingSend.payload.body}\n\n` +
+          'Reply send or yes to send it now, or describe how you’d like the draft changed, or cancel to dismiss this prompt (the draft stays in Gmail).'
         );
       }
     }
@@ -131,6 +171,7 @@ export class ToolOrchestratorService {
               draftId: draft.draftId,
               recipients: draft.recipients,
               subject: draft.subject,
+              body: draft.body,
             },
             missingSlots: ['confirmation'],
             collectedSlots: {},
@@ -143,7 +184,7 @@ export class ToolOrchestratorService {
           `Subject: ${draft.subject}\n\n` +
           `${draft.body}\n\n` +
           `---\n` +
-          `Send it? Reply send or yes to send from your Gmail now, or cancel to skip sending (the draft stays in Gmail).`
+          `Send it? Reply send or yes to send from your Gmail now, or say how you’d like it revised, or cancel to skip sending (the draft stays in Gmail).`
         );
       } catch (e: unknown) {
         return formatToolFailureMessage('create the Gmail draft', e);
