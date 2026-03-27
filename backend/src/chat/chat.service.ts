@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { LlmChatTurn, LlmService } from '../llm/llm.service';
 import { MemoryService } from '../memory/memory.service';
-import { ToolOrchestratorService } from './tool-orchestrator.service';
+import { ToolOrchestratorService } from './tool-orchestrator';
 import { MemoryPersistenceService } from './memory-persistence.service';
 import { ChatHistoryService } from './chat-history.service';
 

@@ -5,7 +5,7 @@ import { LlmModule } from '../llm/llm.module';
 import { MemoryModule } from '../memory/memory.module';
 import { EmailModule } from '../integrations/email/email.module';
 import { CalendarModule } from '../integrations/calendar/calendar.module';
-import { ToolOrchestratorService } from './tool-orchestrator.service';
+import { ToolOrchestratorService } from './tool-orchestrator';
 import { MemoryPersistenceService } from './memory-persistence.service';
 import { ChatHistoryService } from './chat-history.service';
 import { SessionPreferencesService } from './session-preferences.service';
