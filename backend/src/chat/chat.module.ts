@@ -9,6 +9,7 @@ import { ToolOrchestratorService } from './tool-orchestrator.service';
 import { MemoryPersistenceService } from './memory-persistence.service';
 import { ChatHistoryService } from './chat-history.service';
 import { SessionPreferencesService } from './session-preferences.service';
+import { PendingRequestService } from './pending-request.service';
 
 @Module({
   imports: [LlmModule, MemoryModule, EmailModule, CalendarModule],
@@ -19,6 +20,7 @@ import { SessionPreferencesService } from './session-preferences.service';
     MemoryPersistenceService,
     ChatHistoryService,
     SessionPreferencesService,
+    PendingRequestService,
   ],
 })
 export class ChatModule {}

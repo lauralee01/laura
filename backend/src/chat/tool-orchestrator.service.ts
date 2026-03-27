@@ -5,6 +5,7 @@ import { LlmService } from '../llm/llm.service';
 import { DateTime, IANAZone } from 'luxon';
 import { debugCalendarLog } from '../integrations/calendar/calendar-debug';
 import { SessionPreferencesService } from './session-preferences.service';
+import { PendingRequestService } from './pending-request.service';
 
 type CalendarArgs = {
   title: string;
@@ -14,32 +15,27 @@ type CalendarArgs = {
   reminderMinutesBefore?: number;
 };
 
-type PendingCalendarRequest = {
+type PendingCalendarCreatePayload = {
   message: string;
 };
 
-type CalendarListMode = 'week' | 'upcoming' | 'past';
+type CalendarListMode = 'week' | 'day' | 'upcoming' | 'past';
 
-type PendingCalendarListRequest = {
+type PendingCalendarListPayload = {
   mode: CalendarListMode;
   weekOffset: number; // 0 = this week, 1 = next week, -1 = last week
+  dayOffset?: number; // 0 = today, 1 = tomorrow, -1 = yesterday
   maxEvents?: number; // upcoming / past: how many events to show
 };
 
 @Injectable()
 export class ToolOrchestratorService {
-  private readonly pendingCalendarBySession =
-    new Map<string, PendingCalendarRequest>();
-  private readonly pendingCalendarListBySession = new Map<
-    string,
-    PendingCalendarListRequest
-  >();
-
   constructor(
     private readonly llmService: LlmService,
     private readonly emailService: EmailService,
     private readonly calendarService: CalendarService,
     private readonly sessionPreferences: SessionPreferencesService,
+    private readonly pendingRequestService: PendingRequestService,
   ) {}
 
   async tryHandle(sessionId: string, message: string): Promise<string | null> {
@@ -85,19 +81,29 @@ export class ToolOrchestratorService {
 
       const weekOffset = this.extractWeekOffset(message);
       const weekListing = this.isWeekListing(message);
+      const dayListing = this.isDayListing(message);
+      const dayOffset = this.extractDayOffset(message);
       const listedCount = this.extractListedEventCount(message);
       const pastIntent = this.isPastCalendarListIntent(message);
 
-      const pendingListRequest: PendingCalendarListRequest = weekListing
+      const pendingListRequest: PendingCalendarListPayload = weekListing
         ? { mode: 'week', weekOffset }
+        : dayListing
+          ? { mode: 'day', weekOffset: 0, dayOffset }
         : pastIntent
           ? { mode: 'past', weekOffset: 0, maxEvents: listedCount ?? 10 }
           : { mode: 'upcoming', weekOffset, maxEvents: listedCount ?? 10 };
 
       if (!timeZone) {
-        this.pendingCalendarListBySession.set(
+        this.pendingRequestService.setPending<PendingCalendarListPayload>(
           sessionId,
-          pendingListRequest,
+          {
+            actionType: 'calendar_list',
+            originalMessage: message,
+            payload: pendingListRequest,
+            missingSlots: ['timeZone'],
+            collectedSlots: {},
+          },
         );
         return (
           'What timezone should I use for your events?\n\n' +
@@ -110,6 +116,8 @@ export class ToolOrchestratorService {
         const { startLocal, endLocal } =
           pendingListRequest.mode === 'week'
             ? this.getMonToSunRangeLocal(nowLocal, timeZone, weekOffset)
+            : pendingListRequest.mode === 'day'
+              ? this.getSingleDayRangeLocal(nowLocal, pendingListRequest.dayOffset ?? 0)
             : pendingListRequest.mode === 'past'
               ? this.getPastRangeLocal(nowLocal)
               : this.getUpcomingRangeLocal(nowLocal);
@@ -173,13 +181,26 @@ export class ToolOrchestratorService {
         if (events.length === 0) {
           return pendingListRequest.mode === 'week'
             ? `No events found for that Mon–Sun week in ${timeZone}.`
-            : `No upcoming events found in ${timeZone}.`;
+            : pendingListRequest.mode === 'day'
+              ? `No events found for ${this.describeDayWindow(nowLocal, pendingListRequest.dayOffset ?? 0)} in ${timeZone}.`
+              : `No upcoming events found in ${timeZone}.`;
         }
 
         if (pendingListRequest.mode === 'week') {
           const range = this.formatMonToSunRange(nowLocal, weekOffset);
           return (
             `Here are your events for ${range} (${timeZone}):\n\n` +
+            formatList(events)
+          );
+        }
+
+        if (pendingListRequest.mode === 'day') {
+          const dayText = this.describeDayWindow(
+            nowLocal,
+            pendingListRequest.dayOffset ?? 0,
+          );
+          return (
+            `Here are your events for ${dayText} (${timeZone}):\n\n` +
             formatList(events)
           );
         }
@@ -208,7 +229,16 @@ export class ToolOrchestratorService {
       }
 
       if (!timeZone) {
-        this.pendingCalendarBySession.set(sessionId, { message });
+        this.pendingRequestService.setPending<PendingCalendarCreatePayload>(
+          sessionId,
+          {
+            actionType: 'calendar_create',
+            originalMessage: message,
+            payload: { message },
+            missingSlots: ['timeZone'],
+            collectedSlots: {},
+          },
+        );
         return (
           'What timezone should I use for your events?\n\n' +
           'Please reply with an IANA timezone like `America/Chicago` (Central), `America/New_York` (Eastern), or `America/Los_Angeles` (Pacific).'
@@ -217,7 +247,7 @@ export class ToolOrchestratorService {
 
       try {
         // If we’re about to create immediately, clear any stale pending request.
-        this.pendingCalendarBySession.delete(sessionId);
+        this.pendingRequestService.clearPending(sessionId, 'calendar_create');
         const args = await this.extractCalendarEventArgs(message, timeZone);
         if (!args) {
           return (
@@ -267,11 +297,17 @@ export class ToolOrchestratorService {
         return this.toolFailureMessage('set timezone', e);
       }
 
-      const pending = this.pendingCalendarBySession.get(sessionId);
+      const pending = this.pendingRequestService.getPending<PendingCalendarCreatePayload>(
+        sessionId,
+        'calendar_create',
+      );
       if (pending) {
-        this.pendingCalendarBySession.delete(sessionId);
+        this.pendingRequestService.clearPending(sessionId, 'calendar_create');
         try {
-          const args = await this.extractCalendarEventArgs(pending.message, tzCandidate);
+          const args = await this.extractCalendarEventArgs(
+            pending.payload.message,
+            tzCandidate,
+          );
           if (!args) {
             return `I saved your timezone as ${tzCandidate}, but I still need a valid start and end time to create the event.`;
           }
@@ -305,21 +341,34 @@ export class ToolOrchestratorService {
         }
       }
 
-      const pendingList = this.pendingCalendarListBySession.get(sessionId);
+      const pendingList = this.pendingRequestService.getPending<PendingCalendarListPayload>(
+        sessionId,
+        'calendar_list',
+      );
       if (pendingList) {
-        this.pendingCalendarListBySession.delete(sessionId);
+        this.pendingRequestService.clearPending(sessionId, 'calendar_list');
         try {
           const nowLocal = DateTime.now().setZone(tzCandidate);
           const { startLocal, endLocal } =
-            pendingList.mode === 'week'
-              ? this.getMonToSunRangeLocal(nowLocal, tzCandidate, pendingList.weekOffset)
-              : pendingList.mode === 'past'
+            pendingList.payload.mode === 'week'
+              ? this.getMonToSunRangeLocal(
+                  nowLocal,
+                  tzCandidate,
+                  pendingList.payload.weekOffset,
+                )
+              : pendingList.payload.mode === 'day'
+                ? this.getSingleDayRangeLocal(
+                    nowLocal,
+                    pendingList.payload.dayOffset ?? 0,
+                  )
+              : pendingList.payload.mode === 'past'
                 ? this.getPastRangeLocal(nowLocal)
                 : this.getUpcomingRangeLocal(nowLocal);
 
           const maxFetch =
-            pendingList.mode === 'upcoming' || pendingList.mode === 'past'
-              ? pendingList.maxEvents
+            pendingList.payload.mode === 'upcoming' ||
+            pendingList.payload.mode === 'past'
+              ? pendingList.payload.maxEvents
               : undefined;
 
           const events = await this.calendarService.listEvents({
@@ -328,7 +377,7 @@ export class ToolOrchestratorService {
             start: startLocal,
             end: endLocal,
             maxEvents:
-              pendingList.mode === 'past' ? undefined : maxFetch,
+              pendingList.payload.mode === 'past' ? undefined : maxFetch,
           });
 
           const formatList = (
@@ -346,8 +395,8 @@ export class ToolOrchestratorService {
               )
               .join('\n');
 
-          if (pendingList.mode === 'past') {
-            const max = pendingList.maxEvents ?? 10;
+          if (pendingList.payload.mode === 'past') {
+            const max = pendingList.payload.maxEvents ?? 10;
             const recent = events.slice(-max).reverse();
             if (recent.length === 0) {
               return `No past events found in ${tzCandidate} (searched about the last year up to now).`;
@@ -359,21 +408,37 @@ export class ToolOrchestratorService {
           }
 
           if (events.length === 0) {
-            return pendingList.mode === 'week'
+            return pendingList.payload.mode === 'week'
               ? `No events found for that Mon–Sun week in ${tzCandidate}.`
+              : pendingList.payload.mode === 'day'
+                ? `No events found for ${this.describeDayWindow(nowLocal, pendingList.payload.dayOffset ?? 0)} in ${tzCandidate}.`
               : `No upcoming events found in ${tzCandidate}.`;
           }
 
-          if (pendingList.mode === 'week') {
-            const range = this.formatMonToSunRange(nowLocal, pendingList.weekOffset);
+          if (pendingList.payload.mode === 'week') {
+            const range = this.formatMonToSunRange(
+              nowLocal,
+              pendingList.payload.weekOffset,
+            );
             return (
               `Here are your events for ${range} (${tzCandidate}):\n\n` +
               formatList(events)
             );
           }
 
+          if (pendingList.payload.mode === 'day') {
+            const dayText = this.describeDayWindow(
+              nowLocal,
+              pendingList.payload.dayOffset ?? 0,
+            );
+            return (
+              `Here are your events for ${dayText} (${tzCandidate}):\n\n` +
+              formatList(events)
+            );
+          }
+
           return (
-            `Here are your next ${pendingList.maxEvents ?? 10} events (${tzCandidate}):\n\n` +
+            `Here are your next ${pendingList.payload.maxEvents ?? 10} events (${tzCandidate}):\n\n` +
             formatList(events)
           );
         } catch (e: unknown) {
@@ -535,6 +600,14 @@ export class ToolOrchestratorService {
       text.includes('upcoming');
 
     const hasWeek = text.includes('week') || (text.includes('mon') && text.includes('sun'));
+    const hasDay =
+      text.includes('today') ||
+      text.includes('tomorrow') ||
+      text.includes('yesterday') ||
+      text.includes('tonight') ||
+      /\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/.test(
+        text,
+      );
 
     const hasNumberRequest =
       /\bnext\s+\d+\s+(events?|appointments?|meetings?)\b/.test(text) ||
@@ -548,7 +621,7 @@ export class ToolOrchestratorService {
     return (
       hasCalendarNoun &&
       hasListVerb &&
-      (hasWeek || hasNumberRequest || hasPastNumberRequest)
+      (hasWeek || hasDay || hasNumberRequest || hasPastNumberRequest)
     );
   }
 
@@ -562,6 +635,39 @@ export class ToolOrchestratorService {
     if (text.includes('last week')) return -1;
     if (text.includes('next week')) return 1;
     return 0;
+  }
+
+  private isDayListing(message: string): boolean {
+    const text = message.toLowerCase();
+    return (
+      text.includes('today') ||
+      text.includes('tomorrow') ||
+      text.includes('yesterday') ||
+      text.includes('tonight') ||
+      /\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/.test(
+        text,
+      )
+    );
+  }
+
+  private extractDayOffset(message: string): number {
+    const text = message.toLowerCase();
+    if (text.includes('tomorrow')) return 1;
+    if (text.includes('yesterday')) return -1;
+
+    const nextDow = text.match(
+      /\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/,
+    );
+    if (nextDow?.[1]) {
+      const target = this.weekdayNameToNumber(nextDow[1]);
+      const now = DateTime.now();
+      const current = now.weekday; // 1..7
+      let diff = target - current;
+      if (diff <= 0) diff += 7;
+      return diff;
+    }
+
+    return 0; // today / tonight / fallback
   }
 
   /**
@@ -628,6 +734,22 @@ export class ToolOrchestratorService {
     return { startLocal, endLocal };
   }
 
+  /** Day window in local time, [start, next-day-start). */
+  private getSingleDayRangeLocal(
+    nowLocal: DateTime,
+    dayOffset: number,
+  ): { startLocal: string; endLocal: string } {
+    const start = nowLocal
+      .startOf('day')
+      .plus({ days: dayOffset })
+      .toFormat("yyyy-MM-dd'T'HH:mm:ss");
+    const end = nowLocal
+      .startOf('day')
+      .plus({ days: dayOffset + 1 })
+      .toFormat("yyyy-MM-dd'T'HH:mm:ss");
+    return { startLocal: start, endLocal: end };
+  }
+
   /**
    * Window for "what already happened": roughly the last year through "now"
    * (exclusive end is the current instant for Google’s timeMax).
@@ -675,6 +797,34 @@ export class ToolOrchestratorService {
       .minus({ milliseconds: 1 });
 
     return `${start.toFormat('MMM d, yyyy')} – ${endInclusive.toFormat('MMM d, yyyy')}`;
+  }
+
+  private describeDayWindow(nowLocal: DateTime, dayOffset: number): string {
+    if (dayOffset === 0) return 'today';
+    if (dayOffset === 1) return 'tomorrow';
+    if (dayOffset === -1) return 'yesterday';
+    return nowLocal.plus({ days: dayOffset }).toFormat('ccc, MMM d, yyyy');
+  }
+
+  private weekdayNameToNumber(dayName: string): number {
+    switch (dayName.toLowerCase()) {
+      case 'monday':
+        return 1;
+      case 'tuesday':
+        return 2;
+      case 'wednesday':
+        return 3;
+      case 'thursday':
+        return 4;
+      case 'friday':
+        return 5;
+      case 'saturday':
+        return 6;
+      case 'sunday':
+        return 7;
+      default:
+        return 1;
+    }
   }
 
   private async extractDraftEmailArgs(message: string): Promise<{
