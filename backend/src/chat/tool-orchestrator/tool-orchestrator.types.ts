@@ -3,6 +3,13 @@ export type PendingCalendarCreatePayload = {
   message: string;
 };
 
+/** After a Gmail draft is created: wait for explicit send confirmation. */
+export type PendingEmailSendPayload = {
+  draftId: string;
+  recipients: string[];
+  subject: string;
+};
+
 export type CalendarListMode =
   | 'week'
   | 'month'

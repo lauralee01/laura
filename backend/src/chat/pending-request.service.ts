@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 
-export type PendingActionType = 'calendar_create' | 'calendar_list';
+export type PendingActionType =
+  | 'calendar_create'
+  | 'calendar_list'
+  | 'email_send';
 
 export type PendingSlotName =
   | 'timeZone'

@@ -38,9 +38,15 @@ import {
   extractTimeZoneFromMessage,
   isTimeZoneSettingMessage,
 } from './tool-orchestrator.timezone';
+import {
+  isCancelPendingEmailSend,
+  isConfirmSendEmail,
+  shouldClearEmailSendForNewToolIntent,
+} from './tool-orchestrator.email-send-intents';
 import type {
   PendingCalendarCreatePayload,
   PendingCalendarListPayload,
+  PendingEmailSendPayload,
 } from './tool-orchestrator.types';
 import { formatToolFailureMessage } from './tool-orchestrator.utils';
 
@@ -59,6 +65,48 @@ export class ToolOrchestratorService {
   ) {}
 
   async tryHandle(sessionId: string, message: string): Promise<string | null> {
+    const pendingSend =
+      this.pendingRequestService.getPending<PendingEmailSendPayload>(
+        sessionId,
+        'email_send',
+      );
+    if (pendingSend) {
+      if (isCancelPendingEmailSend(message)) {
+        this.pendingRequestService.clearPending(sessionId, 'email_send');
+        return (
+          'Okay — I won’t send that draft from here. ' +
+          'It’s still in your Gmail drafts if you want to send or edit it there.'
+        );
+      }
+      if (isConfirmSendEmail(message)) {
+        this.pendingRequestService.clearPending(sessionId, 'email_send');
+        try {
+          const sent = await this.emailService.sendDraft(
+            sessionId,
+            pendingSend.payload.draftId,
+          );
+          return (
+            `Email sent from your Gmail.\n\n` +
+            `To: ${pendingSend.payload.recipients.join(', ')}\n` +
+            `Subject: ${pendingSend.payload.subject}\n` +
+            (sent.messageId ? `Message id: ${sent.messageId}\n` : '')
+          );
+        } catch (e: unknown) {
+          return formatToolFailureMessage('send the email', e);
+        }
+      }
+      if (shouldClearEmailSendForNewToolIntent(message)) {
+        this.pendingRequestService.clearPending(sessionId, 'email_send');
+      } else {
+        return (
+          'I still have a draft ready to send:\n' +
+          `To: ${pendingSend.payload.recipients.join(', ')}\n` +
+          `Subject: ${pendingSend.payload.subject}\n\n` +
+          'Reply send or yes to send it now, or cancel to dismiss this prompt (the draft stays in Gmail).'
+        );
+      }
+    }
+
     if (isEmailDraftIntent(message)) {
       const args = await extractDraftEmailArgs(this.llmService, message);
       if (!args) {
@@ -74,11 +122,28 @@ export class ToolOrchestratorService {
           context: args.context,
         });
 
+        this.pendingRequestService.setPending<PendingEmailSendPayload>(
+          sessionId,
+          {
+            actionType: 'email_send',
+            originalMessage: message,
+            payload: {
+              draftId: draft.draftId,
+              recipients: draft.recipients,
+              subject: draft.subject,
+            },
+            missingSlots: ['confirmation'],
+            collectedSlots: {},
+          },
+        );
+
         return (
           `Draft saved in Gmail.\n\n` +
           `Recipients: ${draft.recipients.join(', ')}\n` +
           `Subject: ${draft.subject}\n\n` +
-          `${draft.body}`
+          `${draft.body}\n\n` +
+          `---\n` +
+          `Send it? Reply send or yes to send from your Gmail now, or cancel to skip sending (the draft stays in Gmail).`
         );
       } catch (e: unknown) {
         return formatToolFailureMessage('create the Gmail draft', e);

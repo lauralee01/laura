@@ -18,6 +18,11 @@ export type DraftEmailOutput = {
   body: string;
 };
 
+export type SendDraftOutput = {
+  messageId: string;
+  threadId?: string;
+};
+
 @Injectable()
 export class EmailService {
   constructor(
@@ -86,6 +91,44 @@ export class EmailService {
       throw new BadRequestException(
         `Could not create Gmail draft: ${detail}`,
       );
+    }
+  }
+
+  /**
+   * Sends an existing Gmail draft via the Gmail API (`users.drafts.send`).
+   * Requires the same OAuth session used to create the draft.
+   */
+  async sendDraft(
+    sessionId: string,
+    draftId: string,
+  ): Promise<SendDraftOutput> {
+    const sid = sessionId?.trim();
+    if (!sid) {
+      throw new BadRequestException(
+        'sessionId is required to send a Gmail draft.',
+      );
+    }
+    const id = draftId?.trim();
+    if (!id) {
+      throw new BadRequestException('draftId is required to send.');
+    }
+
+    const auth = await this.googleOAuth.getOAuth2ClientForSession(sid);
+    const gmail = google.gmail({ version: 'v1', auth });
+
+    try {
+      const { data } = await gmail.users.drafts.send({
+        userId: 'me',
+        requestBody: { id },
+      });
+
+      return {
+        messageId: data.id ?? '',
+        threadId: data.threadId ?? undefined,
+      };
+    } catch (err: unknown) {
+      const detail = err instanceof Error ? err.message : 'Gmail API error';
+      throw new BadRequestException(`Could not send Gmail draft: ${detail}`);
     }
   }
 
