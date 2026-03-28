@@ -5,7 +5,21 @@ export function isEmailDraftIntent(message: string): boolean {
   if (text.includes('write email') || text.includes('compose email')) {
     return true;
   }
-  return text.includes('draft') && text.includes('email');
+  if (text.includes('draft') && text.includes('email')) {
+    return true;
+  }
+  // Natural phrasing like “send an email to…” (no “draft” keyword).
+  const mentionsSend =
+    /\bsend\b/.test(text) || /\bsending\b/.test(text);
+  const refusesSend =
+    text.includes("don't send") ||
+    text.includes('do not send') ||
+    /\bwon'?t\s+send\b/.test(text) ||
+    /\bwont\s+send\b/.test(text);
+  if (text.includes('email') && mentionsSend && !refusesSend) {
+    return true;
+  }
+  return false;
 }
 
 export function isCalendarCreateIntent(message: string): boolean {

@@ -80,12 +80,12 @@ export class ToolOrchestratorService {
         );
       }
       if (isConfirmSendEmail(message)) {
-        this.pendingRequestService.clearPending(sessionId, 'email_send');
         try {
           const sent = await this.emailService.sendDraft(
             sessionId,
             pendingSend.payload.draftId,
           );
+          this.pendingRequestService.clearPending(sessionId, 'email_send');
           return (
             `Email sent from your Gmail.\n\n` +
             `To: ${pendingSend.payload.recipients.join(', ')}\n` +

@@ -14,7 +14,9 @@ type GenerateInput = {
 };
 
 type GeminiGenerateResponse = {
+  promptFeedback?: { blockReason?: string };
   candidates?: Array<{
+    finishReason?: string;
     content?: {
       parts?: Array<{
         text?: string;
@@ -111,10 +113,26 @@ export class LlmService {
     }
 
     const json = jsonUnknown as GeminiGenerateResponse;
+    const candidate = json.candidates?.[0];
     const reply =
-      json.candidates?.[0]?.content?.parts?.[0]?.text ??
-      json.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      candidate?.content?.parts?.[0]?.text ??
+      candidate?.content?.parts?.[0]?.inlineData?.data;
 
-    return String(reply ?? 'Sorry—no response generated.');
+    if (reply != null && String(reply).trim() !== '') {
+      return String(reply);
+    }
+
+    const blockReason = json.promptFeedback?.blockReason;
+    const finishReason = candidate?.finishReason;
+    if (blockReason || finishReason) {
+      return (
+        'I couldn’t produce a reply just now (the model blocked or stopped early). ' +
+        'Try rephrasing or sending a shorter message; if it keeps happening, check your API key and model settings.'
+      );
+    }
+
+    return (
+      'I didn’t get any text back from the model. Please try again in a moment.'
+    );
   }
 }

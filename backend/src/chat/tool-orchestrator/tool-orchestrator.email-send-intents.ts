@@ -4,16 +4,24 @@ import {
   isEmailDraftIntent,
 } from './tool-orchestrator.calendar-intents';
 
+/** Strips trailing punctuation / chat markdown so "Yes." and "yes" match alike. */
+function normalizeQuickReply(message: string): string {
+  let t = message.trim().toLowerCase();
+  t = t.replace(/^\*+|\*+$/g, '').trim();
+  t = t.replace(/[.!?…]+$/u, '').trim();
+  return t;
+}
+
 /** User explicitly cancels sending the pending draft. */
 export function isCancelPendingEmailSend(message: string): boolean {
-  const t = message.trim().toLowerCase();
-  if (t.length > 120) return false;
+  const raw = message.trim().toLowerCase();
+  if (raw.length > 120) return false;
+  const t = normalizeQuickReply(message);
   return (
     t === 'cancel' ||
-    t === 'cancel.' ||
-    t.startsWith('cancel ') ||
-    t.includes("don't send") ||
-    t.includes('do not send') ||
+    raw.startsWith('cancel ') ||
+    raw.includes("don't send") ||
+    raw.includes('do not send') ||
     t === 'never mind' ||
     t === 'nevermind' ||
     t === 'stop' ||
@@ -28,15 +36,19 @@ export function isCancelPendingEmailSend(message: string): boolean {
  * Avoid matching “draft another email” (requires draft + email for that path).
  */
 export function isConfirmSendEmail(message: string): boolean {
-  const t = message.trim().toLowerCase();
-  if (t.length > 120) return false;
+  const raw = message.trim().toLowerCase();
+  if (raw.length > 120) return false;
   if (isCancelPendingEmailSend(message)) return false;
+
+  const t = normalizeQuickReply(message);
 
   if (
     t === 'y' ||
     t === 'yes' ||
+    t === 'yep' ||
+    t === 'yeah' ||
+    t === 'sure' ||
     t === 'send' ||
-    t === 'send!' ||
     t === 'send it' ||
     t === 'send now' ||
     t === 'send it now' ||
@@ -51,15 +63,15 @@ export function isConfirmSendEmail(message: string): boolean {
   ) {
     return true;
   }
-  if (/^yes,?\s*send\.?$/.test(t)) return true;
+  if (/^yes,?\s*send\.?$/.test(raw.replace(/[.!?…]+$/u, '').trim())) return true;
 
-  if (/\bdraft\b/.test(t) && /\bemail\b/.test(t)) return false;
+  if (/\bdraft\b/.test(raw) && /\bemail\b/.test(raw)) return false;
 
   if (
     t === 'send that email' ||
     t === 'send the email' ||
-    t.includes('send it now') ||
-    (t.includes('send it') && !t.includes('draft'))
+    raw.includes('send it now') ||
+    (raw.includes('send it') && !raw.includes('draft'))
   ) {
     return true;
   }
