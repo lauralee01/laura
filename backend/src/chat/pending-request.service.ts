@@ -3,6 +3,9 @@ import { Injectable } from '@nestjs/common';
 export type PendingActionType =
   | 'calendar_create'
   | 'calendar_list'
+  | 'calendar_delete'
+  | 'calendar_update'
+  | 'calendar_mutate_tz'
   | 'email_send';
 
 export type PendingSlotName =

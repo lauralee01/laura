@@ -15,6 +15,7 @@ export type SortableCalendarEvent = {
 export function mapGoogleCalendarEventToSortable(
   ev: calendar_v3.Schema$Event,
   timeZone: string,
+  calendarId: string,
 ): SortableCalendarEvent {
   const id = ev.id ?? '';
   const title = ev.summary ?? '(Untitled)';
@@ -57,6 +58,7 @@ export function mapGoogleCalendarEventToSortable(
     return {
       sortMillis,
       summary: {
+        calendarId,
         eventId: id,
         title,
         isAllDay: true,
@@ -85,6 +87,7 @@ export function mapGoogleCalendarEventToSortable(
   return {
     sortMillis,
     summary: {
+      calendarId,
       eventId: id,
       title,
       isAllDay: false,

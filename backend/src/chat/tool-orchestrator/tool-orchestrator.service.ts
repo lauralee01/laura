@@ -8,13 +8,20 @@ import { SessionPreferencesService } from '../session-preferences.service';
 import { PendingRequestService } from '../pending-request.service';
 import {
   extractCalendarEventArgs,
+  extractCalendarMutationArgs,
   extractDraftEmailArgs,
 } from './tool-orchestrator-llm-extractors';
 import { buildCalendarListUserMessage } from './tool-orchestrator.calendar-list-reply';
 import {
+  filterEventsForMutation,
+  isConfirmCalendarMutation,
+  parseEventChoiceIndex,
+} from './tool-orchestrator.calendar-mutation-replies';
+import {
   getCalendarMonthRangeLocal,
   getCalendarYearRangeLocal,
   getMonToSunRangeLocal,
+  getNextDaysRangeLocal,
   getPastRangeLocal,
   getSingleDayRangeLocal,
   getUpcomingRangeLocal,
@@ -26,7 +33,9 @@ import {
   extractWeekOffset,
   extractYearOffset,
   isCalendarCreateIntent,
+  isCalendarDeleteIntent,
   isCalendarListIntent,
+  isCalendarUpdateIntent,
   isDayListing,
   isEmailDraftIntent,
   isMonthListing,
@@ -46,13 +55,16 @@ import {
 } from './tool-orchestrator.email-send-intents';
 import type {
   PendingCalendarCreatePayload,
+  PendingCalendarDeletePayload,
   PendingCalendarListPayload,
+  PendingCalendarMutateTzPayload,
+  PendingCalendarUpdatePayload,
   PendingEmailSendPayload,
 } from './tool-orchestrator.types';
 import { formatToolFailureMessage } from './tool-orchestrator.utils';
 
 /**
- * Routes chat messages to tool actions (email draft, calendar list/create)
+ * Routes chat messages to tool actions (email draft, calendar list/create/update/delete)
  * and handles timezone follow-ups via PendingRequestService.
  */
 @Injectable()
@@ -144,6 +156,111 @@ export class ToolOrchestratorService {
           `${pendingSend.payload.body}\n\n` +
           'Reply send or yes to send it now, or describe how you’d like the draft changed, or cancel to dismiss this prompt (the draft stays in Gmail).'
         );
+      }
+    }
+
+    const pendingDelete =
+      this.pendingRequestService.getPending<PendingCalendarDeletePayload>(
+        sessionId,
+        'calendar_delete',
+      );
+    if (pendingDelete) {
+      if (isCancelPendingEmailSend(message)) {
+        this.pendingRequestService.clearPending(sessionId, 'calendar_delete');
+        return (
+          'Okay — I won’t delete anything. Ask again when you want to remove an event.'
+        );
+      }
+      const p = pendingDelete.payload;
+      if (p.phase === 'pick') {
+        const idx = parseEventChoiceIndex(message, p.options.length);
+        if (idx === null) {
+          return (
+            `Reply with a number 1–${p.options.length} for the event to delete, or say cancel.`
+          );
+        }
+        const opt = p.options[idx - 1];
+        this.pendingRequestService.setPending<PendingCalendarDeletePayload>(
+          sessionId,
+          {
+            actionType: 'calendar_delete',
+            originalMessage: pendingDelete.originalMessage,
+            payload: {
+              phase: 'confirm',
+              timeZone: p.timeZone,
+              eventId: opt.eventId,
+              calendarId: opt.calendarId,
+              title: opt.title,
+              startText: opt.startText,
+            },
+            missingSlots: ['confirmation'],
+            collectedSlots: {},
+          },
+        );
+        return (
+          `Delete “${opt.title}” (${opt.startText})?\n\n` +
+            `Reply yes to remove it from Google Calendar, or cancel.`
+        );
+      }
+      if (isConfirmCalendarMutation(message)) {
+        try {
+          await this.calendarService.deleteEvent(
+            sessionId,
+            p.calendarId,
+            p.eventId,
+          );
+          this.pendingRequestService.clearPending(sessionId, 'calendar_delete');
+          return (
+            `Deleted from Google Calendar: “${p.title}” (${p.startText}).`
+          );
+        } catch (e: unknown) {
+          return formatToolFailureMessage('delete the calendar event', e);
+        }
+      }
+      return (
+        `Still waiting: delete “${p.title}”?\n` +
+        `Reply yes to confirm, or cancel.`
+      );
+    }
+
+    const pendingUpdate =
+      this.pendingRequestService.getPending<PendingCalendarUpdatePayload>(
+        sessionId,
+        'calendar_update',
+      );
+    if (pendingUpdate) {
+      if (isCancelPendingEmailSend(message)) {
+        this.pendingRequestService.clearPending(sessionId, 'calendar_update');
+        return (
+          'Okay — I won’t change that event. Ask again when you want to reschedule or rename something.'
+        );
+      }
+      const pu = pendingUpdate.payload;
+      const idx = parseEventChoiceIndex(message, pu.options.length);
+      if (idx === null) {
+        return (
+          `Reply with a number 1–${pu.options.length} for the event to update, or say cancel.`
+        );
+      }
+      const opt = pu.options[idx - 1];
+      this.pendingRequestService.clearPending(sessionId, 'calendar_update');
+      try {
+        const updated = await this.calendarService.updateEvent({
+          sessionId,
+          calendarId: opt.calendarId,
+          eventId: opt.eventId,
+          timeZone: pu.timeZone,
+          title: pu.newTitle ?? undefined,
+          start: pu.newStart ?? undefined,
+          end: pu.newEnd ?? undefined,
+        });
+        return (
+          `Updated in Google Calendar: “${updated.title}”.\n` +
+          (updated.url ? `Open: ${updated.url}\n` : '') +
+          `(event id: ${updated.eventId})`
+        );
+      } catch (e: unknown) {
+        return formatToolFailureMessage('update the calendar event', e);
       }
     }
 
@@ -365,6 +482,41 @@ export class ToolOrchestratorService {
       }
     }
 
+    if (isCalendarDeleteIntent(message) || isCalendarUpdateIntent(message)) {
+      const tzCandidateMut = extractTimeZoneFromMessage(message);
+      const storedTzMut = await this.sessionPreferences.getTimeZone(sessionId);
+      const timeZoneMut = tzCandidateMut ?? storedTzMut;
+
+      if (tzCandidateMut) {
+        await this.sessionPreferences
+          .setTimeZone(sessionId, tzCandidateMut)
+          .catch(() => undefined);
+      }
+
+      if (!timeZoneMut) {
+        this.pendingRequestService.setPending<PendingCalendarMutateTzPayload>(
+          sessionId,
+          {
+            actionType: 'calendar_mutate_tz',
+            originalMessage: message,
+            payload: { message },
+            missingSlots: ['timeZone'],
+            collectedSlots: {},
+          },
+        );
+        return (
+          'What timezone should I use to find that event?\n\n' +
+          'Reply with an IANA timezone like `America/Chicago`, `America/New_York`, or `America/Los_Angeles`.'
+        );
+      }
+
+      return await this.runCalendarMutation(
+        sessionId,
+        message,
+        timeZoneMut,
+      );
+    }
+
     const tzCandidate = extractTimeZoneFromMessage(message);
     if (tzCandidate && isTimeZoneSettingMessage(message, tzCandidate)) {
       try {
@@ -464,10 +616,185 @@ export class ToolOrchestratorService {
         }
       }
 
+      const pendingMutTz =
+        this.pendingRequestService.getPending<PendingCalendarMutateTzPayload>(
+          sessionId,
+          'calendar_mutate_tz',
+        );
+      if (pendingMutTz) {
+        this.pendingRequestService.clearPending(sessionId, 'calendar_mutate_tz');
+        return await this.runCalendarMutation(
+          sessionId,
+          pendingMutTz.payload.message,
+          tzCandidate,
+        );
+      }
+
       return `Got it — I’ll schedule events in ${tzCandidate}.`;
     }
 
     return null;
+  }
+
+  private async runCalendarMutation(
+    sessionId: string,
+    userMessage: string,
+    timeZone: string,
+  ): Promise<string> {
+    const extracted = await extractCalendarMutationArgs(
+      this.llmService,
+      userMessage,
+      timeZone,
+    );
+    if (!extracted) {
+      return (
+        'I couldn’t tell which event or what to change. Try naming the event and the day ' +
+        '(e.g. “move my dentist visit tomorrow to 4pm” or “cancel team sync Friday”).'
+      );
+    }
+
+    if (extracted.operation === 'update') {
+      if (!extracted.newTitle && !extracted.newStart && !extracted.newEnd) {
+        return (
+          'What should I change—title, time, or both? For example: “rename it to Budget review” or “move it to 4pm”.'
+        );
+      }
+    }
+
+    const nowLocal = DateTime.now().setZone(timeZone);
+    let startLocal: string;
+    let endLocal: string;
+
+    if (extracted.searchWholeWeek) {
+      ({ startLocal, endLocal } = getMonToSunRangeLocal(
+        nowLocal,
+        timeZone,
+        0,
+      ));
+    } else if (extracted.dayOffset !== null) {
+      ({ startLocal, endLocal } = getSingleDayRangeLocal(
+        nowLocal,
+        extracted.dayOffset,
+      ));
+    } else {
+      const days = extracted.searchNextDays ?? 14;
+      ({ startLocal, endLocal } = getNextDaysRangeLocal(nowLocal, days));
+    }
+
+    try {
+      const events = await this.calendarService.listEvents({
+        sessionId,
+        timeZone,
+        start: startLocal,
+        end: endLocal,
+        maxEvents: 40,
+      });
+
+      const candidates = filterEventsForMutation(
+        events,
+        extracted.titleKeywords,
+      );
+
+      if (candidates.length === 0) {
+        return (
+          'I didn’t find a matching event in that window. Try listing your calendar or ' +
+            'being more specific about the title or date.'
+        );
+      }
+
+      if (candidates.length === 1) {
+        const c = candidates[0];
+        if (extracted.operation === 'delete') {
+          this.pendingRequestService.setPending<PendingCalendarDeletePayload>(
+            sessionId,
+            {
+              actionType: 'calendar_delete',
+              originalMessage: userMessage,
+              payload: {
+                phase: 'confirm',
+                timeZone,
+                eventId: c.eventId,
+                calendarId: c.calendarId,
+                title: c.title,
+                startText: c.startText,
+              },
+              missingSlots: ['confirmation'],
+              collectedSlots: {},
+            },
+          );
+          return (
+            `Delete “${c.title}” (${c.startText})?\n\n` +
+              `Reply yes to remove it from Google Calendar, or cancel.`
+          );
+        }
+
+        const updated = await this.calendarService.updateEvent({
+          sessionId,
+          calendarId: c.calendarId,
+          eventId: c.eventId,
+          timeZone,
+          title: extracted.newTitle ?? undefined,
+          start: extracted.newStart ?? undefined,
+          end: extracted.newEnd ?? undefined,
+        });
+        return (
+          `Updated in Google Calendar: “${updated.title}”.\n` +
+          (updated.url ? `Open: ${updated.url}\n` : '') +
+          `(event id: ${updated.eventId})`
+        );
+      }
+
+      const sliced = candidates.slice(0, 12);
+      const options = sliced.map((e, i) => ({
+        index: i + 1,
+        eventId: e.eventId,
+        calendarId: e.calendarId,
+        title: e.title,
+        startText: e.startText,
+      }));
+
+      if (extracted.operation === 'delete') {
+        this.pendingRequestService.setPending<PendingCalendarDeletePayload>(
+          sessionId,
+          {
+            actionType: 'calendar_delete',
+            originalMessage: userMessage,
+            payload: { phase: 'pick', timeZone, options },
+            missingSlots: ['targetEvent'],
+            collectedSlots: {},
+          },
+        );
+      } else {
+        this.pendingRequestService.setPending<PendingCalendarUpdatePayload>(
+          sessionId,
+          {
+            actionType: 'calendar_update',
+            originalMessage: userMessage,
+            payload: {
+              phase: 'pick',
+              timeZone,
+              newTitle: extracted.newTitle,
+              newStart: extracted.newStart,
+              newEnd: extracted.newEnd,
+              options,
+            },
+            missingSlots: ['targetEvent'],
+            collectedSlots: {},
+          },
+        );
+      }
+
+      const lines = options.map(
+        (o) => `${o.index}. ${o.title} — ${o.startText}`,
+      );
+      return (
+        `I found several events. Reply with a number (1–${options.length}):\n\n` +
+        `${lines.join('\n')}\n\n` +
+        `Or say cancel.`
+      );
+    } catch (e: unknown) {
+      return formatToolFailureMessage('search or change calendar events', e);
+    }
   }
 
   private resolveListRange(

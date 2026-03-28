@@ -62,6 +62,22 @@ export function getUpcomingRangeLocal(
   return { startLocal, endLocal };
 }
 
+/** Start of today through start of today+N days (use for mutation search windows). */
+export function getNextDaysRangeLocal(
+  nowLocal: DateTime,
+  days: number,
+): { startLocal: string; endLocal: string } {
+  const n = Math.max(1, Math.min(60, Math.floor(days)));
+  const startLocal = nowLocal.startOf('day').toFormat(
+    "yyyy-MM-dd'T'HH:mm:ss",
+  );
+  const endLocal = nowLocal
+    .plus({ days: n })
+    .startOf('day')
+    .toFormat("yyyy-MM-dd'T'HH:mm:ss");
+  return { startLocal, endLocal };
+}
+
 export function formatMonToSunRange(
   nowLocal: DateTime,
   weekOffset: number,

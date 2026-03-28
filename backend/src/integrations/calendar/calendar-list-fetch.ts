@@ -70,7 +70,7 @@ export async function fetchMergedEventsFromAllCalendars(
 
       for (const ev of items) {
         all.push(
-          mapGoogleCalendarEventToSortable(ev, options.timeZone),
+          mapGoogleCalendarEventToSortable(ev, options.timeZone, calendarId),
         );
       }
 

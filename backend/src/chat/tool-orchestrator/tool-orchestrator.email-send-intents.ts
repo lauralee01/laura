@@ -1,16 +1,11 @@
 import {
   isCalendarCreateIntent,
+  isCalendarDeleteIntent,
   isCalendarListIntent,
+  isCalendarUpdateIntent,
   isEmailDraftIntent,
 } from './tool-orchestrator.calendar-intents';
-
-/** Strips trailing punctuation / chat markdown so "Yes." and "yes" match alike. */
-function normalizeQuickReply(message: string): string {
-  let t = message.trim().toLowerCase();
-  t = t.replace(/^\*+|\*+$/g, '').trim();
-  t = t.replace(/[.!?…]+$/u, '').trim();
-  return t;
-}
+import { normalizeQuickReply } from './tool-orchestrator.utils';
 
 /** User explicitly cancels sending the pending draft. */
 export function isCancelPendingEmailSend(message: string): boolean {
@@ -84,6 +79,8 @@ export function shouldClearEmailSendForNewToolIntent(message: string): boolean {
   return (
     isCalendarListIntent(message) ||
     isCalendarCreateIntent(message) ||
+    isCalendarDeleteIntent(message) ||
+    isCalendarUpdateIntent(message) ||
     isEmailDraftIntent(message)
   );
 }

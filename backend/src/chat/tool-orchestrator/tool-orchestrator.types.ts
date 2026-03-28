@@ -31,3 +31,42 @@ export type PendingCalendarListPayload = {
   yearOffset?: number;
   maxEvents?: number; // upcoming / past: how many events to show
 };
+
+export type PendingCalendarMutationOption = {
+  index: number;
+  eventId: string;
+  calendarId: string;
+  title: string;
+  startText: string;
+};
+
+/** Waiting for timezone before delete/update resolution. */
+export type PendingCalendarMutateTzPayload = {
+  message: string;
+};
+
+/** User must pick which event when several match. */
+export type PendingCalendarDeletePayload =
+  | {
+      phase: 'pick';
+      timeZone: string;
+      options: PendingCalendarMutationOption[];
+    }
+  | {
+      phase: 'confirm';
+      timeZone: string;
+      eventId: string;
+      calendarId: string;
+      title: string;
+      startText: string;
+    };
+
+/** Update applies after pick (no second confirm). */
+export type PendingCalendarUpdatePayload = {
+  phase: 'pick';
+  timeZone: string;
+  newTitle: string | null;
+  newStart: string | null;
+  newEnd: string | null;
+  options: PendingCalendarMutationOption[];
+};

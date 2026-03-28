@@ -1,5 +1,13 @@
 import { BadRequestException } from '@nestjs/common';
 
+/** Strips trailing punctuation / chat markdown so "Yes." and "yes" match alike. */
+export function normalizeQuickReply(message: string): string {
+  let t = message.trim().toLowerCase();
+  t = t.replace(/^\*+|\*+$/g, '').trim();
+  t = t.replace(/[.!?…]+$/u, '').trim();
+  return t;
+}
+
 export function formatToolFailureMessage(action: string, err: unknown): string {
   if (err instanceof BadRequestException) {
     return `I couldn’t ${action}. ${err.message}`;

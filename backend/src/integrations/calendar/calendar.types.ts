@@ -26,10 +26,33 @@ export type ListCalendarEventsInput = {
 };
 
 export type ListCalendarEventSummary = {
+  /** Google Calendar id the event lives in (required for update/delete). */
+  calendarId: string;
   eventId: string;
   title: string;
   isAllDay: boolean;
   startText: string;
   endText?: string;
   url?: string;
+};
+
+export type UpdateCalendarEventInput = {
+  sessionId?: string;
+  calendarId: string;
+  eventId: string;
+  timeZone: string;
+  title?: string;
+  /** Local ISO datetimes (same format as create). Omit both to leave times unchanged. */
+  start?: string;
+  end?: string;
+  description?: string;
+  reminderMinutesBefore?: number | null;
+};
+
+export type UpdateCalendarEventOutput = {
+  eventId: string;
+  title: string;
+  start: string;
+  end: string;
+  url: string;
 };

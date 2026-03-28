@@ -120,3 +120,88 @@ Rules:
       typeof reminder === 'number' ? reminder : undefined,
   };
 }
+
+export type CalendarMutationExtraction = {
+  operation: 'delete' | 'update';
+  titleKeywords: string;
+  dayOffset: number | null;
+  searchWholeWeek: boolean;
+  searchNextDays: number | null;
+  newTitle: string | null;
+  newStart: string | null;
+  newEnd: string | null;
+};
+
+export async function extractCalendarMutationArgs(
+  llm: LlmService,
+  message: string,
+  timeZone: string,
+): Promise<CalendarMutationExtraction | null> {
+  const todayInZone = DateTime.now().setZone(timeZone).toISODate();
+
+  const prompt = `
+Extract calendar DELETE or UPDATE intent from the user message.
+Return JSON only with this exact schema:
+{
+  "operation": "delete" | "update",
+  "titleKeywords": string,
+  "dayOffset": number | null,
+  "searchWholeWeek": boolean,
+  "searchNextDays": number | null,
+  "newTitle": string | null,
+  "newStart": string | null,
+  "newEnd": string | null
+}
+
+Rules:
+- Today's date in ${timeZone} is ${todayInZone}.
+- titleKeywords: substring clues for the event title (e.g. "dentist", "1:1 mara"). If the user gave no title clue, use "any".
+- dayOffset: 0 = today, 1 = tomorrow, -1 = yesterday, null if unclear.
+- searchWholeWeek: true for "this week" / "the week" without a specific day.
+- searchNextDays: days ahead to search when day is vague (use 14 if unsure); null ok — caller defaults to 14.
+- delete: set newTitle, newStart, newEnd to null.
+- update: set newTitle if renaming; newStart and newEnd as LOCAL ISO datetimes (YYYY-MM-DDTHH:mm:ss, no Z) for ${timeZone} when rescheduling. If only a new start time is implied, set newEnd one hour after newStart.
+`.trim();
+
+  const raw = await llm.generate({
+    systemPrompt: prompt,
+    userMessage: message,
+  });
+  const parsed = safeParseJsonObject(raw);
+  if (!parsed) return null;
+
+  const operation = parsed['operation'];
+  const titleKeywords = parsed['titleKeywords'];
+  if (operation !== 'delete' && operation !== 'update') return null;
+  if (typeof titleKeywords !== 'string') return null;
+
+  const dayOffsetUnknown = parsed['dayOffset'];
+  const dayOffset =
+    dayOffsetUnknown === null || dayOffsetUnknown === undefined
+      ? null
+      : typeof dayOffsetUnknown === 'number'
+        ? dayOffsetUnknown
+        : null;
+
+  const searchWholeWeek = parsed['searchWholeWeek'] === true;
+  const searchNextDaysUnknown = parsed['searchNextDays'];
+  const searchNextDays =
+    typeof searchNextDaysUnknown === 'number'
+      ? searchNextDaysUnknown
+      : null;
+
+  const newTitle = parsed['newTitle'];
+  const newStart = parsed['newStart'];
+  const newEnd = parsed['newEnd'];
+
+  return {
+    operation,
+    titleKeywords,
+    dayOffset,
+    searchWholeWeek,
+    searchNextDays,
+    newTitle: typeof newTitle === 'string' ? newTitle : null,
+    newStart: typeof newStart === 'string' ? newStart : null,
+    newEnd: typeof newEnd === 'string' ? newEnd : null,
+  };
+}

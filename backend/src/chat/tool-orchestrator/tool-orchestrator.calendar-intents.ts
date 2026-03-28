@@ -256,6 +256,43 @@ export function isPastCalendarListIntent(message: string): boolean {
   );
 }
 
+/** Remove or cancel an existing calendar event (not email). */
+export function isCalendarDeleteIntent(message: string): boolean {
+  const text = message.toLowerCase();
+  if (
+    /\b(email|draft)\b/.test(text) &&
+    !/\b(event|meeting|appointment|calendar)\b/.test(text)
+  ) {
+    return false;
+  }
+  const hasVerb =
+    /\b(delete|remove)\b/.test(text) || /\bcancel\b/.test(text);
+  if (!hasVerb) return false;
+  return /\b(event|meeting|appointment|calendar|reminder|visit)\b/.test(text);
+}
+
+/** Reschedule or edit an existing event (time, title, etc.). */
+export function isCalendarUpdateIntent(message: string): boolean {
+  const text = message.toLowerCase();
+  if (
+    /\b(email|draft)\b/.test(text) &&
+    !/\b(calendar|event|meeting)\b/.test(text)
+  ) {
+    return false;
+  }
+  const hasVerb =
+    /\b(move|reschedule|postpone|shift|update|change|rename|push)\b/.test(
+      text,
+    );
+  if (!hasVerb) return false;
+  const hasTimeHint = /\d{1,2}(:\d{2})?\s*(am|pm)\b/.test(text);
+  return (
+    /\b(event|meeting|appointment|calendar|reminder|time|timing)\b/.test(
+      text,
+    ) || hasTimeHint
+  );
+}
+
 function weekdayNameToNumber(dayName: string): number {
   switch (dayName.toLowerCase()) {
     case 'monday':
