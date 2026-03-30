@@ -4,6 +4,12 @@ import { MemoryService } from '../memory/memory.service';
 import { ToolOrchestratorService } from './tool-orchestrator';
 import { MemoryPersistenceService } from './memory-persistence.service';
 import { ChatHistoryService } from './chat-history.service';
+import { PendingRequestService } from './pending-request.service';
+import { SessionPreferencesService } from './session-preferences.service';
+import {
+  buildPendingHintForClassifier,
+  IntentShadowService,
+} from './intent';
 
 type ChatReply = {
   reply: string;
@@ -18,6 +24,9 @@ export class ChatService {
     private readonly toolOrchestrator: ToolOrchestratorService,
     private readonly memoryPersistenceService: MemoryPersistenceService,
     private readonly chatHistoryService: ChatHistoryService,
+    private readonly pendingRequestService: PendingRequestService,
+    private readonly sessionPreferences: SessionPreferencesService,
+    private readonly intentShadowService: IntentShadowService,
   ) {}
 
   async replyTo(
@@ -36,7 +45,21 @@ export class ChatService {
       message,
     );
 
+    const pendingHint = buildPendingHintForClassifier(
+      sessionId,
+      this.pendingRequestService,
+    );
+    const sessionTz =
+      await this.sessionPreferences.getTimeZone(sessionId);
+
     const toolReply = await this.toolOrchestrator.tryHandle(sessionId, message);
+
+    await this.intentShadowService.maybeLogLlmIntent({
+      sessionId,
+      message,
+      pendingHint,
+      sessionTimeZone: sessionTz ?? undefined,
+    });
     if (toolReply) {
       await this.chatHistoryService.appendMessage(
         dbConversationId ?? '',
