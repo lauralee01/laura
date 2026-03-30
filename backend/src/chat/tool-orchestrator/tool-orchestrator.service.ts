@@ -77,6 +77,112 @@ export class ToolOrchestratorService {
     private readonly pendingRequestService: PendingRequestService,
   ) {}
 
+  /** List path shared by regex routing and LLM `calendar_list` routing. */
+  async handleCalendarListIntent(
+    sessionId: string,
+    message: string,
+  ): Promise<string> {
+    const tzCandidate = extractTimeZoneFromMessage(message);
+    const storedTz = await this.sessionPreferences.getTimeZone(sessionId);
+    const timeZone = tzCandidate ?? storedTz;
+
+    if (tzCandidate) {
+      await this.sessionPreferences.setTimeZone(sessionId, tzCandidate).catch(
+        () => undefined,
+      );
+    }
+
+    const weekOffset = extractWeekOffset(message);
+    const weekListing = isWeekListing(message);
+    const monthListing = isMonthListing(message);
+    const monthOffset = extractMonthOffset(message);
+    const yearListing = isYearListing(message);
+    const yearOffset = extractYearOffset(message);
+    const dayListing = isDayListing(message);
+    const dayOffset = extractDayOffset(message);
+    const listedCount = extractListedEventCount(message);
+    const pastIntent = isPastCalendarListIntent(message);
+
+    const pendingListRequest: PendingCalendarListPayload = weekListing
+      ? { mode: 'week', weekOffset }
+      : monthListing
+        ? { mode: 'month', weekOffset: 0, monthOffset }
+        : yearListing
+          ? { mode: 'year', weekOffset: 0, yearOffset }
+          : dayListing
+            ? { mode: 'day', weekOffset: 0, dayOffset }
+            : pastIntent
+              ? { mode: 'past', weekOffset: 0, maxEvents: listedCount ?? 10 }
+              : { mode: 'upcoming', weekOffset, maxEvents: listedCount ?? 10 };
+
+    if (!timeZone) {
+      this.pendingRequestService.setPending<PendingCalendarListPayload>(
+        sessionId,
+        {
+          actionType: 'calendar_list',
+          originalMessage: message,
+          payload: pendingListRequest,
+          missingSlots: ['timeZone'],
+          collectedSlots: {},
+        },
+      );
+      return (
+        'What timezone should I use for your events?\n\n' +
+        'Please reply with an IANA timezone like `America/Chicago` (Central), `America/New_York` (Eastern), or `America/Los_Angeles` (Pacific).'
+      );
+    }
+
+    try {
+      const nowLocal = DateTime.now().setZone(timeZone);
+      const { startLocal, endLocal } = this.resolveListRange(
+        nowLocal,
+        timeZone,
+        weekOffset,
+        pendingListRequest,
+      );
+
+      debugCalendarLog('[tool-orchestrator.list] request', {
+        mode: pendingListRequest.mode,
+        timeZone,
+        weekOffset,
+        maxEvents:
+          pendingListRequest.mode === 'upcoming' ||
+          pendingListRequest.mode === 'past'
+            ? pendingListRequest.maxEvents
+            : undefined,
+        rangeLocal: { start: startLocal, end: endLocal },
+      });
+
+      const maxFetch =
+        pendingListRequest.mode === 'upcoming' ||
+        pendingListRequest.mode === 'past'
+          ? pendingListRequest.maxEvents
+          : undefined;
+
+      const events = await this.calendarService.listEvents({
+        sessionId,
+        timeZone,
+        start: startLocal,
+        end: endLocal,
+        maxEvents: pendingListRequest.mode === 'past' ? undefined : maxFetch,
+      });
+
+      return buildCalendarListUserMessage({
+        mode: pendingListRequest.mode,
+        timeZone,
+        nowLocal,
+        weekOffset,
+        dayOffset: pendingListRequest.dayOffset ?? 0,
+        monthOffset: pendingListRequest.monthOffset ?? 0,
+        yearOffset: pendingListRequest.yearOffset ?? 0,
+        maxEventsDefault: pendingListRequest.maxEvents ?? 10,
+        events,
+      });
+    } catch (e: unknown) {
+      return formatToolFailureMessage('list calendar events', e);
+    }
+  }
+
   async tryHandle(sessionId: string, message: string): Promise<string | null> {
     const pendingSend =
       this.pendingRequestService.getPending<PendingEmailSendPayload>(
@@ -309,106 +415,7 @@ export class ToolOrchestratorService {
     }
 
     if (isCalendarListIntent(message)) {
-      const tzCandidate = extractTimeZoneFromMessage(message);
-      const storedTz = await this.sessionPreferences.getTimeZone(sessionId);
-      const timeZone = tzCandidate ?? storedTz;
-
-      if (tzCandidate) {
-        await this.sessionPreferences.setTimeZone(sessionId, tzCandidate).catch(
-          () => undefined,
-        );
-      }
-
-      const weekOffset = extractWeekOffset(message);
-      const weekListing = isWeekListing(message);
-      const monthListing = isMonthListing(message);
-      const monthOffset = extractMonthOffset(message);
-      const yearListing = isYearListing(message);
-      const yearOffset = extractYearOffset(message);
-      const dayListing = isDayListing(message);
-      const dayOffset = extractDayOffset(message);
-      const listedCount = extractListedEventCount(message);
-      const pastIntent = isPastCalendarListIntent(message);
-
-      const pendingListRequest: PendingCalendarListPayload = weekListing
-        ? { mode: 'week', weekOffset }
-        : monthListing
-          ? { mode: 'month', weekOffset: 0, monthOffset }
-          : yearListing
-            ? { mode: 'year', weekOffset: 0, yearOffset }
-            : dayListing
-              ? { mode: 'day', weekOffset: 0, dayOffset }
-              : pastIntent
-                ? { mode: 'past', weekOffset: 0, maxEvents: listedCount ?? 10 }
-                : { mode: 'upcoming', weekOffset, maxEvents: listedCount ?? 10 };
-
-      if (!timeZone) {
-        this.pendingRequestService.setPending<PendingCalendarListPayload>(
-          sessionId,
-          {
-            actionType: 'calendar_list',
-            originalMessage: message,
-            payload: pendingListRequest,
-            missingSlots: ['timeZone'],
-            collectedSlots: {},
-          },
-        );
-        return (
-          'What timezone should I use for your events?\n\n' +
-          'Please reply with an IANA timezone like `America/Chicago` (Central), `America/New_York` (Eastern), or `America/Los_Angeles` (Pacific).'
-        );
-      }
-
-      try {
-        const nowLocal = DateTime.now().setZone(timeZone);
-        const { startLocal, endLocal } = this.resolveListRange(
-          nowLocal,
-          timeZone,
-          weekOffset,
-          pendingListRequest,
-        );
-
-        debugCalendarLog('[tool-orchestrator.list] request', {
-          mode: pendingListRequest.mode,
-          timeZone,
-          weekOffset,
-          maxEvents:
-            pendingListRequest.mode === 'upcoming' ||
-            pendingListRequest.mode === 'past'
-              ? pendingListRequest.maxEvents
-              : undefined,
-          rangeLocal: { start: startLocal, end: endLocal },
-        });
-
-        const maxFetch =
-          pendingListRequest.mode === 'upcoming' ||
-          pendingListRequest.mode === 'past'
-            ? pendingListRequest.maxEvents
-            : undefined;
-
-        const events = await this.calendarService.listEvents({
-          sessionId,
-          timeZone,
-          start: startLocal,
-          end: endLocal,
-          maxEvents:
-            pendingListRequest.mode === 'past' ? undefined : maxFetch,
-        });
-
-        return buildCalendarListUserMessage({
-          mode: pendingListRequest.mode,
-          timeZone,
-          nowLocal,
-          weekOffset,
-          dayOffset: pendingListRequest.dayOffset ?? 0,
-          monthOffset: pendingListRequest.monthOffset ?? 0,
-          yearOffset: pendingListRequest.yearOffset ?? 0,
-          maxEventsDefault: pendingListRequest.maxEvents ?? 10,
-          events,
-        });
-      } catch (e: unknown) {
-        return formatToolFailureMessage('list calendar events', e);
-      }
+      return this.handleCalendarListIntent(sessionId, message);
     }
 
     if (isCalendarCreateIntent(message)) {

@@ -37,6 +37,13 @@ export class IntentRouterService {
     return v === 'true' || v === '1';
   }
 
+  /** When true with USE_LLM_INTENT, ChatService routes `calendar_list` via Stage-1 first. */
+  isCalendarListLlmRoutingEnabled(): boolean {
+    if (!this.isLlmIntentEnabled()) return false;
+    const v = process.env.INTENT_ROUTE_CALENDAR_LIST?.trim().toLowerCase();
+    return v === 'true' || v === '1';
+  }
+
   async classify(context: IntentClassificationContext): Promise<IntentEnvelope> {
     if (!this.isLlmIntentEnabled()) {
       throw new LlmIntentDisabledError();

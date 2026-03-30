@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { IntentRouterService } from './intent-router.service';
+import type { IntentEnvelope } from './intent.types';
 import { LlmIntentDisabledError } from './intent.types';
 
 /**
@@ -29,15 +30,19 @@ export class IntentShadowService {
     message: string;
     pendingHint?: string;
     sessionTimeZone?: string;
+    /** When set (e.g. after routing classify), skips a second Gemini call. */
+    precomputedEnvelope?: IntentEnvelope;
   }): Promise<void> {
     if (!this.isShadowLoggingEnabled()) return;
 
     try {
-      const envelope = await this.intentRouter.classify({
-        userMessage: input.message,
-        pendingHint: input.pendingHint,
-        sessionTimeZone: input.sessionTimeZone,
-      });
+      const envelope =
+        input.precomputedEnvelope ??
+        (await this.intentRouter.classify({
+          userMessage: input.message,
+          pendingHint: input.pendingHint,
+          sessionTimeZone: input.sessionTimeZone,
+        }));
       this.logger.debug(
         `[intent-classify] ${JSON.stringify({
           sessionId: input.sessionId,

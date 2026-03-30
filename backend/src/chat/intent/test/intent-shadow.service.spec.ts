@@ -90,4 +90,23 @@ describe('IntentShadowService', () => {
     });
     expect(classify).not.toHaveBeenCalled();
   });
+
+  it('does not call classify when precomputedEnvelope is provided', async () => {
+    process.env.USE_LLM_INTENT = 'true';
+    delete process.env.INTENT_SHADOW_LOG;
+    process.env.NODE_ENV = 'development';
+
+    await service.maybeLogLlmIntent({
+      sessionId: 's1',
+      message: 'hi',
+      precomputedEnvelope: {
+        version: 1,
+        intent: 'calendar_list',
+        confidence: 0.9,
+        missingSlots: [],
+        slots: {},
+      },
+    });
+    expect(classify).not.toHaveBeenCalled();
+  });
 });

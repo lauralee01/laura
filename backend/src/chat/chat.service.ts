@@ -9,6 +9,8 @@ import { SessionPreferencesService } from './session-preferences.service';
 import {
   buildPendingHintForClassifier,
   IntentShadowService,
+  IntentRouterService,
+  type IntentEnvelope,
 } from './intent';
 
 type ChatReply = {
@@ -27,6 +29,7 @@ export class ChatService {
     private readonly pendingRequestService: PendingRequestService,
     private readonly sessionPreferences: SessionPreferencesService,
     private readonly intentShadowService: IntentShadowService,
+    private readonly intentRouter: IntentRouterService,
   ) {}
 
   async replyTo(
@@ -52,6 +55,48 @@ export class ChatService {
     const sessionTz =
       await this.sessionPreferences.getTimeZone(sessionId);
 
+    let precomputedEnvelope: IntentEnvelope | undefined;
+
+    if (this.intentRouter.isCalendarListLlmRoutingEnabled()) {
+      try {
+        const envelope = await this.intentRouter.classify({
+          userMessage: message,
+          pendingHint,
+          sessionTimeZone: sessionTz ?? undefined,
+        });
+        precomputedEnvelope = envelope;
+        if (envelope.intent === 'calendar_list') {
+          const listReply =
+            await this.toolOrchestrator.handleCalendarListIntent(
+              sessionId,
+              message,
+            );
+          await this.intentShadowService.maybeLogLlmIntent({
+            sessionId,
+            message,
+            pendingHint,
+            sessionTimeZone: sessionTz ?? undefined,
+            precomputedEnvelope: envelope,
+          });
+          await this.chatHistoryService.appendMessage(
+            dbConversationId ?? '',
+            'assistant',
+            listReply,
+          );
+          await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
+            sessionId,
+            message,
+          );
+          return {
+            reply: listReply,
+            conversationId: dbConversationId ?? undefined,
+          };
+        }
+      } catch {
+        precomputedEnvelope = undefined;
+      }
+    }
+
     const toolReply = await this.toolOrchestrator.tryHandle(sessionId, message);
 
     await this.intentShadowService.maybeLogLlmIntent({
@@ -59,6 +104,7 @@ export class ChatService {
       message,
       pendingHint,
       sessionTimeZone: sessionTz ?? undefined,
+      precomputedEnvelope,
     });
     if (toolReply) {
       await this.chatHistoryService.appendMessage(

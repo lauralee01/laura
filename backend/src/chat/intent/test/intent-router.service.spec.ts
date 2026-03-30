@@ -8,12 +8,18 @@ describe('IntentRouterService', () => {
   let llmGenerate: jest.Mock;
 
   const prevFlag = process.env.USE_LLM_INTENT;
+  const prevRouteCal = process.env.INTENT_ROUTE_CALENDAR_LIST;
 
   afterEach(() => {
     if (prevFlag === undefined) {
       delete process.env.USE_LLM_INTENT;
     } else {
       process.env.USE_LLM_INTENT = prevFlag;
+    }
+    if (prevRouteCal === undefined) {
+      delete process.env.INTENT_ROUTE_CALENDAR_LIST;
+    } else {
+      process.env.INTENT_ROUTE_CALENDAR_LIST = prevRouteCal;
     }
   });
 
@@ -39,6 +45,18 @@ describe('IntentRouterService', () => {
     expect(service.isLlmIntentEnabled()).toBe(true);
     process.env.USE_LLM_INTENT = '1';
     expect(service.isLlmIntentEnabled()).toBe(true);
+  });
+
+  it('isCalendarListLlmRoutingEnabled requires both flags', () => {
+    delete process.env.INTENT_ROUTE_CALENDAR_LIST;
+    process.env.USE_LLM_INTENT = 'true';
+    expect(service.isCalendarListLlmRoutingEnabled()).toBe(false);
+
+    process.env.INTENT_ROUTE_CALENDAR_LIST = 'true';
+    expect(service.isCalendarListLlmRoutingEnabled()).toBe(true);
+
+    process.env.USE_LLM_INTENT = 'false';
+    expect(service.isCalendarListLlmRoutingEnabled()).toBe(false);
   });
 
   it('classify throws LlmIntentDisabledError when flag off', async () => {
