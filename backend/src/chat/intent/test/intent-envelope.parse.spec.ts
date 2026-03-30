@@ -30,6 +30,12 @@ describe('parseIntentEnvelopeFromModelText', () => {
     expect(e.intent).toBe('calendar_list');
   });
 
+  it('parses JSON inside markdown code fences', () => {
+    const raw = '```json\n{"version":1,"intent":"email_draft_revise","confidence":1,"missingSlots":[],"slots":{}}\n```';
+    const e = parseIntentEnvelopeFromModelText(raw);
+    expect(e.intent).toBe('email_draft_revise');
+  });
+
   it('throws on bad intent string', () => {
     expect(() =>
       parseIntentEnvelopeFromModelText(

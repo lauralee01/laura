@@ -12,6 +12,7 @@ import {
   IntentRouterService,
   type IntentEnvelope,
 } from './intent';
+import { shouldClearEmailSendForNewToolIntent } from './tool-orchestrator/tool-orchestrator.email-send-intents';
 
 type ChatReply = {
   reply: string;
@@ -56,33 +57,97 @@ export class ChatService {
       await this.sessionPreferences.getTimeZone(sessionId);
 
     let precomputedEnvelope: IntentEnvelope | undefined;
+    let routingClassifyFailed = false;
 
-    if (this.intentRouter.isCalendarLlmRoutingEnabled()) {
+    if (this.intentRouter.isLlmToolRoutingEnabled()) {
       try {
-        const envelope = await this.intentRouter.classify({
+        precomputedEnvelope = await this.intentRouter.classify({
           userMessage: message,
           pendingHint,
           sessionTimeZone: sessionTz ?? undefined,
         });
-        precomputedEnvelope = envelope;
+      } catch {
+        routingClassifyFailed = true;
+        precomputedEnvelope = undefined;
+      }
+    }
 
-        const routeList = this.intentRouter.isCalendarListLlmRoutingEnabled();
-        const routeMut =
-          this.intentRouter.isCalendarMutationsLlmRoutingEnabled();
+    const envelope = precomputedEnvelope;
 
-        if (routeList && envelope.intent === 'calendar_list') {
+    const shadowLog = (e?: IntentEnvelope) => ({
+      sessionId,
+      message,
+      pendingHint,
+      sessionTimeZone: sessionTz ?? undefined,
+      precomputedEnvelope: e,
+      skipDuplicateClassify: routingClassifyFailed,
+    });
+
+    if (
+      this.pendingRequestService.getPending(sessionId, 'email_send') &&
+      shouldClearEmailSendForNewToolIntent(message)
+    ) {
+      this.pendingRequestService.clearPending(sessionId, 'email_send');
+    }
+
+    if (this.pendingRequestService.getPending(sessionId, 'email_send')) {
+      if (this.intentRouter.isEmailLlmRoutingEnabled() && envelope) {
+        const emailLlm = await this.toolOrchestrator.tryLlmRoutedEmail(
+          sessionId,
+          message,
+          envelope,
+        );
+        if (emailLlm !== null) {
+          await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
+          await this.chatHistoryService.appendMessage(
+            dbConversationId ?? '',
+            'assistant',
+            emailLlm,
+          );
+          await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
+            sessionId,
+            message,
+          );
+          return {
+            reply: emailLlm,
+            conversationId: dbConversationId ?? undefined,
+          };
+        }
+      }
+      const emailRegex = await this.toolOrchestrator.handlePendingEmailSendTurn(
+        sessionId,
+        message,
+      );
+      if (emailRegex !== null) {
+        await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
+        await this.chatHistoryService.appendMessage(
+          dbConversationId ?? '',
+          'assistant',
+          emailRegex,
+        );
+        await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
+          sessionId,
+          message,
+        );
+        return {
+          reply: emailRegex,
+          conversationId: dbConversationId ?? undefined,
+        };
+      }
+    }
+
+    if (this.intentRouter.isCalendarLlmRoutingEnabled() && envelope) {
+      const routeList = this.intentRouter.isCalendarListLlmRoutingEnabled();
+      const routeMut =
+        this.intentRouter.isCalendarMutationsLlmRoutingEnabled();
+
+      if (routeList && envelope.intent === 'calendar_list') {
           const listReply =
             await this.toolOrchestrator.handleCalendarListIntent(
               sessionId,
               message,
             );
-          await this.intentShadowService.maybeLogLlmIntent({
-            sessionId,
-            message,
-            pendingHint,
-            sessionTimeZone: sessionTz ?? undefined,
-            precomputedEnvelope: envelope,
-          });
+          await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
           await this.chatHistoryService.appendMessage(
             dbConversationId ?? '',
             'assistant',
@@ -104,13 +169,7 @@ export class ChatService {
               sessionId,
               message,
             );
-          await this.intentShadowService.maybeLogLlmIntent({
-            sessionId,
-            message,
-            pendingHint,
-            sessionTimeZone: sessionTz ?? undefined,
-            precomputedEnvelope: envelope,
-          });
+          await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
           await this.chatHistoryService.appendMessage(
             dbConversationId ?? '',
             'assistant',
@@ -136,13 +195,7 @@ export class ChatService {
               sessionId,
               message,
             );
-          await this.intentShadowService.maybeLogLlmIntent({
-            sessionId,
-            message,
-            pendingHint,
-            sessionTimeZone: sessionTz ?? undefined,
-            precomputedEnvelope: envelope,
-          });
+          await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
           await this.chatHistoryService.appendMessage(
             dbConversationId ?? '',
             'assistant',
@@ -157,20 +210,36 @@ export class ChatService {
             conversationId: dbConversationId ?? undefined,
           };
         }
-      } catch {
-        precomputedEnvelope = undefined;
-      }
+    }
+
+    if (
+      this.intentRouter.isEmailLlmRoutingEnabled() &&
+      envelope?.intent === 'email_draft' &&
+      !this.pendingRequestService.getPending(sessionId, 'email_send')
+    ) {
+      const draftReply = await this.toolOrchestrator.handleEmailDraftIntent(
+        sessionId,
+        message,
+      );
+      await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
+      await this.chatHistoryService.appendMessage(
+        dbConversationId ?? '',
+        'assistant',
+        draftReply,
+      );
+      await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
+        sessionId,
+        message,
+      );
+      return {
+        reply: draftReply,
+        conversationId: dbConversationId ?? undefined,
+      };
     }
 
     const toolReply = await this.toolOrchestrator.tryHandle(sessionId, message);
 
-    await this.intentShadowService.maybeLogLlmIntent({
-      sessionId,
-      message,
-      pendingHint,
-      sessionTimeZone: sessionTz ?? undefined,
-      precomputedEnvelope,
-    });
+    await this.intentShadowService.maybeLogLlmIntent(shadowLog(precomputedEnvelope));
     if (toolReply) {
       await this.chatHistoryService.appendMessage(
         dbConversationId ?? '',

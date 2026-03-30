@@ -10,12 +10,24 @@ function isIntentId(value: string): value is IntentId {
   return (INTENT_IDS as readonly string[]).includes(value);
 }
 
+/** Strips ``` / ```json fences and leading noise so Gemini markdown output still parses. */
+function normalizeClassifierRawText(raw: string): string {
+  let t = raw.trim();
+  const fenced = t.match(/^```(?:json)?\s*\r?\n?([\s\S]*?)\r?\n?```\s*$/im);
+  if (fenced?.[1]) {
+    return fenced[1].trim();
+  }
+  t = t.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '');
+  return t.trim();
+}
+
 /**
  * Validates model output into `{ version, intent, confidence, missingSlots, slots }`.
  * Throws IntentEnvelopeParseError if the shape is invalid.
  */
 export function parseIntentEnvelopeFromModelText(raw: string): IntentEnvelope {
-  const obj = safeParseJsonObject(raw);
+  const normalized = normalizeClassifierRawText(raw);
+  const obj = safeParseJsonObject(normalized);
   if (!obj) {
     throw new IntentEnvelopeParseError(
       'Model did not return parseable JSON (object).',

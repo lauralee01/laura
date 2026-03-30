@@ -32,8 +32,20 @@ export class IntentShadowService {
     sessionTimeZone?: string;
     /** When set (e.g. after routing classify), skips a second Gemini call. */
     precomputedEnvelope?: IntentEnvelope;
+    /**
+     * When true, do not call classify again (e.g. routing classify already failed).
+     * Avoids duplicate API calls and noisy WARN logs.
+     */
+    skipDuplicateClassify?: boolean;
   }): Promise<void> {
     if (!this.isShadowLoggingEnabled()) return;
+
+    if (
+      !input.precomputedEnvelope &&
+      input.skipDuplicateClassify
+    ) {
+      return;
+    }
 
     try {
       const envelope =

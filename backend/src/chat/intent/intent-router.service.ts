@@ -59,6 +59,18 @@ export class IntentRouterService {
     );
   }
 
+  /** When true with USE_LLM_INTENT, ChatService routes email draft / pending-send / revise first. */
+  isEmailLlmRoutingEnabled(): boolean {
+    if (!this.isLlmIntentEnabled()) return false;
+    const v = process.env.INTENT_ROUTE_EMAIL?.trim().toLowerCase();
+    return v === 'true' || v === '1';
+  }
+
+  /** Classify when any tool routing (calendar or email) is enabled. */
+  isLlmToolRoutingEnabled(): boolean {
+    return this.isCalendarLlmRoutingEnabled() || this.isEmailLlmRoutingEnabled();
+  }
+
   async classify(context: IntentClassificationContext): Promise<IntentEnvelope> {
     if (!this.isLlmIntentEnabled()) {
       throw new LlmIntentDisabledError();

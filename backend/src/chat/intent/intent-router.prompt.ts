@@ -13,6 +13,8 @@ export function buildIntentClassificationSystemPrompt(): string {
   return `
 You are a routing classifier for a personal assistant (laura). Your job is to read the user's message and optional context, then return JSON only (no markdown fences, no commentary).
 
+Every message—including one or two words like "yes", "send", "cancel", or "make it shorter"—must produce exactly one JSON object on a single line or multiple lines, with no text before or after it.
+
 Output JSON with this exact shape:
 {
   "version": 1,
@@ -34,9 +36,9 @@ Guidance:
 
 Optional slots hints (execution still validates in code): e.g. titleHint, roughTimeHint strings for create; titleHint for update/delete.
 - email_draft: user wants to draft/send an email (initial draft request).
-- email_send_confirm: user is confirming sending a pending email (e.g. yes, send, go ahead).
+- email_send_confirm: user is confirming sending a pending email (e.g. yes, send, go ahead). Use only when pendingHint indicates a draft is waiting for send.
 - email_draft_revise: user wants to change wording of a pending draft before sending.
-- pending_cancel: user is cancelling/dismissing the current pending action (e.g. cancel, never mind).
+- pending_cancel: user is cancelling/dismissing the current pending action (e.g. cancel, never mind). Use when pendingHint describes what to cancel.
 - set_timezone: user is providing or setting a timezone (IANA).
 - clarify: the message is ambiguous and needs a follow-up question before routing.
 

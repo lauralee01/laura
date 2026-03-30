@@ -10,6 +10,7 @@ describe('IntentRouterService', () => {
   const prevFlag = process.env.USE_LLM_INTENT;
   const prevRouteCal = process.env.INTENT_ROUTE_CALENDAR_LIST;
   const prevRouteMut = process.env.INTENT_ROUTE_CALENDAR_MUTATIONS;
+  const prevRouteEmail = process.env.INTENT_ROUTE_EMAIL;
 
   afterEach(() => {
     if (prevFlag === undefined) {
@@ -26,6 +27,11 @@ describe('IntentRouterService', () => {
       delete process.env.INTENT_ROUTE_CALENDAR_MUTATIONS;
     } else {
       process.env.INTENT_ROUTE_CALENDAR_MUTATIONS = prevRouteMut;
+    }
+    if (prevRouteEmail === undefined) {
+      delete process.env.INTENT_ROUTE_EMAIL;
+    } else {
+      process.env.INTENT_ROUTE_EMAIL = prevRouteEmail;
     }
   });
 
@@ -89,6 +95,33 @@ describe('IntentRouterService', () => {
     delete process.env.INTENT_ROUTE_CALENDAR_LIST;
     process.env.INTENT_ROUTE_CALENDAR_MUTATIONS = 'true';
     expect(service.isCalendarLlmRoutingEnabled()).toBe(true);
+  });
+
+  it('isEmailLlmRoutingEnabled requires USE_LLM_INTENT and INTENT_ROUTE_EMAIL', () => {
+    delete process.env.INTENT_ROUTE_EMAIL;
+    process.env.USE_LLM_INTENT = 'true';
+    expect(service.isEmailLlmRoutingEnabled()).toBe(false);
+
+    process.env.INTENT_ROUTE_EMAIL = 'true';
+    expect(service.isEmailLlmRoutingEnabled()).toBe(true);
+
+    process.env.USE_LLM_INTENT = 'false';
+    expect(service.isEmailLlmRoutingEnabled()).toBe(false);
+  });
+
+  it('isLlmToolRoutingEnabled is true if calendar or email routing is on', () => {
+    process.env.USE_LLM_INTENT = 'true';
+    delete process.env.INTENT_ROUTE_CALENDAR_LIST;
+    delete process.env.INTENT_ROUTE_CALENDAR_MUTATIONS;
+    delete process.env.INTENT_ROUTE_EMAIL;
+    expect(service.isLlmToolRoutingEnabled()).toBe(false);
+
+    process.env.INTENT_ROUTE_EMAIL = 'true';
+    expect(service.isLlmToolRoutingEnabled()).toBe(true);
+
+    delete process.env.INTENT_ROUTE_EMAIL;
+    process.env.INTENT_ROUTE_CALENDAR_LIST = 'true';
+    expect(service.isLlmToolRoutingEnabled()).toBe(true);
   });
 
   it('classify throws LlmIntentDisabledError when flag off', async () => {

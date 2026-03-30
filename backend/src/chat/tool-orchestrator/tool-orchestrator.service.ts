@@ -62,6 +62,8 @@ import type {
   PendingEmailSendPayload,
 } from './tool-orchestrator.types';
 import { formatToolFailureMessage } from './tool-orchestrator.utils';
+import type { IntentEnvelope } from '../intent/intent.types';
+import type { PendingRequest } from '../pending-request.service';
 
 /**
  * Routes chat messages to tool actions (email draft, calendar list/create/update/delete)
@@ -294,87 +296,214 @@ export class ToolOrchestratorService {
     return this.runCalendarMutation(sessionId, message, timeZone);
   }
 
-  async tryHandle(sessionId: string, message: string): Promise<string | null> {
+  /** New Gmail draft path (regex or LLM `email_draft`). Does not check `isEmailDraftIntent`. */
+  async handleEmailDraftIntent(
+    sessionId: string,
+    message: string,
+  ): Promise<string> {
+    const args = await extractDraftEmailArgs(this.llmService, message);
+    if (!args) {
+      return 'I can draft that email, but I need at least one recipient email address (e.g. jordan@example.com).';
+    }
+
+    try {
+      const draft = await this.emailService.draftEmail({
+        sessionId,
+        recipients: args.recipients,
+        subject: args.subject,
+        tone: args.tone,
+        context: args.context,
+      });
+
+      this.pendingRequestService.setPending<PendingEmailSendPayload>(
+        sessionId,
+        {
+          actionType: 'email_send',
+          originalMessage: message,
+          payload: {
+            draftId: draft.draftId,
+            recipients: draft.recipients,
+            subject: draft.subject,
+            body: draft.body,
+          },
+          missingSlots: ['confirmation'],
+          collectedSlots: {},
+        },
+      );
+
+      return (
+        `Draft saved in Gmail.\n\n` +
+        `Recipients: ${draft.recipients.join(', ')}\n` +
+        `Subject: ${draft.subject}\n\n` +
+        `${draft.body}\n\n` +
+        `---\n` +
+        `Send it? Reply send or yes to send from your Gmail now, or say how you’d like it revised, or cancel to skip sending (the draft stays in Gmail).`
+      );
+    } catch (e: unknown) {
+      return formatToolFailureMessage('create the Gmail draft', e);
+    }
+  }
+
+  /**
+   * When a Gmail draft is waiting for send/revise/cancel. Returns null if no pending email_send.
+   * When the user starts a new tool intent, clears pending and returns null so the caller continues.
+   */
+  async handlePendingEmailSendTurn(
+    sessionId: string,
+    message: string,
+  ): Promise<string | null> {
     const pendingSend =
       this.pendingRequestService.getPending<PendingEmailSendPayload>(
         sessionId,
         'email_send',
       );
+    if (!pendingSend) return null;
+
+    if (isCancelPendingEmailSend(message)) {
+      this.pendingRequestService.clearPending(sessionId, 'email_send');
+      return (
+        'Okay — I won’t send that draft from here. ' +
+        'It’s still in your Gmail drafts if you want to send or edit it there.'
+      );
+    }
+    if (isConfirmSendEmail(message)) {
+      return this.sendPendingEmailDraftNow(sessionId, pendingSend);
+    }
+    if (shouldClearEmailSendForNewToolIntent(message)) {
+      this.pendingRequestService.clearPending(sessionId, 'email_send');
+      return null;
+    }
+    if (isEmailDraftRevisionIntent(message)) {
+      return this.revisePendingEmailDraftNow(sessionId, pendingSend, message);
+    }
+    return (
+      'I still have a draft ready to send:\n' +
+      `To: ${pendingSend.payload.recipients.join(', ')}\n` +
+      `Subject: ${pendingSend.payload.subject}\n\n` +
+      `${pendingSend.payload.body}\n\n` +
+      'Reply send or yes to send it now, or describe how you’d like the draft changed, or cancel to dismiss this prompt (the draft stays in Gmail).'
+    );
+  }
+
+  /**
+   * Stage-1 email routing: intent must align with regex guards before send/revise/cancel.
+   * Returns null to fall back to regex pending-email handling or tryHandle.
+   */
+  async tryLlmRoutedEmail(
+    sessionId: string,
+    message: string,
+    envelope: IntentEnvelope,
+  ): Promise<string | null> {
+    const pendingSend =
+      this.pendingRequestService.getPending<PendingEmailSendPayload>(
+        sessionId,
+        'email_send',
+      );
+
     if (pendingSend) {
-      if (isCancelPendingEmailSend(message)) {
+      if (
+        envelope.intent === 'pending_cancel' &&
+        isCancelPendingEmailSend(message)
+      ) {
         this.pendingRequestService.clearPending(sessionId, 'email_send');
         return (
           'Okay — I won’t send that draft from here. ' +
           'It’s still in your Gmail drafts if you want to send or edit it there.'
         );
       }
-      if (isConfirmSendEmail(message)) {
-        try {
-          const sent = await this.emailService.sendDraft(
-            sessionId,
-            pendingSend.payload.draftId,
-          );
-          this.pendingRequestService.clearPending(sessionId, 'email_send');
-          return (
-            `Email sent from your Gmail.\n\n` +
-            `To: ${pendingSend.payload.recipients.join(', ')}\n` +
-            `Subject: ${pendingSend.payload.subject}\n` +
-            (sent.messageId ? `Message id: ${sent.messageId}\n` : '')
-          );
-        } catch (e: unknown) {
-          return formatToolFailureMessage('send the email', e);
-        }
+      if (envelope.intent === 'email_send_confirm') {
+        if (!isConfirmSendEmail(message)) return null;
+        return this.sendPendingEmailDraftNow(sessionId, pendingSend);
       }
-      if (shouldClearEmailSendForNewToolIntent(message)) {
+      if (envelope.intent === 'email_draft_revise') {
+        if (!isEmailDraftRevisionIntent(message)) return null;
+        return this.revisePendingEmailDraftNow(sessionId, pendingSend, message);
+      }
+      if (envelope.intent === 'email_draft') {
+        if (!shouldClearEmailSendForNewToolIntent(message)) return null;
         this.pendingRequestService.clearPending(sessionId, 'email_send');
-      } else if (isEmailDraftRevisionIntent(message)) {
-        try {
-          const revised = await this.emailService.reviseDraftEmail({
-            sessionId,
-            draftId: pendingSend.payload.draftId,
-            recipients: pendingSend.payload.recipients,
-            currentSubject: pendingSend.payload.subject,
-            currentBody: pendingSend.payload.body,
-            revisionInstruction: message,
-          });
-
-          this.pendingRequestService.setPending<PendingEmailSendPayload>(
-            sessionId,
-            {
-              actionType: 'email_send',
-              originalMessage: pendingSend.originalMessage,
-              payload: {
-                draftId: revised.draftId,
-                recipients: revised.recipients,
-                subject: revised.subject,
-                body: revised.body,
-              },
-              missingSlots: ['confirmation'],
-              collectedSlots: {},
-            },
-          );
-
-          return (
-            `Updated your Gmail draft.\n\n` +
-            `Recipients: ${revised.recipients.join(', ')}\n` +
-            `Subject: ${revised.subject}\n\n` +
-            `${revised.body}\n\n` +
-            `---\n` +
-            `Send it? Reply send or yes to send from your Gmail now, or ask for another change, or cancel to skip sending (the draft stays in Gmail).`
-          );
-        } catch (e: unknown) {
-          return formatToolFailureMessage('update the Gmail draft', e);
-        }
-      } else {
-        return (
-          'I still have a draft ready to send:\n' +
-          `To: ${pendingSend.payload.recipients.join(', ')}\n` +
-          `Subject: ${pendingSend.payload.subject}\n\n` +
-          `${pendingSend.payload.body}\n\n` +
-          'Reply send or yes to send it now, or describe how you’d like the draft changed, or cancel to dismiss this prompt (the draft stays in Gmail).'
-        );
+        return this.handleEmailDraftIntent(sessionId, message);
       }
+      return null;
     }
+
+    if (envelope.intent === 'email_draft') {
+      return this.handleEmailDraftIntent(sessionId, message);
+    }
+    return null;
+  }
+
+  private async sendPendingEmailDraftNow(
+    sessionId: string,
+    pendingSend: PendingRequest<PendingEmailSendPayload>,
+  ): Promise<string> {
+    try {
+      const sent = await this.emailService.sendDraft(
+        sessionId,
+        pendingSend.payload.draftId,
+      );
+      this.pendingRequestService.clearPending(sessionId, 'email_send');
+      return (
+        `Email sent from your Gmail.\n\n` +
+        `To: ${pendingSend.payload.recipients.join(', ')}\n` +
+        `Subject: ${pendingSend.payload.subject}\n` +
+        (sent.messageId ? `Message id: ${sent.messageId}\n` : '')
+      );
+    } catch (e: unknown) {
+      return formatToolFailureMessage('send the email', e);
+    }
+  }
+
+  private async revisePendingEmailDraftNow(
+    sessionId: string,
+    pendingSend: PendingRequest<PendingEmailSendPayload>,
+    message: string,
+  ): Promise<string> {
+    try {
+      const revised = await this.emailService.reviseDraftEmail({
+        sessionId,
+        draftId: pendingSend.payload.draftId,
+        recipients: pendingSend.payload.recipients,
+        currentSubject: pendingSend.payload.subject,
+        currentBody: pendingSend.payload.body,
+        revisionInstruction: message,
+      });
+
+      this.pendingRequestService.setPending<PendingEmailSendPayload>(
+        sessionId,
+        {
+          actionType: 'email_send',
+          originalMessage: pendingSend.originalMessage,
+          payload: {
+            draftId: revised.draftId,
+            recipients: revised.recipients,
+            subject: revised.subject,
+            body: revised.body,
+          },
+          missingSlots: ['confirmation'],
+          collectedSlots: {},
+        },
+      );
+
+      return (
+        `Updated your Gmail draft.\n\n` +
+        `Recipients: ${revised.recipients.join(', ')}\n` +
+        `Subject: ${revised.subject}\n\n` +
+        `${revised.body}\n\n` +
+        `---\n` +
+        `Send it? Reply send or yes to send from your Gmail now, or ask for another change, or cancel to skip sending (the draft stays in Gmail).`
+      );
+    } catch (e: unknown) {
+      return formatToolFailureMessage('update the Gmail draft', e);
+    }
+  }
+
+  async tryHandle(sessionId: string, message: string): Promise<string | null> {
+    const pendingEmail = await this.handlePendingEmailSendTurn(
+      sessionId,
+      message,
+    );
+    if (pendingEmail !== null) return pendingEmail;
 
     const pendingDelete =
       this.pendingRequestService.getPending<PendingCalendarDeletePayload>(
@@ -482,47 +611,7 @@ export class ToolOrchestratorService {
     }
 
     if (isEmailDraftIntent(message)) {
-      const args = await extractDraftEmailArgs(this.llmService, message);
-      if (!args) {
-        return 'I can draft that email, but I need at least one recipient email address (e.g. jordan@example.com).';
-      }
-
-      try {
-        const draft = await this.emailService.draftEmail({
-          sessionId,
-          recipients: args.recipients,
-          subject: args.subject,
-          tone: args.tone,
-          context: args.context,
-        });
-
-        this.pendingRequestService.setPending<PendingEmailSendPayload>(
-          sessionId,
-          {
-            actionType: 'email_send',
-            originalMessage: message,
-            payload: {
-              draftId: draft.draftId,
-              recipients: draft.recipients,
-              subject: draft.subject,
-              body: draft.body,
-            },
-            missingSlots: ['confirmation'],
-            collectedSlots: {},
-          },
-        );
-
-        return (
-          `Draft saved in Gmail.\n\n` +
-          `Recipients: ${draft.recipients.join(', ')}\n` +
-          `Subject: ${draft.subject}\n\n` +
-          `${draft.body}\n\n` +
-          `---\n` +
-          `Send it? Reply send or yes to send from your Gmail now, or say how you’d like it revised, or cancel to skip sending (the draft stays in Gmail).`
-        );
-      } catch (e: unknown) {
-        return formatToolFailureMessage('create the Gmail draft', e);
-      }
+      return this.handleEmailDraftIntent(sessionId, message);
     }
 
     if (isCalendarListIntent(message)) {

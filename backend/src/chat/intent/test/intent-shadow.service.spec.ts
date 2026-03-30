@@ -91,6 +91,19 @@ describe('IntentShadowService', () => {
     expect(classify).not.toHaveBeenCalled();
   });
 
+  it('does not call classify when skipDuplicateClassify is true and no precomputed envelope', async () => {
+    process.env.USE_LLM_INTENT = 'true';
+    delete process.env.INTENT_SHADOW_LOG;
+    process.env.NODE_ENV = 'development';
+
+    await service.maybeLogLlmIntent({
+      sessionId: 's1',
+      message: 'hi',
+      skipDuplicateClassify: true,
+    });
+    expect(classify).not.toHaveBeenCalled();
+  });
+
   it('does not call classify when precomputedEnvelope is provided', async () => {
     process.env.USE_LLM_INTENT = 'true';
     delete process.env.INTENT_SHADOW_LOG;

@@ -14,7 +14,7 @@
 export const INTENT_CLASSIFICATION_SCHEMA_VERSION = 1 as const;
 
 /** Prompt / parser version for logs and regression tests (increment when JSON shape changes). */
-export const INTENT_CLASSIFICATION_PROMPT_VERSION = 'batch-d-v1';
+export const INTENT_CLASSIFICATION_PROMPT_VERSION = 'batch-e-v2';
 
 export const INTENT_IDS = [
   'general_chat',
