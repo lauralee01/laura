@@ -10,12 +10,14 @@ import { MemoryPersistenceService } from './memory-persistence.service';
 import { ChatHistoryService } from './chat-history.service';
 import { SessionPreferencesService } from './session-preferences.service';
 import { PendingRequestService } from './pending-request.service';
+import { IntentRouterService } from './intent';
 
 @Module({
   imports: [LlmModule, MemoryModule, EmailModule, CalendarModule],
   controllers: [ChatController],
   providers: [
     ChatService,
+    IntentRouterService,
     ToolOrchestratorService,
     MemoryPersistenceService,
     ChatHistoryService,

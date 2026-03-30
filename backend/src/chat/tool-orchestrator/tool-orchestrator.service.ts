@@ -482,41 +482,6 @@ export class ToolOrchestratorService {
       }
     }
 
-    if (isCalendarDeleteIntent(message) || isCalendarUpdateIntent(message)) {
-      const tzCandidateMut = extractTimeZoneFromMessage(message);
-      const storedTzMut = await this.sessionPreferences.getTimeZone(sessionId);
-      const timeZoneMut = tzCandidateMut ?? storedTzMut;
-
-      if (tzCandidateMut) {
-        await this.sessionPreferences
-          .setTimeZone(sessionId, tzCandidateMut)
-          .catch(() => undefined);
-      }
-
-      if (!timeZoneMut) {
-        this.pendingRequestService.setPending<PendingCalendarMutateTzPayload>(
-          sessionId,
-          {
-            actionType: 'calendar_mutate_tz',
-            originalMessage: message,
-            payload: { message },
-            missingSlots: ['timeZone'],
-            collectedSlots: {},
-          },
-        );
-        return (
-          'What timezone should I use to find that event?\n\n' +
-          'Reply with an IANA timezone like `America/Chicago`, `America/New_York`, or `America/Los_Angeles`.'
-        );
-      }
-
-      return await this.runCalendarMutation(
-        sessionId,
-        message,
-        timeZoneMut,
-      );
-    }
-
     const tzCandidate = extractTimeZoneFromMessage(message);
     if (tzCandidate && isTimeZoneSettingMessage(message, tzCandidate)) {
       try {
