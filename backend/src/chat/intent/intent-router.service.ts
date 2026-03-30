@@ -44,6 +44,21 @@ export class IntentRouterService {
     return v === 'true' || v === '1';
   }
 
+  /** When true with USE_LLM_INTENT, ChatService routes create/update/delete calendar intents first. */
+  isCalendarMutationsLlmRoutingEnabled(): boolean {
+    if (!this.isLlmIntentEnabled()) return false;
+    const v = process.env.INTENT_ROUTE_CALENDAR_MUTATIONS?.trim().toLowerCase();
+    return v === 'true' || v === '1';
+  }
+
+  /** True if any calendar Stage-1 routing env is enabled. */
+  isCalendarLlmRoutingEnabled(): boolean {
+    return (
+      this.isCalendarListLlmRoutingEnabled() ||
+      this.isCalendarMutationsLlmRoutingEnabled()
+    );
+  }
+
   async classify(context: IntentClassificationContext): Promise<IntentEnvelope> {
     if (!this.isLlmIntentEnabled()) {
       throw new LlmIntentDisabledError();

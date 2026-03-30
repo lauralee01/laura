@@ -183,6 +183,117 @@ export class ToolOrchestratorService {
     }
   }
 
+  /** Create path shared by regex routing and LLM `calendar_create` routing. */
+  async handleCalendarCreateIntent(
+    sessionId: string,
+    message: string,
+  ): Promise<string> {
+    const tzCandidate = extractTimeZoneFromMessage(message);
+    const storedTz = await this.sessionPreferences.getTimeZone(sessionId);
+    const timeZone = tzCandidate ?? storedTz;
+
+    if (tzCandidate) {
+      await this.sessionPreferences.setTimeZone(sessionId, tzCandidate).catch(
+        () => undefined,
+      );
+    }
+
+    if (!timeZone) {
+      this.pendingRequestService.setPending<PendingCalendarCreatePayload>(
+        sessionId,
+        {
+          actionType: 'calendar_create',
+          originalMessage: message,
+          payload: { message },
+          missingSlots: ['timeZone'],
+          collectedSlots: {},
+        },
+      );
+      return (
+        'What timezone should I use for your events?\n\n' +
+        'Please reply with an IANA timezone like `America/Chicago` (Central), `America/New_York` (Eastern), or `America/Los_Angeles` (Pacific).'
+      );
+    }
+
+    try {
+      this.pendingRequestService.clearPending(sessionId, 'calendar_create');
+      const args = await extractCalendarEventArgs(
+        this.llmService,
+        message,
+        timeZone,
+      );
+      if (!args) {
+        return (
+          `I can create that calendar event, but I need start and end time in your local time (${timeZone}). ` +
+          `Example: March 26 12:00 to 13:00.`
+        );
+      }
+      const event = await this.calendarService.createEvent({
+        sessionId,
+        title: args.title,
+        start: args.start,
+        end: args.end,
+        description: args.description,
+        reminderMinutesBefore: args.reminderMinutesBefore,
+        timeZone,
+      });
+
+      return (
+        `Event added to Google Calendar.\n\n` +
+        `Title: ${event.title}\n` +
+        `Time zone: ${timeZone}\n` +
+        `Local start: ${args.start}\n` +
+        `Local end: ${args.end}\n` +
+        `Reminder (minutes before): ${
+          event.reminderMinutesBefore !== undefined
+            ? event.reminderMinutesBefore
+            : 'none'
+        }\n` +
+        `Calendar: primary\n` +
+        (event.url ? `Open: ${event.url}\n` : '') +
+        `(event id: ${event.eventId})`
+      );
+    } catch (e: unknown) {
+      return formatToolFailureMessage('create the calendar event', e);
+    }
+  }
+
+  /** Update/delete: timezone + mutation extractor + list/search (same as legacy). */
+  async handleCalendarMutationIntent(
+    sessionId: string,
+    message: string,
+  ): Promise<string> {
+    const tzCandidate = extractTimeZoneFromMessage(message);
+    const storedTz = await this.sessionPreferences.getTimeZone(sessionId);
+    const timeZone = tzCandidate ?? storedTz;
+
+    if (tzCandidate) {
+      await this.sessionPreferences.setTimeZone(sessionId, tzCandidate).catch(
+        () => undefined,
+      );
+    }
+
+    if (!timeZone) {
+      this.pendingRequestService.setPending<PendingCalendarMutateTzPayload>(
+        sessionId,
+        {
+          actionType: 'calendar_mutate_tz',
+          originalMessage: message,
+          payload: { message },
+          missingSlots: ['timeZone'],
+          collectedSlots: {},
+        },
+      );
+      return (
+        'What timezone should I use for your events?\n\n' +
+        'Please reply with an IANA timezone like `America/Chicago` (Central), `America/New_York` (Eastern), or `America/Los_Angeles` (Pacific).'
+      );
+    }
+
+    this.pendingRequestService.clearPending(sessionId, 'calendar_mutate_tz');
+    return this.runCalendarMutation(sessionId, message, timeZone);
+  }
+
   async tryHandle(sessionId: string, message: string): Promise<string | null> {
     const pendingSend =
       this.pendingRequestService.getPending<PendingEmailSendPayload>(
@@ -418,75 +529,12 @@ export class ToolOrchestratorService {
       return this.handleCalendarListIntent(sessionId, message);
     }
 
+    if (isCalendarDeleteIntent(message) || isCalendarUpdateIntent(message)) {
+      return this.handleCalendarMutationIntent(sessionId, message);
+    }
+
     if (isCalendarCreateIntent(message)) {
-      const tzCandidate = extractTimeZoneFromMessage(message);
-      const storedTz = await this.sessionPreferences.getTimeZone(sessionId);
-      const timeZone = tzCandidate ?? storedTz;
-
-      if (tzCandidate) {
-        await this.sessionPreferences.setTimeZone(sessionId, tzCandidate).catch(
-          () => undefined,
-        );
-      }
-
-      if (!timeZone) {
-        this.pendingRequestService.setPending<PendingCalendarCreatePayload>(
-          sessionId,
-          {
-            actionType: 'calendar_create',
-            originalMessage: message,
-            payload: { message },
-            missingSlots: ['timeZone'],
-            collectedSlots: {},
-          },
-        );
-        return (
-          'What timezone should I use for your events?\n\n' +
-          'Please reply with an IANA timezone like `America/Chicago` (Central), `America/New_York` (Eastern), or `America/Los_Angeles` (Pacific).'
-        );
-      }
-
-      try {
-        this.pendingRequestService.clearPending(sessionId, 'calendar_create');
-        const args = await extractCalendarEventArgs(
-          this.llmService,
-          message,
-          timeZone,
-        );
-        if (!args) {
-          return (
-            `I can create that calendar event, but I need start and end time in your local time (${timeZone}). ` +
-            `Example: March 26 12:00 to 13:00.`
-          );
-        }
-        const event = await this.calendarService.createEvent({
-          sessionId,
-          title: args.title,
-          start: args.start,
-          end: args.end,
-          description: args.description,
-          reminderMinutesBefore: args.reminderMinutesBefore,
-          timeZone,
-        });
-
-        return (
-          `Event added to Google Calendar.\n\n` +
-          `Title: ${event.title}\n` +
-          `Time zone: ${timeZone}\n` +
-          `Local start: ${args.start}\n` +
-          `Local end: ${args.end}\n` +
-          `Reminder (minutes before): ${
-            event.reminderMinutesBefore !== undefined
-              ? event.reminderMinutesBefore
-              : 'none'
-          }\n` +
-          `Calendar: primary\n` +
-          (event.url ? `Open: ${event.url}\n` : '') +
-          `(event id: ${event.eventId})`
-        );
-      } catch (e: unknown) {
-        return formatToolFailureMessage('create the calendar event', e);
-      }
+      return this.handleCalendarCreateIntent(sessionId, message);
     }
 
     const tzCandidate = extractTimeZoneFromMessage(message);

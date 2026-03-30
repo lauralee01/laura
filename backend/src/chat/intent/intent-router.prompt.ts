@@ -31,6 +31,8 @@ Guidance:
 - calendar_create: user wants to add/schedule/create a new event.
 - calendar_update: user wants to move/reschedule/change/edit an existing event.
 - calendar_delete: user wants to cancel/delete/remove an event.
+
+Optional slots hints (execution still validates in code): e.g. titleHint, roughTimeHint strings for create; titleHint for update/delete.
 - email_draft: user wants to draft/send an email (initial draft request).
 - email_send_confirm: user is confirming sending a pending email (e.g. yes, send, go ahead).
 - email_draft_revise: user wants to change wording of a pending draft before sending.

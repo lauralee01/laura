@@ -9,6 +9,7 @@ describe('IntentRouterService', () => {
 
   const prevFlag = process.env.USE_LLM_INTENT;
   const prevRouteCal = process.env.INTENT_ROUTE_CALENDAR_LIST;
+  const prevRouteMut = process.env.INTENT_ROUTE_CALENDAR_MUTATIONS;
 
   afterEach(() => {
     if (prevFlag === undefined) {
@@ -20,6 +21,11 @@ describe('IntentRouterService', () => {
       delete process.env.INTENT_ROUTE_CALENDAR_LIST;
     } else {
       process.env.INTENT_ROUTE_CALENDAR_LIST = prevRouteCal;
+    }
+    if (prevRouteMut === undefined) {
+      delete process.env.INTENT_ROUTE_CALENDAR_MUTATIONS;
+    } else {
+      process.env.INTENT_ROUTE_CALENDAR_MUTATIONS = prevRouteMut;
     }
   });
 
@@ -57,6 +63,32 @@ describe('IntentRouterService', () => {
 
     process.env.USE_LLM_INTENT = 'false';
     expect(service.isCalendarListLlmRoutingEnabled()).toBe(false);
+  });
+
+  it('isCalendarMutationsLlmRoutingEnabled requires both flags', () => {
+    delete process.env.INTENT_ROUTE_CALENDAR_MUTATIONS;
+    process.env.USE_LLM_INTENT = 'true';
+    expect(service.isCalendarMutationsLlmRoutingEnabled()).toBe(false);
+
+    process.env.INTENT_ROUTE_CALENDAR_MUTATIONS = 'true';
+    expect(service.isCalendarMutationsLlmRoutingEnabled()).toBe(true);
+
+    process.env.USE_LLM_INTENT = 'false';
+    expect(service.isCalendarMutationsLlmRoutingEnabled()).toBe(false);
+  });
+
+  it('isCalendarLlmRoutingEnabled is true if list or mutations routing is on', () => {
+    process.env.USE_LLM_INTENT = 'true';
+    delete process.env.INTENT_ROUTE_CALENDAR_LIST;
+    delete process.env.INTENT_ROUTE_CALENDAR_MUTATIONS;
+    expect(service.isCalendarLlmRoutingEnabled()).toBe(false);
+
+    process.env.INTENT_ROUTE_CALENDAR_LIST = 'true';
+    expect(service.isCalendarLlmRoutingEnabled()).toBe(true);
+
+    delete process.env.INTENT_ROUTE_CALENDAR_LIST;
+    process.env.INTENT_ROUTE_CALENDAR_MUTATIONS = 'true';
+    expect(service.isCalendarLlmRoutingEnabled()).toBe(true);
   });
 
   it('classify throws LlmIntentDisabledError when flag off', async () => {

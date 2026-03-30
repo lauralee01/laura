@@ -57,7 +57,7 @@ export class ChatService {
 
     let precomputedEnvelope: IntentEnvelope | undefined;
 
-    if (this.intentRouter.isCalendarListLlmRoutingEnabled()) {
+    if (this.intentRouter.isCalendarLlmRoutingEnabled()) {
       try {
         const envelope = await this.intentRouter.classify({
           userMessage: message,
@@ -65,7 +65,12 @@ export class ChatService {
           sessionTimeZone: sessionTz ?? undefined,
         });
         precomputedEnvelope = envelope;
-        if (envelope.intent === 'calendar_list') {
+
+        const routeList = this.intentRouter.isCalendarListLlmRoutingEnabled();
+        const routeMut =
+          this.intentRouter.isCalendarMutationsLlmRoutingEnabled();
+
+        if (routeList && envelope.intent === 'calendar_list') {
           const listReply =
             await this.toolOrchestrator.handleCalendarListIntent(
               sessionId,
@@ -89,6 +94,66 @@ export class ChatService {
           );
           return {
             reply: listReply,
+            conversationId: dbConversationId ?? undefined,
+          };
+        }
+
+        if (routeMut && envelope.intent === 'calendar_create') {
+          const createReply =
+            await this.toolOrchestrator.handleCalendarCreateIntent(
+              sessionId,
+              message,
+            );
+          await this.intentShadowService.maybeLogLlmIntent({
+            sessionId,
+            message,
+            pendingHint,
+            sessionTimeZone: sessionTz ?? undefined,
+            precomputedEnvelope: envelope,
+          });
+          await this.chatHistoryService.appendMessage(
+            dbConversationId ?? '',
+            'assistant',
+            createReply,
+          );
+          await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
+            sessionId,
+            message,
+          );
+          return {
+            reply: createReply,
+            conversationId: dbConversationId ?? undefined,
+          };
+        }
+
+        if (
+          routeMut &&
+          (envelope.intent === 'calendar_update' ||
+            envelope.intent === 'calendar_delete')
+        ) {
+          const mutReply =
+            await this.toolOrchestrator.handleCalendarMutationIntent(
+              sessionId,
+              message,
+            );
+          await this.intentShadowService.maybeLogLlmIntent({
+            sessionId,
+            message,
+            pendingHint,
+            sessionTimeZone: sessionTz ?? undefined,
+            precomputedEnvelope: envelope,
+          });
+          await this.chatHistoryService.appendMessage(
+            dbConversationId ?? '',
+            'assistant',
+            mutReply,
+          );
+          await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
+            sessionId,
+            message,
+          );
+          return {
+            reply: mutReply,
             conversationId: dbConversationId ?? undefined,
           };
         }
