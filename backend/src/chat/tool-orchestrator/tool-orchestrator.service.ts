@@ -32,12 +32,7 @@ import {
   extractMonthOffset,
   extractWeekOffset,
   extractYearOffset,
-  isCalendarCreateIntent,
-  isCalendarDeleteIntent,
-  isCalendarListIntent,
-  isCalendarUpdateIntent,
   isDayListing,
-  isEmailDraftIntent,
   isMonthListing,
   isPastCalendarListIntent,
   isWeekListing,
@@ -608,22 +603,6 @@ export class ToolOrchestratorService {
       } catch (e: unknown) {
         return formatToolFailureMessage('update the calendar event', e);
       }
-    }
-
-    if (isEmailDraftIntent(message)) {
-      return this.handleEmailDraftIntent(sessionId, message);
-    }
-
-    if (isCalendarListIntent(message)) {
-      return this.handleCalendarListIntent(sessionId, message);
-    }
-
-    if (isCalendarDeleteIntent(message) || isCalendarUpdateIntent(message)) {
-      return this.handleCalendarMutationIntent(sessionId, message);
-    }
-
-    if (isCalendarCreateIntent(message)) {
-      return this.handleCalendarCreateIntent(sessionId, message);
     }
 
     const tzCandidate = extractTimeZoneFromMessage(message);

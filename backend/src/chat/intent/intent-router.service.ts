@@ -37,18 +37,18 @@ export class IntentRouterService {
     return v !== 'false' && v !== '0';
   }
 
-  /** When true with USE_LLM_INTENT, ChatService routes `calendar_list` via Stage-1 first. */
+  /** True by default; false only when INTENT_ROUTE_CALENDAR_LIST is "false" or "0". */
   isCalendarListLlmRoutingEnabled(): boolean {
     if (!this.isLlmIntentEnabled()) return false;
     const v = process.env.INTENT_ROUTE_CALENDAR_LIST?.trim().toLowerCase();
-    return v === 'true' || v === '1';
+    return v !== 'false' && v !== '0';
   }
 
-  /** When true with USE_LLM_INTENT, ChatService routes create/update/delete calendar intents first. */
+  /** True by default; false only when INTENT_ROUTE_CALENDAR_MUTATIONS is "false" or "0". */
   isCalendarMutationsLlmRoutingEnabled(): boolean {
     if (!this.isLlmIntentEnabled()) return false;
     const v = process.env.INTENT_ROUTE_CALENDAR_MUTATIONS?.trim().toLowerCase();
-    return v === 'true' || v === '1';
+    return v !== 'false' && v !== '0';
   }
 
   /** True if any calendar Stage-1 routing env is enabled. */
@@ -59,11 +59,11 @@ export class IntentRouterService {
     );
   }
 
-  /** When true with USE_LLM_INTENT, ChatService routes email draft / pending-send / revise first. */
+  /** True by default; false only when INTENT_ROUTE_EMAIL is "false" or "0". */
   isEmailLlmRoutingEnabled(): boolean {
     if (!this.isLlmIntentEnabled()) return false;
     const v = process.env.INTENT_ROUTE_EMAIL?.trim().toLowerCase();
-    return v === 'true' || v === '1';
+    return v !== 'false' && v !== '0';
   }
 
   /** Classify when any tool routing (calendar or email) is enabled. */

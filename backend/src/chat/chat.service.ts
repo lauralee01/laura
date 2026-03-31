@@ -12,7 +12,6 @@ import {
   IntentRouterService,
   type IntentEnvelope,
 } from './intent';
-import { shouldClearEmailSendForNewToolIntent } from './tool-orchestrator/tool-orchestrator.email-send-intents';
 
 type ChatReply = {
   reply: string;
@@ -91,9 +90,15 @@ export class ChatService {
       skipDuplicateClassify: routingClassifyFailed,
     });
 
+    const shouldClearPendingEmailFromEnvelope =
+      envelope?.intent === 'calendar_list' ||
+      envelope?.intent === 'calendar_create' ||
+      envelope?.intent === 'calendar_update' ||
+      envelope?.intent === 'calendar_delete' ||
+      envelope?.intent === 'email_draft';
     if (
       this.pendingRequestService.getPending(sessionId, 'email_send') &&
-      shouldClearEmailSendForNewToolIntent(message)
+      shouldClearPendingEmailFromEnvelope
     ) {
       this.pendingRequestService.clearPending(sessionId, 'email_send');
     }

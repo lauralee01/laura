@@ -72,69 +72,64 @@ describe('IntentRouterService', () => {
     expect(service.isLlmIntentEnabled()).toBe(false);
   });
 
-  it('isCalendarListLlmRoutingEnabled requires both flags', () => {
+  it('isCalendarListLlmRoutingEnabled is true by default when LLM intent is enabled', () => {
     delete process.env.INTENT_ROUTE_CALENDAR_LIST;
     process.env.USE_LLM_INTENT = 'true';
-    expect(service.isCalendarListLlmRoutingEnabled()).toBe(false);
-
-    process.env.INTENT_ROUTE_CALENDAR_LIST = 'true';
     expect(service.isCalendarListLlmRoutingEnabled()).toBe(true);
 
+    process.env.INTENT_ROUTE_CALENDAR_LIST = 'false';
+    expect(service.isCalendarListLlmRoutingEnabled()).toBe(false);
+
     process.env.USE_LLM_INTENT = 'false';
     expect(service.isCalendarListLlmRoutingEnabled()).toBe(false);
   });
 
-  it('isCalendarMutationsLlmRoutingEnabled requires both flags', () => {
+  it('isCalendarMutationsLlmRoutingEnabled is true by default when LLM intent is enabled', () => {
     delete process.env.INTENT_ROUTE_CALENDAR_MUTATIONS;
     process.env.USE_LLM_INTENT = 'true';
-    expect(service.isCalendarMutationsLlmRoutingEnabled()).toBe(false);
-
-    process.env.INTENT_ROUTE_CALENDAR_MUTATIONS = 'true';
     expect(service.isCalendarMutationsLlmRoutingEnabled()).toBe(true);
 
+    process.env.INTENT_ROUTE_CALENDAR_MUTATIONS = 'false';
+    expect(service.isCalendarMutationsLlmRoutingEnabled()).toBe(false);
+
     process.env.USE_LLM_INTENT = 'false';
     expect(service.isCalendarMutationsLlmRoutingEnabled()).toBe(false);
   });
 
-  it('isCalendarLlmRoutingEnabled is true if list or mutations routing is on', () => {
+  it('isCalendarLlmRoutingEnabled is true by default when LLM intent is enabled', () => {
     process.env.USE_LLM_INTENT = 'true';
     delete process.env.INTENT_ROUTE_CALENDAR_LIST;
     delete process.env.INTENT_ROUTE_CALENDAR_MUTATIONS;
+    expect(service.isCalendarLlmRoutingEnabled()).toBe(true);
+
+    process.env.INTENT_ROUTE_CALENDAR_LIST = 'false';
+    process.env.INTENT_ROUTE_CALENDAR_MUTATIONS = 'false';
     expect(service.isCalendarLlmRoutingEnabled()).toBe(false);
-
-    process.env.INTENT_ROUTE_CALENDAR_LIST = 'true';
-    expect(service.isCalendarLlmRoutingEnabled()).toBe(true);
-
-    delete process.env.INTENT_ROUTE_CALENDAR_LIST;
-    process.env.INTENT_ROUTE_CALENDAR_MUTATIONS = 'true';
-    expect(service.isCalendarLlmRoutingEnabled()).toBe(true);
   });
 
-  it('isEmailLlmRoutingEnabled requires USE_LLM_INTENT and INTENT_ROUTE_EMAIL', () => {
+  it('isEmailLlmRoutingEnabled is true by default when LLM intent is enabled', () => {
     delete process.env.INTENT_ROUTE_EMAIL;
     process.env.USE_LLM_INTENT = 'true';
-    expect(service.isEmailLlmRoutingEnabled()).toBe(false);
-
-    process.env.INTENT_ROUTE_EMAIL = 'true';
     expect(service.isEmailLlmRoutingEnabled()).toBe(true);
+
+    process.env.INTENT_ROUTE_EMAIL = 'false';
+    expect(service.isEmailLlmRoutingEnabled()).toBe(false);
 
     process.env.USE_LLM_INTENT = 'false';
     expect(service.isEmailLlmRoutingEnabled()).toBe(false);
   });
 
-  it('isLlmToolRoutingEnabled is true if calendar or email routing is on', () => {
+  it('isLlmToolRoutingEnabled is true by default when LLM intent is enabled', () => {
     process.env.USE_LLM_INTENT = 'true';
     delete process.env.INTENT_ROUTE_CALENDAR_LIST;
     delete process.env.INTENT_ROUTE_CALENDAR_MUTATIONS;
     delete process.env.INTENT_ROUTE_EMAIL;
+    expect(service.isLlmToolRoutingEnabled()).toBe(true);
+
+    process.env.INTENT_ROUTE_CALENDAR_LIST = 'false';
+    process.env.INTENT_ROUTE_CALENDAR_MUTATIONS = 'false';
+    process.env.INTENT_ROUTE_EMAIL = 'false';
     expect(service.isLlmToolRoutingEnabled()).toBe(false);
-
-    process.env.INTENT_ROUTE_EMAIL = 'true';
-    expect(service.isLlmToolRoutingEnabled()).toBe(true);
-
-    delete process.env.INTENT_ROUTE_EMAIL;
-    process.env.INTENT_ROUTE_CALENDAR_LIST = 'true';
-    expect(service.isLlmToolRoutingEnabled()).toBe(true);
   });
 
   it('getToolRoutingMinConfidence defaults and clamps env values', () => {
