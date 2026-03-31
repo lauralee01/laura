@@ -24,17 +24,17 @@ function buildClassifierUserMessage(c: IntentClassificationContext): string {
 }
 
 /**
- * Stage-1: LLM → structured {@link IntentEnvelope}. Gated by USE_LLM_INTENT (default off).
- * Not wired into {@link ChatService} until Batch B+; call only when enabled or in tests.
+ * Stage-1: LLM → structured {@link IntentEnvelope}. Enabled by default (disable with
+ * USE_LLM_INTENT=false) and used by ChatService routing/fallback logic.
  */
 @Injectable()
 export class IntentRouterService {
   constructor(private readonly llm: LlmService) {}
 
-  /** True when USE_LLM_INTENT is "true" or "1". */
+  /** True by default; false only when USE_LLM_INTENT is "false" or "0". */
   isLlmIntentEnabled(): boolean {
     const v = process.env.USE_LLM_INTENT?.trim().toLowerCase();
-    return v === 'true' || v === '1';
+    return v !== 'false' && v !== '0';
   }
 
   /** When true with USE_LLM_INTENT, ChatService routes `calendar_list` via Stage-1 first. */

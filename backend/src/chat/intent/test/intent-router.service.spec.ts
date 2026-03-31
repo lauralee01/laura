@@ -53,9 +53,9 @@ describe('IntentRouterService', () => {
     service = module.get(IntentRouterService);
   });
 
-  it('isLlmIntentEnabled is false by default', () => {
+  it('isLlmIntentEnabled is true by default', () => {
     delete process.env.USE_LLM_INTENT;
-    expect(service.isLlmIntentEnabled()).toBe(false);
+    expect(service.isLlmIntentEnabled()).toBe(true);
   });
 
   it('isLlmIntentEnabled is true for true or 1', () => {
@@ -63,6 +63,13 @@ describe('IntentRouterService', () => {
     expect(service.isLlmIntentEnabled()).toBe(true);
     process.env.USE_LLM_INTENT = '1';
     expect(service.isLlmIntentEnabled()).toBe(true);
+  });
+
+  it('isLlmIntentEnabled is false for false or 0', () => {
+    process.env.USE_LLM_INTENT = 'false';
+    expect(service.isLlmIntentEnabled()).toBe(false);
+    process.env.USE_LLM_INTENT = '0';
+    expect(service.isLlmIntentEnabled()).toBe(false);
   });
 
   it('isCalendarListLlmRoutingEnabled requires both flags', () => {
@@ -148,7 +155,7 @@ describe('IntentRouterService', () => {
   });
 
   it('classify throws LlmIntentDisabledError when flag off', async () => {
-    delete process.env.USE_LLM_INTENT;
+    process.env.USE_LLM_INTENT = 'false';
     await expect(
       service.classify({ userMessage: 'hello' }),
     ).rejects.toThrow(LlmIntentDisabledError);
