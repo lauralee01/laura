@@ -73,6 +73,14 @@ export class ChatService {
     }
 
     const envelope = precomputedEnvelope;
+    const minToolConfidence =
+      this.intentRouter.getToolRoutingMinConfidence();
+    const isLowConfidenceIntent =
+      !!envelope && envelope.confidence < minToolConfidence;
+    const isChatLikeIntent =
+      envelope?.intent === 'general_chat' ||
+      envelope?.intent === 'clarify' ||
+      isLowConfidenceIntent;
 
     const shadowLog = (e?: IntentEnvelope) => ({
       sessionId,
@@ -237,7 +245,32 @@ export class ChatService {
       };
     }
 
-    const toolReply = await this.toolOrchestrator.tryHandle(sessionId, message);
+    if (this.intentRouter.isLlmToolRoutingEnabled() && envelope) {
+      if (envelope.intent === 'clarify' || isLowConfidenceIntent) {
+        const clarifyReply =
+          'I did not fully catch that. Could you rephrase what you want me to do? ' +
+          'For example: "draft an email to ...", "show my calendar tomorrow", or "just answer this question: ...".';
+        await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
+        await this.chatHistoryService.appendMessage(
+          dbConversationId ?? '',
+          'assistant',
+          clarifyReply,
+        );
+        await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
+          sessionId,
+          message,
+        );
+        return {
+          reply: clarifyReply,
+          conversationId: dbConversationId ?? undefined,
+        };
+      }
+    }
+
+    const toolReply =
+      this.intentRouter.isLlmToolRoutingEnabled() && isChatLikeIntent
+        ? null
+        : await this.toolOrchestrator.tryHandle(sessionId, message);
 
     await this.intentShadowService.maybeLogLlmIntent(shadowLog(precomputedEnvelope));
     if (toolReply) {

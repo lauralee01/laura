@@ -11,6 +11,7 @@ describe('IntentRouterService', () => {
   const prevRouteCal = process.env.INTENT_ROUTE_CALENDAR_LIST;
   const prevRouteMut = process.env.INTENT_ROUTE_CALENDAR_MUTATIONS;
   const prevRouteEmail = process.env.INTENT_ROUTE_EMAIL;
+  const prevMinConfidence = process.env.INTENT_TOOL_MIN_CONFIDENCE;
 
   afterEach(() => {
     if (prevFlag === undefined) {
@@ -32,6 +33,11 @@ describe('IntentRouterService', () => {
       delete process.env.INTENT_ROUTE_EMAIL;
     } else {
       process.env.INTENT_ROUTE_EMAIL = prevRouteEmail;
+    }
+    if (prevMinConfidence === undefined) {
+      delete process.env.INTENT_TOOL_MIN_CONFIDENCE;
+    } else {
+      process.env.INTENT_TOOL_MIN_CONFIDENCE = prevMinConfidence;
     }
   });
 
@@ -122,6 +128,23 @@ describe('IntentRouterService', () => {
     delete process.env.INTENT_ROUTE_EMAIL;
     process.env.INTENT_ROUTE_CALENDAR_LIST = 'true';
     expect(service.isLlmToolRoutingEnabled()).toBe(true);
+  });
+
+  it('getToolRoutingMinConfidence defaults and clamps env values', () => {
+    delete process.env.INTENT_TOOL_MIN_CONFIDENCE;
+    expect(service.getToolRoutingMinConfidence()).toBe(0.6);
+
+    process.env.INTENT_TOOL_MIN_CONFIDENCE = '0.75';
+    expect(service.getToolRoutingMinConfidence()).toBe(0.75);
+
+    process.env.INTENT_TOOL_MIN_CONFIDENCE = '-1';
+    expect(service.getToolRoutingMinConfidence()).toBe(0);
+
+    process.env.INTENT_TOOL_MIN_CONFIDENCE = '2';
+    expect(service.getToolRoutingMinConfidence()).toBe(1);
+
+    process.env.INTENT_TOOL_MIN_CONFIDENCE = 'not-a-number';
+    expect(service.getToolRoutingMinConfidence()).toBe(0.6);
   });
 
   it('classify throws LlmIntentDisabledError when flag off', async () => {

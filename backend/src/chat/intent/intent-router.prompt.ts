@@ -42,6 +42,10 @@ Optional slots hints (execution still validates in code): e.g. titleHint, roughT
 - set_timezone: user is providing or setting a timezone (IANA).
 - clarify: the message is ambiguous and needs a follow-up question before routing.
 
+Confidence guidance:
+- Use lower confidence for uncertain guesses or weak wording overlap.
+- Use intent "clarify" when the user request is too ambiguous to safely map to a tool action.
+
 Intent classification prompt version: ${INTENT_CLASSIFICATION_PROMPT_VERSION}
 `.trim();
 }

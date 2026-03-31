@@ -71,6 +71,20 @@ export class IntentRouterService {
     return this.isCalendarLlmRoutingEnabled() || this.isEmailLlmRoutingEnabled();
   }
 
+  /**
+   * Minimum confidence required to run tool orchestration from Stage-1 intent.
+   * Invalid or missing env values fall back to 0.6.
+   */
+  getToolRoutingMinConfidence(): number {
+    const raw = process.env.INTENT_TOOL_MIN_CONFIDENCE;
+    if (!raw) return 0.6;
+    const parsed = Number(raw);
+    if (Number.isNaN(parsed)) return 0.6;
+    if (parsed < 0) return 0;
+    if (parsed > 1) return 1;
+    return parsed;
+  }
+
   async classify(context: IntentClassificationContext): Promise<IntentEnvelope> {
     if (!this.isLlmIntentEnabled()) {
       throw new LlmIntentDisabledError();
