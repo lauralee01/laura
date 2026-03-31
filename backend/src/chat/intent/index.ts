@@ -6,7 +6,6 @@ export {
   type IntentEnvelope,
   type IntentId,
   IntentEnvelopeParseError,
-  LlmIntentDisabledError,
 } from './intent.types';
 export { parseIntentEnvelopeFromModelText } from './intent-envelope.parse';
 export { IntentRouterService } from './intent-router.service';

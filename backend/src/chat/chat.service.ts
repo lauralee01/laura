@@ -58,17 +58,15 @@ export class ChatService {
     let precomputedEnvelope: IntentEnvelope | undefined;
     let routingClassifyFailed = false;
 
-    if (this.intentRouter.isLlmToolRoutingEnabled()) {
-      try {
-        precomputedEnvelope = await this.intentRouter.classify({
-          userMessage: message,
-          pendingHint,
-          sessionTimeZone: sessionTz ?? undefined,
-        });
-      } catch {
-        routingClassifyFailed = true;
-        precomputedEnvelope = undefined;
-      }
+    try {
+      precomputedEnvelope = await this.intentRouter.classify({
+        userMessage: message,
+        pendingHint,
+        sessionTimeZone: sessionTz ?? undefined,
+      });
+    } catch {
+      routingClassifyFailed = true;
+      precomputedEnvelope = undefined;
     }
 
     const envelope = precomputedEnvelope;
@@ -96,15 +94,12 @@ export class ChatService {
       envelope?.intent === 'calendar_update' ||
       envelope?.intent === 'calendar_delete' ||
       envelope?.intent === 'email_draft';
-    if (
-      this.pendingRequestService.getPending(sessionId, 'email_send') &&
-      shouldClearPendingEmailFromEnvelope
-    ) {
+    if (this.pendingRequestService.getPending(sessionId, 'email_send') && shouldClearPendingEmailFromEnvelope) {
       this.pendingRequestService.clearPending(sessionId, 'email_send');
     }
 
     if (this.pendingRequestService.getPending(sessionId, 'email_send')) {
-      if (this.intentRouter.isEmailLlmRoutingEnabled() && envelope) {
+      if (envelope) {
         const emailLlm = await this.toolOrchestrator.tryLlmRoutedEmail(
           sessionId,
           message,
@@ -130,6 +125,7 @@ export class ChatService {
       const emailRegex = await this.toolOrchestrator.handlePendingEmailSendTurn(
         sessionId,
         message,
+        envelope,
       );
       if (emailRegex !== null) {
         await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
@@ -149,87 +145,80 @@ export class ChatService {
       }
     }
 
-    if (this.intentRouter.isCalendarLlmRoutingEnabled() && envelope) {
-      const routeList = this.intentRouter.isCalendarListLlmRoutingEnabled();
-      const routeMut =
-        this.intentRouter.isCalendarMutationsLlmRoutingEnabled();
+    if (envelope?.intent === 'calendar_list') {
+      const listReply =
+        await this.toolOrchestrator.handleCalendarListIntent(
+          sessionId,
+          message,
+          envelope,
+        );
+      await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
+      await this.chatHistoryService.appendMessage(
+        dbConversationId ?? '',
+        'assistant',
+        listReply,
+      );
+      await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
+        sessionId,
+        message,
+      );
+      return {
+        reply: listReply,
+        conversationId: dbConversationId ?? undefined,
+      };
+    }
 
-      if (routeList && envelope.intent === 'calendar_list') {
-          const listReply =
-            await this.toolOrchestrator.handleCalendarListIntent(
-              sessionId,
-              message,
-            );
-          await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
-          await this.chatHistoryService.appendMessage(
-            dbConversationId ?? '',
-            'assistant',
-            listReply,
-          );
-          await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
-            sessionId,
-            message,
-          );
-          return {
-            reply: listReply,
-            conversationId: dbConversationId ?? undefined,
-          };
-        }
-
-        if (routeMut && envelope.intent === 'calendar_create') {
-          const createReply =
-            await this.toolOrchestrator.handleCalendarCreateIntent(
-              sessionId,
-              message,
-            );
-          await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
-          await this.chatHistoryService.appendMessage(
-            dbConversationId ?? '',
-            'assistant',
-            createReply,
-          );
-          await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
-            sessionId,
-            message,
-          );
-          return {
-            reply: createReply,
-            conversationId: dbConversationId ?? undefined,
-          };
-        }
-
-        if (
-          routeMut &&
-          (envelope.intent === 'calendar_update' ||
-            envelope.intent === 'calendar_delete')
-        ) {
-          const mutReply =
-            await this.toolOrchestrator.handleCalendarMutationIntent(
-              sessionId,
-              message,
-            );
-          await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
-          await this.chatHistoryService.appendMessage(
-            dbConversationId ?? '',
-            'assistant',
-            mutReply,
-          );
-          await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
-            sessionId,
-            message,
-          );
-          return {
-            reply: mutReply,
-            conversationId: dbConversationId ?? undefined,
-          };
-        }
+    if (envelope?.intent === 'calendar_create') {
+      const createReply =
+        await this.toolOrchestrator.handleCalendarCreateIntent(
+          sessionId,
+          message,
+          envelope,
+        );
+      await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
+      await this.chatHistoryService.appendMessage(
+        dbConversationId ?? '',
+        'assistant',
+        createReply,
+      );
+      await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
+        sessionId,
+        message,
+      );
+      return {
+        reply: createReply,
+        conversationId: dbConversationId ?? undefined,
+      };
     }
 
     if (
-      this.intentRouter.isEmailLlmRoutingEnabled() &&
-      envelope?.intent === 'email_draft' &&
-      !this.pendingRequestService.getPending(sessionId, 'email_send')
+      envelope &&
+      (envelope.intent === 'calendar_update' ||
+        envelope.intent === 'calendar_delete')
     ) {
+      const mutReply =
+        await this.toolOrchestrator.handleCalendarMutationIntent(
+          sessionId,
+          message,
+          envelope,
+        );
+      await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
+      await this.chatHistoryService.appendMessage(
+        dbConversationId ?? '',
+        'assistant',
+        mutReply,
+      );
+      await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
+        sessionId,
+        message,
+      );
+      return {
+        reply: mutReply,
+        conversationId: dbConversationId ?? undefined,
+      };
+    }
+
+    if (envelope?.intent === 'email_draft' && !this.pendingRequestService.getPending(sessionId, 'email_send')) {
       const draftReply = await this.toolOrchestrator.handleEmailDraftIntent(
         sessionId,
         message,
@@ -250,32 +239,29 @@ export class ChatService {
       };
     }
 
-    if (this.intentRouter.isLlmToolRoutingEnabled() && envelope) {
-      if (envelope.intent === 'clarify' || isLowConfidenceIntent) {
-        const clarifyReply =
-          'I did not fully catch that. Could you rephrase what you want me to do? ' +
-          'For example: "draft an email to ...", "show my calendar tomorrow", or "just answer this question: ...".';
-        await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
-        await this.chatHistoryService.appendMessage(
-          dbConversationId ?? '',
-          'assistant',
-          clarifyReply,
-        );
-        await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
-          sessionId,
-          message,
-        );
-        return {
-          reply: clarifyReply,
-          conversationId: dbConversationId ?? undefined,
-        };
-      }
+    if (envelope && (envelope.intent === 'clarify' || isLowConfidenceIntent)) {
+      const clarifyReply =
+        'I did not fully catch that. Could you rephrase what you want me to do? ' +
+        'For example: "draft an email to ...", "show my calendar tomorrow", or "just answer this question: ...".';
+      await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
+      await this.chatHistoryService.appendMessage(
+        dbConversationId ?? '',
+        'assistant',
+        clarifyReply,
+      );
+      await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
+        sessionId,
+        message,
+      );
+      return {
+        reply: clarifyReply,
+        conversationId: dbConversationId ?? undefined,
+      };
     }
 
-    const toolReply =
-      this.intentRouter.isLlmToolRoutingEnabled() && isChatLikeIntent
-        ? null
-        : await this.toolOrchestrator.tryHandle(sessionId, message);
+    const toolReply = isChatLikeIntent
+      ? null
+      : await this.toolOrchestrator.tryHandle(sessionId, message, envelope);
 
     await this.intentShadowService.maybeLogLlmIntent(shadowLog(precomputedEnvelope));
     if (toolReply) {

@@ -38,6 +38,7 @@ Optional slots hints (execution still validates in code): e.g. titleHint, roughT
 - email_draft: user wants to draft/send an email (initial draft request).
 - email_send_confirm: user is confirming sending a pending email (e.g. yes, send, go ahead). Use only when pendingHint indicates a draft is waiting for send.
 - email_draft_revise: user wants to change wording of a pending draft before sending.
+- pending_confirm: user confirms a pending action (e.g. yes/confirm) that is not email-send-specific.
 - pending_cancel: user is cancelling/dismissing the current pending action (e.g. cancel, never mind). Use when pendingHint describes what to cancel.
 - set_timezone: user is providing or setting a timezone (IANA).
 - clarify: the message is ambiguous and needs a follow-up question before routing.
@@ -45,6 +46,15 @@ Optional slots hints (execution still validates in code): e.g. titleHint, roughT
 Confidence guidance:
 - Use lower confidence for uncertain guesses or weak wording overlap.
 - Use intent "clarify" when the user request is too ambiguous to safely map to a tool action.
+
+Slots guidance (important for tool execution):
+- For calendar_list, include slots when possible:
+  - mode: "week" | "month" | "year" | "day" | "upcoming" | "past"
+  - weekOffset, monthOffset, yearOffset, dayOffset, maxEvents (numbers)
+  - timeZone (IANA string when user provided one)
+- For set_timezone, include slots.timeZone as IANA (e.g. "America/Chicago").
+- For pending pick prompts, include slots.selectedIndex as 1-based number.
+- Use pending_confirm for confirm-style replies for non-email pending actions.
 
 Intent classification prompt version: ${INTENT_CLASSIFICATION_PROMPT_VERSION}
 `.trim();

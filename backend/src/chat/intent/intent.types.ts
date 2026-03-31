@@ -14,7 +14,7 @@
 export const INTENT_CLASSIFICATION_SCHEMA_VERSION = 1 as const;
 
 /** Prompt / parser version for logs and regression tests (increment when JSON shape changes). */
-export const INTENT_CLASSIFICATION_PROMPT_VERSION = 'batch-f-v1';
+export const INTENT_CLASSIFICATION_PROMPT_VERSION = 'batch-g-v2';
 
 export const INTENT_IDS = [
   'general_chat',
@@ -25,6 +25,7 @@ export const INTENT_IDS = [
   'email_draft',
   'email_send_confirm',
   'email_draft_revise',
+  'pending_confirm',
   'pending_cancel',
   'set_timezone',
   'clarify',
@@ -51,17 +52,6 @@ export type IntentClassificationContext = {
   /** Session default IANA zone if already known */
   sessionTimeZone?: string;
 };
-
-export class LlmIntentDisabledError extends Error {
-  readonly code = 'LLM_INTENT_DISABLED';
-
-  constructor() {
-    super(
-      'LLM intent classification is disabled (set USE_LLM_INTENT=true to enable).',
-    );
-    this.name = 'LlmIntentDisabledError';
-  }
-}
 
 export class IntentEnvelopeParseError extends Error {
   readonly code = 'INTENT_ENVELOPE_PARSE';

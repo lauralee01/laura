@@ -6,7 +6,6 @@ import type {
   IntentClassificationContext,
   IntentEnvelope,
 } from './intent.types';
-import { LlmIntentDisabledError } from './intent.types';
 
 function buildClassifierUserMessage(c: IntentClassificationContext): string {
   const lines = [
@@ -23,53 +22,10 @@ function buildClassifierUserMessage(c: IntentClassificationContext): string {
   return lines.join('\n');
 }
 
-/**
- * Stage-1: LLM → structured {@link IntentEnvelope}. Enabled by default (disable with
- * USE_LLM_INTENT=false) and used by ChatService routing/fallback logic.
- */
+/** Stage-1: LLM → structured {@link IntentEnvelope} used by ChatService routing/fallback logic. */
 @Injectable()
 export class IntentRouterService {
   constructor(private readonly llm: LlmService) {}
-
-  /** True by default; false only when USE_LLM_INTENT is "false" or "0". */
-  isLlmIntentEnabled(): boolean {
-    const v = process.env.USE_LLM_INTENT?.trim().toLowerCase();
-    return v !== 'false' && v !== '0';
-  }
-
-  /** True by default; false only when INTENT_ROUTE_CALENDAR_LIST is "false" or "0". */
-  isCalendarListLlmRoutingEnabled(): boolean {
-    if (!this.isLlmIntentEnabled()) return false;
-    const v = process.env.INTENT_ROUTE_CALENDAR_LIST?.trim().toLowerCase();
-    return v !== 'false' && v !== '0';
-  }
-
-  /** True by default; false only when INTENT_ROUTE_CALENDAR_MUTATIONS is "false" or "0". */
-  isCalendarMutationsLlmRoutingEnabled(): boolean {
-    if (!this.isLlmIntentEnabled()) return false;
-    const v = process.env.INTENT_ROUTE_CALENDAR_MUTATIONS?.trim().toLowerCase();
-    return v !== 'false' && v !== '0';
-  }
-
-  /** True if any calendar Stage-1 routing env is enabled. */
-  isCalendarLlmRoutingEnabled(): boolean {
-    return (
-      this.isCalendarListLlmRoutingEnabled() ||
-      this.isCalendarMutationsLlmRoutingEnabled()
-    );
-  }
-
-  /** True by default; false only when INTENT_ROUTE_EMAIL is "false" or "0". */
-  isEmailLlmRoutingEnabled(): boolean {
-    if (!this.isLlmIntentEnabled()) return false;
-    const v = process.env.INTENT_ROUTE_EMAIL?.trim().toLowerCase();
-    return v !== 'false' && v !== '0';
-  }
-
-  /** Classify when any tool routing (calendar or email) is enabled. */
-  isLlmToolRoutingEnabled(): boolean {
-    return this.isCalendarLlmRoutingEnabled() || this.isEmailLlmRoutingEnabled();
-  }
 
   /**
    * Minimum confidence required to run tool orchestration from Stage-1 intent.
@@ -86,10 +42,6 @@ export class IntentRouterService {
   }
 
   async classify(context: IntentClassificationContext): Promise<IntentEnvelope> {
-    if (!this.isLlmIntentEnabled()) {
-      throw new LlmIntentDisabledError();
-    }
-
     const systemPrompt = buildIntentClassificationSystemPrompt();
     const userMessage = buildClassifierUserMessage(context);
 

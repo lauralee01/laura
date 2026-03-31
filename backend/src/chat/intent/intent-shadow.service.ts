@@ -1,11 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { IntentRouterService } from './intent-router.service';
 import type { IntentEnvelope } from './intent.types';
-import { LlmIntentDisabledError } from './intent.types';
 
 /**
- * When enabled, runs the LLM intent classifier and logs the envelope (routing still uses
- * ToolOrchestrator until a later batch).
+ * Runs the LLM intent classifier and logs the envelope.
  */
 @Injectable()
 export class IntentShadowService {
@@ -13,12 +11,8 @@ export class IntentShadowService {
 
   constructor(private readonly intentRouter: IntentRouterService) {}
 
-  /**
-   * Runs only when USE_LLM_INTENT is on and INTENT_SHADOW_LOG is not "false".
-   * If INTENT_SHADOW_LOG is unset, defaults to on in non-production.
-   */
+  /** Runs when INTENT_SHADOW_LOG is not "false" (defaults on in non-production). */
   isShadowLoggingEnabled(): boolean {
-    if (!this.intentRouter.isLlmIntentEnabled()) return false;
     const v = process.env.INTENT_SHADOW_LOG?.trim().toLowerCase();
     if (v === 'false' || v === '0') return false;
     if (v === 'true' || v === '1') return true;
@@ -64,7 +58,6 @@ export class IntentShadowService {
         })}`,
       );
     } catch (e: unknown) {
-      if (e instanceof LlmIntentDisabledError) return;
       this.logger.warn(
         `[intent-classify] classify failed: ${e instanceof Error ? e.message : String(e)}`,
       );

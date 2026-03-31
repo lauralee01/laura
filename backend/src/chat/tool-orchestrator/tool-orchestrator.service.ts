@@ -14,8 +14,6 @@ import {
 import { buildCalendarListUserMessage } from './tool-orchestrator.calendar-list-reply';
 import {
   filterEventsForMutation,
-  isConfirmCalendarMutation,
-  parseEventChoiceIndex,
 } from './tool-orchestrator.calendar-mutation-replies';
 import {
   getCalendarMonthRangeLocal,
@@ -26,29 +24,8 @@ import {
   getSingleDayRangeLocal,
   getUpcomingRangeLocal,
 } from './tool-orchestrator.calendar-ranges';
-import {
-  extractDayOffset,
-  extractListedEventCount,
-  extractMonthOffset,
-  extractWeekOffset,
-  extractYearOffset,
-  isDayListing,
-  isMonthListing,
-  isPastCalendarListIntent,
-  isWeekListing,
-  isYearListing,
-} from './tool-orchestrator.calendar-intents';
-import {
-  extractTimeZoneFromMessage,
-  isTimeZoneSettingMessage,
-} from './tool-orchestrator.timezone';
-import {
-  isCancelPendingEmailSend,
-  isConfirmSendEmail,
-  isEmailDraftRevisionIntent,
-  shouldClearEmailSendForNewToolIntent,
-} from './tool-orchestrator.email-send-intents';
 import type {
+  CalendarListMode,
   PendingCalendarCreatePayload,
   PendingCalendarDeletePayload,
   PendingCalendarListPayload,
@@ -74,12 +51,59 @@ export class ToolOrchestratorService {
     private readonly pendingRequestService: PendingRequestService,
   ) {}
 
+  private slotString(
+    envelope: IntentEnvelope | undefined,
+    key: string,
+  ): string | null {
+    const v = envelope?.slots?.[key];
+    return typeof v === 'string' && v.trim() ? v.trim() : null;
+  }
+
+  private slotNumber(
+    envelope: IntentEnvelope | undefined,
+    key: string,
+  ): number | null {
+    const v = envelope?.slots?.[key];
+    return typeof v === 'number' && Number.isFinite(v) ? v : null;
+  }
+
+  private slotListMode(envelope: IntentEnvelope | undefined): CalendarListMode {
+    const mode = this.slotString(envelope, 'mode');
+    const valid: CalendarListMode[] = [
+      'week',
+      'month',
+      'year',
+      'day',
+      'upcoming',
+      'past',
+    ];
+    return mode && (valid as string[]).includes(mode) ? (mode as CalendarListMode) : 'upcoming';
+  }
+
+  private slotTimeZone(envelope: IntentEnvelope | undefined): string | null {
+    const tz = this.slotString(envelope, 'timeZone');
+    if (!tz) return null;
+    return DateTime.now().setZone(tz).isValid ? tz : null;
+  }
+
+  private slotSelectedIndex(
+    envelope: IntentEnvelope | undefined,
+    max: number,
+  ): number | null {
+    const raw = this.slotNumber(envelope, 'selectedIndex');
+    if (raw === null) return null;
+    const idx = Math.trunc(raw);
+    if (idx < 1 || idx > max) return null;
+    return idx;
+  }
+
   /** List path shared by regex routing and LLM `calendar_list` routing. */
   async handleCalendarListIntent(
     sessionId: string,
     message: string,
+    envelope?: IntentEnvelope,
   ): Promise<string> {
-    const tzCandidate = extractTimeZoneFromMessage(message);
+    const tzCandidate = this.slotTimeZone(envelope);
     const storedTz = await this.sessionPreferences.getTimeZone(sessionId);
     const timeZone = tzCandidate ?? storedTz;
 
@@ -89,28 +113,25 @@ export class ToolOrchestratorService {
       );
     }
 
-    const weekOffset = extractWeekOffset(message);
-    const weekListing = isWeekListing(message);
-    const monthListing = isMonthListing(message);
-    const monthOffset = extractMonthOffset(message);
-    const yearListing = isYearListing(message);
-    const yearOffset = extractYearOffset(message);
-    const dayListing = isDayListing(message);
-    const dayOffset = extractDayOffset(message);
-    const listedCount = extractListedEventCount(message);
-    const pastIntent = isPastCalendarListIntent(message);
+    const mode = this.slotListMode(envelope);
+    const weekOffset = this.slotNumber(envelope, 'weekOffset') ?? 0;
+    const monthOffset = this.slotNumber(envelope, 'monthOffset') ?? 0;
+    const yearOffset = this.slotNumber(envelope, 'yearOffset') ?? 0;
+    const dayOffset = this.slotNumber(envelope, 'dayOffset') ?? 0;
+    const maxEvents = this.slotNumber(envelope, 'maxEvents') ?? 10;
 
-    const pendingListRequest: PendingCalendarListPayload = weekListing
-      ? { mode: 'week', weekOffset }
-      : monthListing
-        ? { mode: 'month', weekOffset: 0, monthOffset }
-        : yearListing
-          ? { mode: 'year', weekOffset: 0, yearOffset }
-          : dayListing
-            ? { mode: 'day', weekOffset: 0, dayOffset }
-            : pastIntent
-              ? { mode: 'past', weekOffset: 0, maxEvents: listedCount ?? 10 }
-              : { mode: 'upcoming', weekOffset, maxEvents: listedCount ?? 10 };
+    const pendingListRequest: PendingCalendarListPayload =
+      mode === 'week'
+        ? { mode, weekOffset }
+        : mode === 'month'
+          ? { mode, weekOffset: 0, monthOffset }
+          : mode === 'year'
+            ? { mode, weekOffset: 0, yearOffset }
+            : mode === 'day'
+              ? { mode, weekOffset: 0, dayOffset }
+              : mode === 'past'
+                ? { mode, weekOffset: 0, maxEvents }
+                : { mode: 'upcoming', weekOffset, maxEvents };
 
     if (!timeZone) {
       this.pendingRequestService.setPending<PendingCalendarListPayload>(
@@ -184,8 +205,9 @@ export class ToolOrchestratorService {
   async handleCalendarCreateIntent(
     sessionId: string,
     message: string,
+    envelope?: IntentEnvelope,
   ): Promise<string> {
-    const tzCandidate = extractTimeZoneFromMessage(message);
+    const tzCandidate = this.slotTimeZone(envelope);
     const storedTz = await this.sessionPreferences.getTimeZone(sessionId);
     const timeZone = tzCandidate ?? storedTz;
 
@@ -259,8 +281,9 @@ export class ToolOrchestratorService {
   async handleCalendarMutationIntent(
     sessionId: string,
     message: string,
+    envelope?: IntentEnvelope,
   ): Promise<string> {
-    const tzCandidate = extractTimeZoneFromMessage(message);
+    const tzCandidate = this.slotTimeZone(envelope);
     const storedTz = await this.sessionPreferences.getTimeZone(sessionId);
     const timeZone = tzCandidate ?? storedTz;
 
@@ -346,6 +369,7 @@ export class ToolOrchestratorService {
   async handlePendingEmailSendTurn(
     sessionId: string,
     message: string,
+    envelope?: IntentEnvelope,
   ): Promise<string | null> {
     const pendingSend =
       this.pendingRequestService.getPending<PendingEmailSendPayload>(
@@ -354,21 +378,17 @@ export class ToolOrchestratorService {
       );
     if (!pendingSend) return null;
 
-    if (isCancelPendingEmailSend(message)) {
+    if (envelope?.intent === 'pending_cancel') {
       this.pendingRequestService.clearPending(sessionId, 'email_send');
       return (
         'Okay — I won’t send that draft from here. ' +
         'It’s still in your Gmail drafts if you want to send or edit it there.'
       );
     }
-    if (isConfirmSendEmail(message)) {
+    if (envelope?.intent === 'email_send_confirm') {
       return this.sendPendingEmailDraftNow(sessionId, pendingSend);
     }
-    if (shouldClearEmailSendForNewToolIntent(message)) {
-      this.pendingRequestService.clearPending(sessionId, 'email_send');
-      return null;
-    }
-    if (isEmailDraftRevisionIntent(message)) {
+    if (envelope?.intent === 'email_draft_revise') {
       return this.revisePendingEmailDraftNow(sessionId, pendingSend, message);
     }
     return (
@@ -380,10 +400,7 @@ export class ToolOrchestratorService {
     );
   }
 
-  /**
-   * Stage-1 email routing: intent must align with regex guards before send/revise/cancel.
-   * Returns null to fall back to regex pending-email handling or tryHandle.
-   */
+  /** Stage-1 email routing with envelope intent and slots only. */
   async tryLlmRoutedEmail(
     sessionId: string,
     message: string,
@@ -396,10 +413,7 @@ export class ToolOrchestratorService {
       );
 
     if (pendingSend) {
-      if (
-        envelope.intent === 'pending_cancel' &&
-        isCancelPendingEmailSend(message)
-      ) {
+      if (envelope.intent === 'pending_cancel') {
         this.pendingRequestService.clearPending(sessionId, 'email_send');
         return (
           'Okay — I won’t send that draft from here. ' +
@@ -407,15 +421,12 @@ export class ToolOrchestratorService {
         );
       }
       if (envelope.intent === 'email_send_confirm') {
-        if (!isConfirmSendEmail(message)) return null;
         return this.sendPendingEmailDraftNow(sessionId, pendingSend);
       }
       if (envelope.intent === 'email_draft_revise') {
-        if (!isEmailDraftRevisionIntent(message)) return null;
         return this.revisePendingEmailDraftNow(sessionId, pendingSend, message);
       }
       if (envelope.intent === 'email_draft') {
-        if (!shouldClearEmailSendForNewToolIntent(message)) return null;
         this.pendingRequestService.clearPending(sessionId, 'email_send');
         return this.handleEmailDraftIntent(sessionId, message);
       }
@@ -493,10 +504,15 @@ export class ToolOrchestratorService {
     }
   }
 
-  async tryHandle(sessionId: string, message: string): Promise<string | null> {
+  async tryHandle(
+    sessionId: string,
+    message: string,
+    envelope?: IntentEnvelope,
+  ): Promise<string | null> {
     const pendingEmail = await this.handlePendingEmailSendTurn(
       sessionId,
       message,
+      envelope,
     );
     if (pendingEmail !== null) return pendingEmail;
 
@@ -506,7 +522,7 @@ export class ToolOrchestratorService {
         'calendar_delete',
       );
     if (pendingDelete) {
-      if (isCancelPendingEmailSend(message)) {
+      if (envelope?.intent === 'pending_cancel') {
         this.pendingRequestService.clearPending(sessionId, 'calendar_delete');
         return (
           'Okay — I won’t delete anything. Ask again when you want to remove an event.'
@@ -514,7 +530,7 @@ export class ToolOrchestratorService {
       }
       const p = pendingDelete.payload;
       if (p.phase === 'pick') {
-        const idx = parseEventChoiceIndex(message, p.options.length);
+        const idx = this.slotSelectedIndex(envelope, p.options.length);
         if (idx === null) {
           return (
             `Reply with a number 1–${p.options.length} for the event to delete, or say cancel.`
@@ -543,7 +559,7 @@ export class ToolOrchestratorService {
             `Reply yes to remove it from Google Calendar, or cancel.`
         );
       }
-      if (isConfirmCalendarMutation(message)) {
+      if (envelope?.intent === 'pending_confirm') {
         try {
           await this.calendarService.deleteEvent(
             sessionId,
@@ -570,14 +586,14 @@ export class ToolOrchestratorService {
         'calendar_update',
       );
     if (pendingUpdate) {
-      if (isCancelPendingEmailSend(message)) {
+      if (envelope?.intent === 'pending_cancel') {
         this.pendingRequestService.clearPending(sessionId, 'calendar_update');
         return (
           'Okay — I won’t change that event. Ask again when you want to reschedule or rename something.'
         );
       }
       const pu = pendingUpdate.payload;
-      const idx = parseEventChoiceIndex(message, pu.options.length);
+      const idx = this.slotSelectedIndex(envelope, pu.options.length);
       if (idx === null) {
         return (
           `Reply with a number 1–${pu.options.length} for the event to update, or say cancel.`
@@ -605,8 +621,8 @@ export class ToolOrchestratorService {
       }
     }
 
-    const tzCandidate = extractTimeZoneFromMessage(message);
-    if (tzCandidate && isTimeZoneSettingMessage(message, tzCandidate)) {
+    const tzCandidate = this.slotTimeZone(envelope);
+    if (envelope?.intent === 'set_timezone' && tzCandidate) {
       try {
         await this.sessionPreferences.setTimeZone(sessionId, tzCandidate);
       } catch (e: unknown) {
