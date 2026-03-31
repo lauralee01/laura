@@ -4,6 +4,7 @@ import type { CalendarListMode } from './tool-orchestrator.types';
 import { formatCalendarEventLines } from './tool-orchestrator.calendar-format';
 import {
   describeDayWindow,
+  describeNextDaysSpan,
   formatMonToSunRange,
   formatMonthWindowLabel,
   formatYearWindowLabel,
@@ -20,6 +21,8 @@ export function buildCalendarListUserMessage(params: {
   dayOffset: number;
   monthOffset: number;
   yearOffset: number;
+  /** Used when mode is next_days. */
+  spanDays?: number;
   maxEventsDefault: number;
   events: ListCalendarEventSummary[];
 }): string {
@@ -31,9 +34,11 @@ export function buildCalendarListUserMessage(params: {
     dayOffset,
     monthOffset,
     yearOffset,
+    spanDays: spanDaysParam,
     maxEventsDefault,
     events,
   } = params;
+  const spanDays = spanDaysParam ?? 2;
 
   if (mode === 'past') {
     const max = maxEventsDefault;
@@ -61,6 +66,9 @@ export function buildCalendarListUserMessage(params: {
     }
     if (mode === 'day') {
       return `No events found for ${describeDayWindow(nowLocal, dayOffset)} in ${timeZone}.`;
+    }
+    if (mode === 'next_days') {
+      return `No events found for ${describeNextDaysSpan(spanDays)} in ${timeZone}.`;
     }
     return `No upcoming events found in ${timeZone}.`;
   }
@@ -93,6 +101,14 @@ export function buildCalendarListUserMessage(params: {
     const dayText = describeDayWindow(nowLocal, dayOffset);
     return (
       `Here are your events for ${dayText} (${timeZone}):\n\n` +
+      formatCalendarEventLines(events)
+    );
+  }
+
+  if (mode === 'next_days') {
+    const label = describeNextDaysSpan(spanDays);
+    return (
+      `Here are your events for ${label} (${timeZone}):\n\n` +
       formatCalendarEventLines(events)
     );
   }

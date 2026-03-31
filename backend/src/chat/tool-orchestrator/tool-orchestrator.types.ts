@@ -17,6 +17,7 @@ export type CalendarListMode =
   | 'month'
   | 'year'
   | 'day'
+  | 'next_days'
   | 'upcoming'
   | 'past';
 
@@ -29,6 +30,8 @@ export type PendingCalendarListPayload = {
   monthOffset?: number;
   /** 0 = this calendar year, 1 = next, -1 = previous */
   yearOffset?: number;
+  /** next_days: number of calendar days from today’s start (default 2 for “today and tomorrow”). */
+  spanDays?: number;
   maxEvents?: number; // upcoming / past: how many events to show
 };
 

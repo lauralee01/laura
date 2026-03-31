@@ -74,6 +74,7 @@ export class ToolOrchestratorService {
       'month',
       'year',
       'day',
+      'next_days',
       'upcoming',
       'past',
     ];
@@ -119,6 +120,7 @@ export class ToolOrchestratorService {
     const yearOffset = this.slotNumber(envelope, 'yearOffset') ?? 0;
     const dayOffset = this.slotNumber(envelope, 'dayOffset') ?? 0;
     const maxEvents = this.slotNumber(envelope, 'maxEvents') ?? 10;
+    const spanDays = this.slotNumber(envelope, 'spanDays') ?? 2;
 
     const pendingListRequest: PendingCalendarListPayload =
       mode === 'week'
@@ -129,6 +131,12 @@ export class ToolOrchestratorService {
             ? { mode, weekOffset: 0, yearOffset }
             : mode === 'day'
               ? { mode, weekOffset: 0, dayOffset }
+              : mode === 'next_days'
+                ? {
+                    mode,
+                    weekOffset: 0,
+                    spanDays: Math.max(1, Math.min(60, Math.floor(spanDays))),
+                  }
               : mode === 'past'
                 ? { mode, weekOffset: 0, maxEvents }
                 : { mode: 'upcoming', weekOffset, maxEvents };
@@ -163,6 +171,10 @@ export class ToolOrchestratorService {
         mode: pendingListRequest.mode,
         timeZone,
         weekOffset,
+        spanDays:
+          pendingListRequest.mode === 'next_days'
+            ? pendingListRequest.spanDays
+            : undefined,
         maxEvents:
           pendingListRequest.mode === 'upcoming' ||
           pendingListRequest.mode === 'past'
@@ -193,6 +205,7 @@ export class ToolOrchestratorService {
         dayOffset: pendingListRequest.dayOffset ?? 0,
         monthOffset: pendingListRequest.monthOffset ?? 0,
         yearOffset: pendingListRequest.yearOffset ?? 0,
+        spanDays: pendingListRequest.spanDays ?? 2,
         maxEventsDefault: pendingListRequest.maxEvents ?? 10,
         events,
       });
@@ -712,6 +725,7 @@ export class ToolOrchestratorService {
             dayOffset: pendingList.payload.dayOffset ?? 0,
             monthOffset: pendingList.payload.monthOffset ?? 0,
             yearOffset: pendingList.payload.yearOffset ?? 0,
+            spanDays: pendingList.payload.spanDays ?? 2,
             maxEventsDefault: pendingList.payload.maxEvents ?? 10,
             events,
           });
@@ -926,6 +940,12 @@ export class ToolOrchestratorService {
       return getSingleDayRangeLocal(
         nowLocal,
         pendingListRequest.dayOffset ?? 0,
+      );
+    }
+    if (pendingListRequest.mode === 'next_days') {
+      return getNextDaysRangeLocal(
+        nowLocal,
+        pendingListRequest.spanDays ?? 2,
       );
     }
     if (pendingListRequest.mode === 'past') {

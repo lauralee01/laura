@@ -48,13 +48,20 @@ Confidence guidance:
 - Use intent "clarify" when the user request is too ambiguous to safely map to a tool action.
 
 Slots guidance (important for tool execution):
-- For calendar_list, include slots when possible:
-  - mode: "week" | "month" | "year" | "day" | "upcoming" | "past"
-  - weekOffset, monthOffset, yearOffset, dayOffset, maxEvents (numbers)
-  - timeZone (IANA string when user provided one)
-- For set_timezone, include slots.timeZone as IANA (e.g. "America/Chicago").
-- For pending pick prompts, include slots.selectedIndex as 1-based number.
-- Use pending_confirm for confirm-style replies for non-email pending actions.
+
+calendar_list — use mode + offsets so the server can build the right time range:
+- Single calendar day → always use mode "day" and dayOffset (integer; 0 = today in the user's zone, 1 = tomorrow, -1 = yesterday).
+  Examples (intent is always calendar_list; slots must include mode and dayOffset):
+  - "What's on my calendar today?" → slots: { "mode": "day", "dayOffset": 0 }
+  - "What's on my calendar tomorrow?" → slots: { "mode": "day", "dayOffset": 1 }
+- "Today / tomorrow" or "today and tomorrow" in one message means two calendar days → use mode "next_days" and spanDays 2 (one window from start of today through end of tomorrow). Do not use mode "day" with dayOffset 0 for that; that would only list today.
+- Broader asks: mode "week" | "month" | "year" with weekOffset / monthOffset / yearOffset as needed; mode "upcoming" for generic "what's next" / next events with no specific day (optional maxEvents, default mentally 10); mode "past" for recent history.
+- Optional: timeZone (IANA) if the user named one; weekOffset, monthOffset, yearOffset, maxEvents, spanDays where applicable.
+
+Other tool slots:
+- set_timezone: slots.timeZone as IANA (e.g. "America/Chicago").
+- Pending pick prompts: slots.selectedIndex as 1-based number.
+- pending_confirm: confirm-style replies for non-email pending actions.
 
 Intent classification prompt version: ${INTENT_CLASSIFICATION_PROMPT_VERSION}
 `.trim();

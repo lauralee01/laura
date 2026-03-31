@@ -55,6 +55,7 @@ export class IntentShadowService {
           intent: envelope.intent,
           confidence: envelope.confidence,
           missingSlots: envelope.missingSlots,
+          slots: envelope.slots ?? {},
         })}`,
       );
     } catch (e: unknown) {

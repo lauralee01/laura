@@ -103,6 +103,14 @@ export function describeDayWindow(nowLocal: DateTime, dayOffset: number): string
   return nowLocal.plus({ days: dayOffset }).toFormat('ccc, MMM d, yyyy');
 }
 
+/** Label for mode next_days (spanDays calendar days from today’s start). */
+export function describeNextDaysSpan(spanDays: number): string {
+  const n = Math.max(1, Math.floor(spanDays));
+  if (n === 1) return 'today';
+  if (n === 2) return 'today and tomorrow';
+  return `the next ${n} days`;
+}
+
 /**
  * Full calendar month in local time: [start of month, start of next month).
  * `monthOffset` 0 = this month, 1 = next, -1 = last.
