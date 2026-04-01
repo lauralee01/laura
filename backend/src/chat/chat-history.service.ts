@@ -277,6 +277,7 @@ export class ChatHistoryService implements OnModuleDestroy {
 
   /**
    * Sets optional sidebar title. Empty string clears the title (preview falls back to first user message).
+   * Does not change `updated_at` so rename alone does not reorder the sidebar (order stays by last message).
    */
   async updateConversationTitle(
     sessionId: string,
@@ -298,7 +299,7 @@ export class ChatHistoryService implements OnModuleDestroy {
     const res = await this.pool.query(
       `
       UPDATE conversations
-      SET title = $3, updated_at = now()
+      SET title = $3
       WHERE id = $1 AND session_id = $2
       RETURNING id;
       `,

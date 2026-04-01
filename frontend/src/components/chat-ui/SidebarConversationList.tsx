@@ -29,6 +29,11 @@ export function SidebarConversationList({
     id: string;
     value: string;
   } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    id: string;
+    preview: string;
+  } | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -53,6 +58,7 @@ export function SidebarConversationList({
       if (e.key === 'Escape') {
         setMenuId(null);
         setRenameTarget(null);
+        setDeleteConfirm(null);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -67,6 +73,19 @@ export function SidebarConversationList({
     await Promise.resolve(onRename(renameTarget.id, t));
     setRenameTarget(null);
   }, [onRename, renameTarget]);
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteConfirm) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      await Promise.resolve(onDelete(deleteConfirm.id));
+      setDeleteConfirm(null);
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleteConfirm, onDelete]);
 
   return (
     <>
@@ -152,7 +171,7 @@ export function SidebarConversationList({
                             className="w-full px-3 py-2 text-left text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
                             onClick={() => {
                               setMenuId(null);
-                              void onDelete(c.id);
+                              setDeleteConfirm({ id: c.id, preview: c.preview });
                             }}
                           >
                             Delete
@@ -218,6 +237,57 @@ export function SidebarConversationList({
                 onClick={() => void submitRename()}
               >
                 Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteConfirm && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-[1px]"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="delete-chat-title"
+          aria-describedby="delete-chat-desc"
+          onClick={() => !deleting && setDeleteConfirm(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-5 shadow-2xl dark:border-zinc-600 dark:bg-zinc-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2
+              id="delete-chat-title"
+              className="text-base font-semibold text-zinc-900 dark:text-zinc-50"
+            >
+              Delete chat?
+            </h2>
+            <p
+              id="delete-chat-desc"
+              className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400"
+            >
+              This removes{' '}
+              <span className="font-medium text-zinc-800 dark:text-zinc-200">
+                “{deleteConfirm.preview}”
+              </span>{' '}
+              and all messages in it. This cannot be undone.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={deleting}
+                className="rounded-lg px-3 py-2 text-sm text-zinc-600 transition hover:bg-zinc-100 disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                onClick={() => setDeleteConfirm(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-50 dark:bg-red-700 dark:hover:bg-red-600"
+                onClick={() => void confirmDelete()}
+              >
+                {deleting ? 'Deleting…' : 'Delete'}
               </button>
             </div>
           </div>

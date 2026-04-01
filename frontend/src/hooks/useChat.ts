@@ -199,13 +199,6 @@ export function useChat() {
       if (!sessionId) {
         return;
       }
-      if (
-        !window.confirm(
-          'Delete this conversation? This cannot be undone.'
-        )
-      ) {
-        return;
-      }
       setError(null);
       try {
         await deleteConversationApi(sessionId, id);
