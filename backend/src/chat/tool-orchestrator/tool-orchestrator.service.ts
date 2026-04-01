@@ -33,6 +33,7 @@ import type {
   PendingCalendarUpdatePayload,
   PendingEmailSendPayload,
 } from './tool-orchestrator.types';
+import { mergeTimeOnlyUpdateOntoEventDay } from './tool-orchestrator.calendar-update-merge';
 import { formatToolFailureMessage } from './tool-orchestrator.utils';
 import type { IntentEnvelope } from '../intent/intent.types';
 import type { PendingRequest } from '../pending-request.service';
@@ -615,14 +616,30 @@ export class ToolOrchestratorService {
       const opt = pu.options[idx - 1];
       this.pendingRequestService.clearPending(sessionId, 'calendar_update');
       try {
+        let startU = pu.newStart ?? undefined;
+        let endU = pu.newEnd ?? undefined;
+        if (opt.startLocalIso && (startU || endU)) {
+          const merged = mergeTimeOnlyUpdateOntoEventDay({
+            userMessage: pendingUpdate.originalMessage,
+            timeZone: pu.timeZone,
+            eventStartLocalIso: opt.startLocalIso,
+            eventEndLocalIso: opt.endLocalIso,
+            newStart: pu.newStart,
+            newEnd: pu.newEnd,
+          });
+          if (merged) {
+            startU = merged.start;
+            endU = merged.end;
+          }
+        }
         const updated = await this.calendarService.updateEvent({
           sessionId,
           calendarId: opt.calendarId,
           eventId: opt.eventId,
           timeZone: pu.timeZone,
           title: pu.newTitle ?? undefined,
-          start: pu.newStart ?? undefined,
-          end: pu.newEnd ?? undefined,
+          start: startU,
+          end: endU,
         });
         return (
           `Updated in Google Calendar: “${updated.title}”.\n` +
@@ -846,14 +863,34 @@ export class ToolOrchestratorService {
           );
         }
 
+        let start = extracted.newStart ?? undefined;
+        let end = extracted.newEnd ?? undefined;
+        if (
+          !c.isAllDay &&
+          c.startLocalIso &&
+          (start || end)
+        ) {
+          const merged = mergeTimeOnlyUpdateOntoEventDay({
+            userMessage,
+            timeZone,
+            eventStartLocalIso: c.startLocalIso,
+            eventEndLocalIso: c.endLocalIso,
+            newStart: extracted.newStart,
+            newEnd: extracted.newEnd,
+          });
+          if (merged) {
+            start = merged.start;
+            end = merged.end;
+          }
+        }
         const updated = await this.calendarService.updateEvent({
           sessionId,
           calendarId: c.calendarId,
           eventId: c.eventId,
           timeZone,
           title: extracted.newTitle ?? undefined,
-          start: extracted.newStart ?? undefined,
-          end: extracted.newEnd ?? undefined,
+          start,
+          end,
         });
         return (
           `Updated in Google Calendar: “${updated.title}”.\n` +
@@ -869,6 +906,8 @@ export class ToolOrchestratorService {
         calendarId: e.calendarId,
         title: e.title,
         startText: e.startText,
+        startLocalIso: e.startLocalIso,
+        endLocalIso: e.endLocalIso,
       }));
 
       if (extracted.operation === 'delete') {

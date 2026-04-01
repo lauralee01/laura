@@ -65,6 +65,7 @@ export function mapGoogleCalendarEventToSortable(
         startText,
         endText,
         url: ev.htmlLink ?? undefined,
+        // all-day: no startLocalIso (merge-time logic is for timed events)
       },
     };
   }
@@ -93,6 +94,12 @@ export function mapGoogleCalendarEventToSortable(
       isAllDay: false,
       startText,
       endText,
+      startLocalIso: localStart
+        ? localStart.toFormat("yyyy-MM-dd'T'HH:mm:ss")
+        : undefined,
+      endLocalIso: localEnd
+        ? localEnd.toFormat("yyyy-MM-dd'T'HH:mm:ss")
+        : undefined,
       url: ev.htmlLink ?? undefined,
     },
   };

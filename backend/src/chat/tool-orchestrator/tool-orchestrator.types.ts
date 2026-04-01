@@ -41,6 +41,9 @@ export type PendingCalendarMutationOption = {
   calendarId: string;
   title: string;
   startText: string;
+  /** Timed events only; used to fix time-only reschedules onto the correct day. */
+  startLocalIso?: string;
+  endLocalIso?: string;
 };
 
 /** Waiting for timezone before delete/update resolution. */

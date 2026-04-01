@@ -33,6 +33,9 @@ export type ListCalendarEventSummary = {
   isAllDay: boolean;
   startText: string;
   endText?: string;
+  /** Local wall time for timed events (YYYY-MM-DDTHH:mm:ss); omitted for all-day. */
+  startLocalIso?: string;
+  endLocalIso?: string;
   url?: string;
 };
 

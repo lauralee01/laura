@@ -161,6 +161,7 @@ Rules:
 - searchNextDays: days ahead to search when day is vague (use 14 if unsure); null ok — caller defaults to 14.
 - delete: set newTitle, newStart, newEnd to null.
 - update: set newTitle if renaming; newStart and newEnd as LOCAL ISO datetimes (YYYY-MM-DDTHH:mm:ss, no Z) for ${timeZone} when rescheduling. If only a new start time is implied, set newEnd one hour after newStart.
+- update: if the user only says a new time without a date (e.g. "move it to 4pm", "to 5:30"), infer the calendar date as best you can; the server may still adjust the date to match the event being edited.
 `.trim();
 
   const raw = await llm.generate({
