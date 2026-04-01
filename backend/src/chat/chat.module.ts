@@ -5,7 +5,12 @@ import { LlmModule } from '../llm/llm.module';
 import { MemoryModule } from '../memory/memory.module';
 import { EmailModule } from '../integrations/email/email.module';
 import { CalendarModule } from '../integrations/calendar/calendar.module';
-import { ToolOrchestratorService } from './tool-orchestrator';
+import {
+  CalendarToolHandler,
+  EmailToolHandler,
+  ToolOrchestratorService,
+  ToolPendingFlowService,
+} from './tool-orchestrator';
 import { MemoryPersistenceService } from './memory-persistence.service';
 import { ChatHistoryService } from './chat-history.service';
 import { SessionPreferencesService } from './session-preferences.service';
@@ -19,6 +24,9 @@ import { IntentRouterService, IntentShadowService } from './intent';
     ChatService,
     IntentRouterService,
     IntentShadowService,
+    CalendarToolHandler,
+    EmailToolHandler,
+    ToolPendingFlowService,
     ToolOrchestratorService,
     MemoryPersistenceService,
     ChatHistoryService,
