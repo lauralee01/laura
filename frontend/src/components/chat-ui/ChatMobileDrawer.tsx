@@ -12,6 +12,8 @@ type Props = {
   activeId: string | undefined;
   onSelect: (id: string) => void;
   onNewChat: () => void;
+  onRename: (id: string, title: string) => void | Promise<void>;
+  onDelete: (id: string) => void | Promise<void>;
   disabled: boolean;
 };
 

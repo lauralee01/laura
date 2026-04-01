@@ -2,7 +2,11 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
+  NotFoundException,
+  Param,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common';
@@ -48,6 +52,11 @@ type CreateConversationBody = {
 
 type CreateConversationResponse = {
   conversationId: string;
+};
+
+type PatchConversationBody = {
+  sessionId?: string;
+  title?: string;
 };
 
 function normalizeHistory(raw: unknown): ChatMessage[] | undefined {
@@ -140,6 +149,54 @@ export class ChatController {
       throw new BadRequestException('Could not create conversation');
     }
     return { conversationId: id };
+  }
+
+  @Patch('conversations/:conversationId')
+  async patchConversation(
+    @Param('conversationId') conversationIdRaw: string,
+    @Body() body: PatchConversationBody,
+  ): Promise<{ ok: true }> {
+    const conversationId = (conversationIdRaw ?? '').trim();
+    const sessionId = (body?.sessionId ?? '').trim();
+    if (!sessionId) {
+      throw new BadRequestException('sessionId is required');
+    }
+    if (!conversationId) {
+      throw new BadRequestException('conversationId is required');
+    }
+    const title = typeof body?.title === 'string' ? body.title : '';
+    const ok = await this.chatHistoryService.updateConversationTitle(
+      sessionId,
+      conversationId,
+      title,
+    );
+    if (!ok) {
+      throw new NotFoundException('Conversation not found');
+    }
+    return { ok: true };
+  }
+
+  @Delete('conversations/:conversationId')
+  async deleteConversation(
+    @Param('conversationId') conversationIdRaw: string,
+    @Query('sessionId') sessionIdRaw: string,
+  ): Promise<{ ok: true }> {
+    const conversationId = (conversationIdRaw ?? '').trim();
+    const sessionId = (sessionIdRaw ?? '').trim();
+    if (!sessionId) {
+      throw new BadRequestException('sessionId is required');
+    }
+    if (!conversationId) {
+      throw new BadRequestException('conversationId is required');
+    }
+    const ok = await this.chatHistoryService.deleteConversation(
+      sessionId,
+      conversationId,
+    );
+    if (!ok) {
+      throw new NotFoundException('Conversation not found');
+    }
+    return { ok: true };
   }
 
   @Post()

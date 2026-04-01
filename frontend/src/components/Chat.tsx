@@ -27,6 +27,8 @@ export function Chat() {
     handleSubmit,
     handleNewChat,
     selectConversation,
+    renameConversation,
+    deleteConversation,
   } = useChat();
 
   const sidebarDisabled = loading || !sessionId;
@@ -38,6 +40,12 @@ export function Chat() {
     onSelect: selectConversation,
     onNewChat: () => {
       void handleNewChat();
+    },
+    onRename: (id: string, title: string) => {
+      void renameConversation(id, title);
+    },
+    onDelete: (id: string) => {
+      void deleteConversation(id);
     },
     disabled: sidebarDisabled,
   };

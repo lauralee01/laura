@@ -10,8 +10,10 @@ import {
 } from 'react';
 import {
   createConversation,
+  deleteConversation as deleteConversationApi,
   fetchChatHistory,
   fetchConversations,
+  renameConversation as renameConversationApi,
   sendChatMessage,
   type ConversationSummary,
 } from '@/lib/chat-api';
@@ -176,6 +178,57 @@ export function useChat() {
     [openThread]
   );
 
+  const renameConversation = useCallback(
+    async (id: string, title: string) => {
+      if (!sessionId) {
+        return;
+      }
+      setError(null);
+      try {
+        await renameConversationApi(sessionId, id, title);
+        await reloadSidebar(sessionId);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Could not rename chat.');
+      }
+    },
+    [reloadSidebar, sessionId]
+  );
+
+  const deleteConversation = useCallback(
+    async (id: string) => {
+      if (!sessionId) {
+        return;
+      }
+      if (
+        !window.confirm(
+          'Delete this conversation? This cannot be undone.'
+        )
+      ) {
+        return;
+      }
+      setError(null);
+      try {
+        await deleteConversationApi(sessionId, id);
+        const list = await fetchConversations(sessionId);
+        setConversations(list);
+        if (conversationId === id) {
+          if (list.length === 0) {
+            const newId = await createConversation(sessionId);
+            setConversationId(newId);
+            setMessages([]);
+            const list2 = await fetchConversations(sessionId);
+            setConversations(list2);
+          } else {
+            await openThread(list[0].id);
+          }
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Could not delete chat.');
+      }
+    },
+    [conversationId, openThread, sessionId]
+  );
+
   const showThinking = useMemo(
     () => loading || initializing,
     [initializing, loading]
@@ -198,5 +251,7 @@ export function useChat() {
     handleSubmit,
     handleNewChat,
     selectConversation,
+    renameConversation,
+    deleteConversation,
   };
 }

@@ -107,6 +107,7 @@ export class ChatHistoryService implements OnModuleDestroy {
         c.id,
         c.updated_at,
         COALESCE(
+          NULLIF(TRIM(c.title), ''),
           (
             SELECT LEFT(m.content, 72)
             FROM messages m
@@ -251,5 +252,58 @@ export class ChatHistoryService implements OnModuleDestroy {
       role: m.role,
       content: m.content,
     }));
+  }
+
+  /** Deletes the conversation and all messages (CASCADE). Returns true if a row was removed. */
+  async deleteConversation(
+    sessionId: string,
+    conversationId: string,
+  ): Promise<boolean> {
+    const sid = sessionId.trim();
+    const cid = conversationId.trim();
+    if (!sid || !cid) {
+      return false;
+    }
+    const res = await this.pool.query(
+      `
+      DELETE FROM conversations
+      WHERE id = $1 AND session_id = $2
+      RETURNING id;
+      `,
+      [cid, sid],
+    );
+    return res.rowCount !== null && res.rowCount > 0;
+  }
+
+  /**
+   * Sets optional sidebar title. Empty string clears the title (preview falls back to first user message).
+   */
+  async updateConversationTitle(
+    sessionId: string,
+    conversationId: string,
+    title: string,
+  ): Promise<boolean> {
+    const sid = sessionId.trim();
+    const cid = conversationId.trim();
+    if (!sid || !cid) {
+      return false;
+    }
+    const trimmed = title.trim();
+    const stored =
+      trimmed.length === 0
+        ? null
+        : trimmed.length > 200
+          ? trimmed.slice(0, 200)
+          : trimmed;
+    const res = await this.pool.query(
+      `
+      UPDATE conversations
+      SET title = $3, updated_at = now()
+      WHERE id = $1 AND session_id = $2
+      RETURNING id;
+      `,
+      [cid, sid, stored],
+    );
+    return res.rowCount !== null && res.rowCount > 0;
   }
 }

@@ -229,3 +229,49 @@ export async function createConversation(sessionId: string): Promise<string> {
 
   return cid.trim();
 }
+
+export async function renameConversation(
+  sessionId: string,
+  conversationId: string,
+  title: string
+): Promise<void> {
+  const sid = sessionId.trim();
+  const cid = conversationId.trim();
+  if (!sid || !cid) {
+    throw new Error('sessionId and conversationId are required');
+  }
+
+  const url = `${getApiBaseUrl()}/chat/conversations/${encodeURIComponent(cid)}`;
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionId: sid, title }),
+  });
+
+  const rawText = await res.text();
+  if (!res.ok) {
+    throw new Error(
+      `Rename failed (${res.status}). ${rawText ? rawText.slice(0, 200) : ''}`
+    );
+  }
+}
+
+export async function deleteConversation(
+  sessionId: string,
+  conversationId: string
+): Promise<void> {
+  const sid = sessionId.trim();
+  const cid = conversationId.trim();
+  if (!sid || !cid) {
+    throw new Error('sessionId and conversationId are required');
+  }
+
+  const url = `${getApiBaseUrl()}/chat/conversations/${encodeURIComponent(cid)}?sessionId=${encodeURIComponent(sid)}`;
+  const res = await fetch(url, { method: 'DELETE' });
+  const rawText = await res.text();
+  if (!res.ok) {
+    throw new Error(
+      `Delete failed (${res.status}). ${rawText ? rawText.slice(0, 200) : ''}`
+    );
+  }
+}
