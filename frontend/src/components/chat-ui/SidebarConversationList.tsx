@@ -104,6 +104,11 @@ export function SidebarConversationList({
         </button>
       </div>
       <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+        {conversations.length === 0 ? (
+          <p className="px-3 py-2 text-xs leading-relaxed text-zinc-500 dark:text-zinc-500">
+            No chats yet. Send a message or tap + to start one.
+          </p>
+        ) : null}
         <ul className="flex flex-col gap-0.5">
           {conversations.map((c) => {
             const active = c.id === activeId;

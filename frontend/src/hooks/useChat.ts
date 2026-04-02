@@ -207,11 +207,10 @@ export function useChat() {
         setConversations(list);
         if (conversationId === id) {
           if (list.length === 0) {
-            const newId = await createConversation();
-            setConversationId(newId);
+            // Empty sidebar until the user sends a message or clicks + — backend
+            // creates a conversation on first send via ensureConversation.
+            setConversationId(undefined);
             setMessages([]);
-            const list2 = await fetchConversations();
-            setConversations(list2);
           } else {
             await openThread(list[0].id);
           }
