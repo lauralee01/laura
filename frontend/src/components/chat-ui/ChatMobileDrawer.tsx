@@ -5,7 +5,7 @@ import { IconClose } from '@/components/chat-ui/ChatIcons';
 import type { ConversationSummary } from '@/lib/chat-api';
 
 type Props = {
-  sessionId: string;
+  sessionReady: boolean;
   open: boolean;
   onClose: () => void;
   conversations: ConversationSummary[];
@@ -18,7 +18,7 @@ type Props = {
 };
 
 export function ChatMobileDrawer({
-  sessionId,
+  sessionReady,
   open,
   onClose,
   ...listProps
@@ -45,7 +45,7 @@ export function ChatMobileDrawer({
           <div className="min-w-0 flex-1">
             <BrandLockup size="md" />
           </div>
-          <GoogleConnectButton sessionId={sessionId} />
+          <GoogleConnectButton sessionReady={sessionReady} />
           <button
             type="button"
             onClick={onClose}

@@ -9,27 +9,27 @@ import {
 type Variant = 'sidebar' | 'default';
 
 type Props = {
-  sessionId: string;
+  /** True after `ensureSession()` and the HttpOnly cookie exists for API calls. */
+  sessionReady: boolean;
   /** Dark sidebar (`#181818`) vs main chrome */
   variant?: Variant;
 };
 
 export function GoogleConnectButton({
-  sessionId,
+  sessionReady,
   variant = 'default',
 }: Props) {
   const [connected, setConnected] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(() => {
-    const sid = sessionId.trim();
-    if (!sid) {
+    if (!sessionReady) {
       return;
     }
-    void fetchGoogleConnectionStatus(sid)
+    void fetchGoogleConnectionStatus()
       .then(setConnected)
       .catch(() => setConnected(false));
-  }, [sessionId]);
+  }, [sessionReady]);
 
   useEffect(() => {
     refresh();
@@ -51,19 +51,19 @@ export function GoogleConnectButton({
   }, [refresh]);
 
   const onConnect = useCallback(async () => {
-    if (!sessionId.trim() || busy) {
+    if (!sessionReady || busy) {
       return;
     }
     setBusy(true);
     try {
-      const url = await fetchGoogleOAuthStartUrl(sessionId);
+      const url = await fetchGoogleOAuthStartUrl();
       window.location.assign(url);
     } catch {
       setBusy(false);
     }
-  }, [sessionId, busy]);
+  }, [sessionReady, busy]);
 
-  if (!sessionId.trim()) {
+  if (!sessionReady) {
     return null;
   }
 

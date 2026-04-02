@@ -1,32 +1,28 @@
 /**
- * Browser session id for laura.
+ * Server-issued anonymous session (HttpOnly cookie). Call `ensureSession` before other API calls.
  */
-
-const SESSION_KEY = 'laura_session_id';
 
 export type StoredChatMessage = {
   role: 'user' | 'assistant';
   content: string;
 };
 
-export function getOrCreateSessionId(): string {
-  if (typeof window === 'undefined') {
-    return '';
+function getApiBaseUrl(): string {
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+  if (base) {
+    return base.replace(/\/$/, '');
   }
-  const existing = window.localStorage.getItem(SESSION_KEY)?.trim();
-  if (existing) {
-    return existing;
-  }
-  const created = crypto.randomUUID();
-  window.localStorage.setItem(SESSION_KEY, created);
-  return created;
+  return 'http://localhost:4000';
 }
 
-export function rotateSessionId(): string {
-  if (typeof window === 'undefined') {
-    return '';
+/**
+ * Hits `GET /session` with credentials so the API sets/refreshes the `laura_session` cookie.
+ * Safe to call more than once.
+ */
+export async function ensureSession(): Promise<void> {
+  const url = `${getApiBaseUrl()}/session`;
+  const res = await fetch(url, { method: 'GET', credentials: 'include' });
+  if (!res.ok) {
+    throw new Error(`Session bootstrap failed (${res.status})`);
   }
-  const created = crypto.randomUUID();
-  window.localStorage.setItem(SESSION_KEY, created);
-  return created;
 }

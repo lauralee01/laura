@@ -3,11 +3,11 @@ import { GoogleConnectButton } from '@/components/chat-ui/GoogleConnectButton';
 import { IconMenu } from '@/components/chat-ui/ChatIcons';
 
 type Props = {
-  sessionId: string;
+  sessionReady: boolean;
   onOpenSidebar: () => void;
 };
 
-export function MobileChatHeader({ sessionId, onOpenSidebar }: Props) {
+export function MobileChatHeader({ sessionReady, onOpenSidebar }: Props) {
   return (
     <header className="flex shrink-0 items-center gap-2 border-b border-zinc-200/80 px-3 py-2.5 dark:border-zinc-800/80 md:hidden">
       <button
@@ -21,7 +21,7 @@ export function MobileChatHeader({ sessionId, onOpenSidebar }: Props) {
       <div className="min-w-0 flex-1">
         <BrandLockup size="sm" />
       </div>
-      <GoogleConnectButton sessionId={sessionId} />
+      <GoogleConnectButton sessionReady={sessionReady} />
     </header>
   );
 }

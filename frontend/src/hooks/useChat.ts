@@ -17,10 +17,10 @@ import {
   sendChatMessage,
   type ConversationSummary,
 } from '@/lib/chat-api';
-import { getOrCreateSessionId, type StoredChatMessage } from '@/lib/session';
+import { ensureSession, type StoredChatMessage } from '@/lib/session';
 
 export function useChat() {
-  const [sessionId, setSessionId] = useState('');
+  const [sessionReady, setSessionReady] = useState(false);
   const [conversationId, setConversationId] = useState<string | undefined>();
   const [conversations, setConversations] = useState<ConversationSummary[]>(
     []
@@ -33,9 +33,9 @@ export function useChat() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  const reloadSidebar = useCallback(async (sid: string) => {
+  const reloadSidebar = useCallback(async () => {
     try {
-      const list = await fetchConversations(sid);
+      const list = await fetchConversations();
       setConversations(list);
     } catch {
       /* keep existing list */
@@ -43,13 +43,16 @@ export function useChat() {
   }, []);
 
   useEffect(() => {
-    const sid = getOrCreateSessionId();
-    setSessionId(sid);
     setMessages([]);
     setInitializing(true);
     setError(null);
+    setSessionReady(false);
 
-    Promise.all([fetchConversations(sid), fetchChatHistory(sid)])
+    ensureSession()
+      .then(() => {
+        setSessionReady(true);
+        return Promise.all([fetchConversations(), fetchChatHistory()]);
+      })
       .then(([convs, hist]) => {
         setConversations(convs);
         setMessages(hist.messages);
@@ -80,14 +83,14 @@ export function useChat() {
 
   const openThread = useCallback(
     async (id: string) => {
-      if (!sessionId) {
+      if (!sessionReady) {
         return;
       }
       setInitializing(true);
       setError(null);
       setConversationId(id);
       try {
-        const hist = await fetchChatHistory(sessionId, id);
+        const hist = await fetchChatHistory(id);
         setMessages(hist.messages);
         setConversationId(hist.conversationId ?? id);
       } catch {
@@ -96,32 +99,32 @@ export function useChat() {
         setInitializing(false);
       }
     },
-    [sessionId]
+    [sessionReady]
   );
 
   const handleNewChat = useCallback(async () => {
-    if (!sessionId || loading) {
+    if (!sessionReady || loading) {
       return;
     }
     setError(null);
     setSidebarOpen(false);
     try {
-      const id = await createConversation(sessionId);
+      const id = await createConversation();
       setConversationId(id);
       setMessages([]);
-      await reloadSidebar(sessionId);
+      await reloadSidebar();
     } catch (e) {
       setError(
         e instanceof Error ? e.message : 'Could not start a new chat.'
       );
     }
-  }, [loading, reloadSidebar, sessionId]);
+  }, [loading, reloadSidebar, sessionReady]);
 
   const handleSubmit = useCallback(
     async (e: FormEvent) => {
       e.preventDefault();
       const text = input.trim();
-      if (!text || loading || !sessionId) {
+      if (!text || loading || !sessionReady) {
         return;
       }
 
@@ -133,14 +136,12 @@ export function useChat() {
 
       try {
         const { reply, conversationId: idFromSend } = await sendChatMessage({
-          sessionId,
           conversationId,
           message: text,
         });
         setConversationId(idFromSend ?? conversationId);
         try {
           const refreshed = await fetchChatHistory(
-            sessionId,
             idFromSend ?? conversationId
           );
           setMessages(refreshed.messages);
@@ -156,7 +157,7 @@ export function useChat() {
             { role: 'assistant', content: reply },
           ]);
         }
-        await reloadSidebar(sessionId);
+        await reloadSidebar();
       } catch (err) {
         const msg =
           err instanceof Error ? err.message : 'Something went wrong.';
@@ -167,7 +168,7 @@ export function useChat() {
         setLoading(false);
       }
     },
-    [conversationId, input, loading, reloadSidebar, sessionId]
+    [conversationId, input, loading, reloadSidebar, sessionReady]
   );
 
   const selectConversation = useCallback(
@@ -180,36 +181,36 @@ export function useChat() {
 
   const renameConversation = useCallback(
     async (id: string, title: string) => {
-      if (!sessionId) {
+      if (!sessionReady) {
         return;
       }
       setError(null);
       try {
-        await renameConversationApi(sessionId, id, title);
-        await reloadSidebar(sessionId);
+        await renameConversationApi(id, title);
+        await reloadSidebar();
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Could not rename chat.');
       }
     },
-    [reloadSidebar, sessionId]
+    [reloadSidebar, sessionReady]
   );
 
   const deleteConversation = useCallback(
     async (id: string) => {
-      if (!sessionId) {
+      if (!sessionReady) {
         return;
       }
       setError(null);
       try {
-        await deleteConversationApi(sessionId, id);
-        const list = await fetchConversations(sessionId);
+        await deleteConversationApi(id);
+        const list = await fetchConversations();
         setConversations(list);
         if (conversationId === id) {
           if (list.length === 0) {
-            const newId = await createConversation(sessionId);
+            const newId = await createConversation();
             setConversationId(newId);
             setMessages([]);
-            const list2 = await fetchConversations(sessionId);
+            const list2 = await fetchConversations();
             setConversations(list2);
           } else {
             await openThread(list[0].id);
@@ -219,7 +220,7 @@ export function useChat() {
         setError(e instanceof Error ? e.message : 'Could not delete chat.');
       }
     },
-    [conversationId, openThread, sessionId]
+    [conversationId, openThread, sessionReady]
   );
 
   const showThinking = useMemo(
@@ -228,7 +229,7 @@ export function useChat() {
   );
 
   return {
-    sessionId,
+    sessionReady,
     conversationId,
     conversations,
     messages,

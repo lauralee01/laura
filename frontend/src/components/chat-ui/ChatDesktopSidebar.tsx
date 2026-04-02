@@ -4,7 +4,7 @@ import { SidebarConversationList } from '@/components/chat-ui/SidebarConversatio
 import type { ConversationSummary } from '@/lib/chat-api';
 
 type Props = {
-  sessionId: string;
+  sessionReady: boolean;
   conversations: ConversationSummary[];
   activeId: string | undefined;
   onSelect: (id: string) => void;
@@ -14,13 +14,13 @@ type Props = {
   disabled: boolean;
 };
 
-export function ChatDesktopSidebar({ sessionId, ...props }: Props) {
+export function ChatDesktopSidebar({ sessionReady, ...props }: Props) {
   return (
     <aside className="hidden h-full min-h-0 w-[min(100%,18rem)] shrink-0 flex-col border-r border-zinc-800/80 bg-[#181818] md:flex">
       <div className="flex flex-col gap-3 border-b border-zinc-800/80 px-4 py-3">
         <div className="flex items-start justify-between gap-2">
           <BrandLockup size="md" />
-          <GoogleConnectButton sessionId={sessionId} variant="sidebar" />
+          <GoogleConnectButton sessionReady={sessionReady} variant="sidebar" />
         </div>
       </div>
       <SidebarConversationList {...props} />

@@ -1,5 +1,7 @@
 import type { StoredChatMessage } from './session';
 
+const cred: RequestInit = { credentials: 'include' };
+
 function getApiBaseUrl(): string {
   const base = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
   if (base) {
@@ -31,7 +33,6 @@ export type ConversationSummary = {
  * - `history` = everything before that turn (user/assistant pairs), so the model sees context.
  */
 export async function sendChatMessage(input: {
-  sessionId: string;
   message: string;
   conversationId?: string;
   history?: StoredChatMessage[];
@@ -40,8 +41,8 @@ export async function sendChatMessage(input: {
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    ...cred,
     body: JSON.stringify({
-      sessionId: input.sessionId,
       conversationId: input.conversationId,
       message: input.message,
       history: input.history,
@@ -81,21 +82,15 @@ export async function sendChatMessage(input: {
 }
 
 export async function fetchChatHistory(
-  sessionId: string,
   conversationId?: string
 ): Promise<ChatHistoryResponse> {
-  const sid = sessionId.trim();
-  if (!sid) {
-    return { messages: [] };
-  }
-
   const cid = conversationId?.trim();
-  const params = new URLSearchParams({ sessionId: sid });
+  const params = new URLSearchParams();
   if (cid) {
     params.set('conversationId', cid);
   }
-  const url = `${getApiBaseUrl()}/chat/history?${params.toString()}`;
-  const res = await fetch(url, { method: 'GET' });
+  const url = `${getApiBaseUrl()}/chat/history${params.toString() ? `?${params.toString()}` : ''}`;
+  const res = await fetch(url, { method: 'GET', ...cred });
   const rawText = await res.text();
   if (!res.ok) {
     throw new Error(
@@ -138,16 +133,9 @@ export async function fetchChatHistory(
   return { conversationId: conversationIdFromResponse, messages: out };
 }
 
-export async function fetchConversations(
-  sessionId: string
-): Promise<ConversationSummary[]> {
-  const sid = sessionId.trim();
-  if (!sid) {
-    return [];
-  }
-
-  const url = `${getApiBaseUrl()}/chat/conversations?sessionId=${encodeURIComponent(sid)}`;
-  const res = await fetch(url, { method: 'GET' });
+export async function fetchConversations(): Promise<ConversationSummary[]> {
+  const url = `${getApiBaseUrl()}/chat/conversations`;
+  const res = await fetch(url, { method: 'GET', ...cred });
   const rawText = await res.text();
   if (!res.ok) {
     throw new Error(
@@ -191,17 +179,13 @@ export async function fetchConversations(
   return out;
 }
 
-export async function createConversation(sessionId: string): Promise<string> {
-  const sid = sessionId.trim();
-  if (!sid) {
-    throw new Error('sessionId is required');
-  }
-
+export async function createConversation(): Promise<string> {
   const url = `${getApiBaseUrl()}/chat/conversations`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId: sid }),
+    ...cred,
+    body: JSON.stringify({}),
   });
 
   const rawText = await res.text();
@@ -231,21 +215,20 @@ export async function createConversation(sessionId: string): Promise<string> {
 }
 
 export async function renameConversation(
-  sessionId: string,
   conversationId: string,
   title: string
 ): Promise<void> {
-  const sid = sessionId.trim();
   const cid = conversationId.trim();
-  if (!sid || !cid) {
-    throw new Error('sessionId and conversationId are required');
+  if (!cid) {
+    throw new Error('conversationId is required');
   }
 
   const url = `${getApiBaseUrl()}/chat/conversations/${encodeURIComponent(cid)}`;
   const res = await fetch(url, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId: sid, title }),
+    ...cred,
+    body: JSON.stringify({ title }),
   });
 
   const rawText = await res.text();
@@ -256,18 +239,14 @@ export async function renameConversation(
   }
 }
 
-export async function deleteConversation(
-  sessionId: string,
-  conversationId: string
-): Promise<void> {
-  const sid = sessionId.trim();
+export async function deleteConversation(conversationId: string): Promise<void> {
   const cid = conversationId.trim();
-  if (!sid || !cid) {
-    throw new Error('sessionId and conversationId are required');
+  if (!cid) {
+    throw new Error('conversationId is required');
   }
 
-  const url = `${getApiBaseUrl()}/chat/conversations/${encodeURIComponent(cid)}?sessionId=${encodeURIComponent(sid)}`;
-  const res = await fetch(url, { method: 'DELETE' });
+  const url = `${getApiBaseUrl()}/chat/conversations/${encodeURIComponent(cid)}`;
+  const res = await fetch(url, { method: 'DELETE', ...cred });
   const rawText = await res.text();
   if (!res.ok) {
     throw new Error(

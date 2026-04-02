@@ -3,11 +3,13 @@ import {
   Controller,
   Get,
   Query,
+  Req,
   Res,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
+import { getSessionId } from '../../common/session/session.util';
 import { GoogleOAuthService } from './google-oauth.service';
 
 @Controller('integrations/google')
@@ -18,13 +20,12 @@ export class GoogleOAuthController {
   ) {}
 
   /**
-   * JSON endpoint the frontend calls with the browser `sessionId` before redirecting the user to Google.
+   * JSON endpoint the frontend calls (with credentials) before redirecting the user to Google.
+   * Session id comes from the HttpOnly cookie set by SessionCookieMiddleware.
    */
   @Get('start')
-  async start(@Query('sessionId') sessionId: string | undefined) {
-    if (!sessionId?.trim()) {
-      throw new BadRequestException('sessionId query parameter is required');
-    }
+  async start(@Req() req: Request) {
+    const sessionId = getSessionId(req);
     const url = await this.googleOAuth.createAuthorizationUrl(sessionId);
     return { url };
   }
@@ -70,10 +71,8 @@ export class GoogleOAuthController {
    * Lets the UI show “Google connected” without exposing tokens.
    */
   @Get('status')
-  async status(@Query('sessionId') sessionId: string | undefined) {
-    if (!sessionId?.trim()) {
-      throw new BadRequestException('sessionId query parameter is required');
-    }
+  async status(@Req() req: Request) {
+    const sessionId = getSessionId(req);
     const connected = await this.googleOAuth.isConnected(sessionId);
     return { connected };
   }

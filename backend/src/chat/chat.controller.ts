@@ -9,7 +9,10 @@ import {
   Patch,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
+import type { Request } from 'express';
+import { getSessionId } from '../common/session/session.util';
 import { ChatService } from './chat.service';
 import { ChatHistoryService } from './chat-history.service';
 
@@ -19,7 +22,6 @@ type ChatMessage = {
 };
 
 type ChatRequest = {
-  sessionId?: string;
   conversationId?: string;
   message: string;
   /** Prior turns in this conversation (optional). Current user message is always `message`. */
@@ -46,16 +48,11 @@ type ConversationListResponse = {
   conversations: ConversationListItem[];
 };
 
-type CreateConversationBody = {
-  sessionId?: string;
-};
-
 type CreateConversationResponse = {
   conversationId: string;
 };
 
 type PatchConversationBody = {
-  sessionId?: string;
   title?: string;
 };
 
@@ -90,14 +87,10 @@ export class ChatController {
 
   @Get('history')
   async history(
-    @Query('sessionId') sessionIdRaw: string,
+    @Req() req: Request,
     @Query('conversationId') conversationIdRaw?: string,
   ): Promise<ChatHistoryResponse> {
-    const sessionId = (sessionIdRaw ?? '').trim();
-    if (!sessionId) {
-      return { messages: [] };
-    }
-
+    const sessionId = getSessionId(req);
     const conversationId = (conversationIdRaw ?? '').trim();
     const history = await this.chatHistoryService.getConversationHistory(
       sessionId,
@@ -117,14 +110,8 @@ export class ChatController {
   }
 
   @Get('conversations')
-  async conversations(
-    @Query('sessionId') sessionIdRaw: string,
-  ): Promise<ConversationListResponse> {
-    const sessionId = (sessionIdRaw ?? '').trim();
-    if (!sessionId) {
-      return { conversations: [] };
-    }
-
+  async conversations(@Req() req: Request): Promise<ConversationListResponse> {
+    const sessionId = getSessionId(req);
     const rows = await this.chatHistoryService.listConversations(sessionId);
     return {
       conversations: rows.map((r) => ({
@@ -136,14 +123,8 @@ export class ChatController {
   }
 
   @Post('conversations')
-  async createConversation(
-    @Body() body: CreateConversationBody,
-  ): Promise<CreateConversationResponse> {
-    const sessionId = (body?.sessionId ?? '').trim();
-    if (!sessionId) {
-      throw new BadRequestException('sessionId is required');
-    }
-
+  async createConversation(@Req() req: Request): Promise<CreateConversationResponse> {
+    const sessionId = getSessionId(req);
     const id = await this.chatHistoryService.createEmptyConversation(sessionId);
     if (!id) {
       throw new BadRequestException('Could not create conversation');
@@ -153,14 +134,12 @@ export class ChatController {
 
   @Patch('conversations/:conversationId')
   async patchConversation(
+    @Req() req: Request,
     @Param('conversationId') conversationIdRaw: string,
     @Body() body: PatchConversationBody,
   ): Promise<{ ok: true }> {
+    const sessionId = getSessionId(req);
     const conversationId = (conversationIdRaw ?? '').trim();
-    const sessionId = (body?.sessionId ?? '').trim();
-    if (!sessionId) {
-      throw new BadRequestException('sessionId is required');
-    }
     if (!conversationId) {
       throw new BadRequestException('conversationId is required');
     }
@@ -178,14 +157,11 @@ export class ChatController {
 
   @Delete('conversations/:conversationId')
   async deleteConversation(
+    @Req() req: Request,
     @Param('conversationId') conversationIdRaw: string,
-    @Query('sessionId') sessionIdRaw: string,
   ): Promise<{ ok: true }> {
+    const sessionId = getSessionId(req);
     const conversationId = (conversationIdRaw ?? '').trim();
-    const sessionId = (sessionIdRaw ?? '').trim();
-    if (!sessionId) {
-      throw new BadRequestException('sessionId is required');
-    }
     if (!conversationId) {
       throw new BadRequestException('conversationId is required');
     }
@@ -200,13 +176,13 @@ export class ChatController {
   }
 
   @Post()
-  async chat(@Body() body: ChatRequest): Promise<ChatResponse> {
+  async chat(@Req() req: Request, @Body() body: ChatRequest): Promise<ChatResponse> {
     const message = (body?.message ?? '').trim();
     if (!message) {
       return { reply: 'Please send a message.' };
     }
 
-    const sessionId = (body?.sessionId ?? '').trim();
+    const sessionId = getSessionId(req);
     const conversationId = (body?.conversationId ?? '').trim();
     const history = normalizeHistory(body?.history);
     return this.chatService.replyTo(

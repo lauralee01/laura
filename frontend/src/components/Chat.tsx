@@ -12,7 +12,7 @@ import {
 
 export function Chat() {
   const {
-    sessionId,
+    sessionReady,
     conversationId,
     conversations,
     messages,
@@ -31,8 +31,8 @@ export function Chat() {
     deleteConversation,
   } = useChat();
 
-  const sidebarDisabled = loading || !sessionId;
-  const composerDisabled = loading || !sessionId;
+  const sidebarDisabled = loading || !sessionReady;
+  const composerDisabled = loading || !sessionReady;
 
   const sidebarProps = {
     conversations,
@@ -52,10 +52,10 @@ export function Chat() {
 
   return (
     <div className="flex h-[100dvh] min-h-0 bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
-      <ChatDesktopSidebar sessionId={sessionId} {...sidebarProps} />
+      <ChatDesktopSidebar sessionReady={sessionReady} {...sidebarProps} />
 
       <ChatMobileDrawer
-        sessionId={sessionId}
+        sessionReady={sessionReady}
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         {...sidebarProps}
@@ -63,7 +63,7 @@ export function Chat() {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <MobileChatHeader
-          sessionId={sessionId}
+          sessionReady={sessionReady}
           onOpenSidebar={() => setSidebarOpen(true)}
         />
 

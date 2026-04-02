@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ChatModule } from './chat/chat.module';
@@ -7,6 +7,7 @@ import { MemoryModule } from './memory/memory.module';
 import { EmailModule } from './integrations/email/email.module';
 import { CalendarModule } from './integrations/calendar/calendar.module';
 import { GoogleOAuthModule } from './integrations/google/google-oauth.module';
+import { SessionCookieMiddleware } from './common/session/session-cookie.middleware';
 
 @Module({
   // Loads `backend/.env` into `process.env` for the whole application.
@@ -20,6 +21,10 @@ import { GoogleOAuthModule } from './integrations/google/google-oauth.module';
     GoogleOAuthModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, SessionCookieMiddleware],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(SessionCookieMiddleware).forRoutes('*');
+  }
+}
