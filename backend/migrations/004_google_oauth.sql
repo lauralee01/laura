@@ -1,5 +1,5 @@
 -- Google OAuth (Phase 4): CSRF state + stored tokens per browser session.
--- `session_id` matches the frontend `laura_session_id` until we add real user accounts.
+-- `session_id` is the anonymous session UUID (server `laura_session` HttpOnly cookie) until we add real user accounts.
 
 CREATE TABLE IF NOT EXISTS oauth_states (
   state text PRIMARY KEY,

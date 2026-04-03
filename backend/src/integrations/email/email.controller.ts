@@ -1,20 +1,17 @@
-import { Body, Controller, Post } from '@nestjs/common';
-import { EmailService } from './email.service';
+import { Body, Controller, Post, Req } from '@nestjs/common';
+import type { Request } from 'express';
+import { getSessionId } from '../../common/session/session.util';
+import { EmailService, type DraftEmailInput } from './email.service';
 
-type DraftEmailRequest = {
-  sessionId?: string;
-  recipients: string[];
-  subject?: string;
-  tone?: string;
-  context: string;
-};
+type DraftEmailBody = Omit<DraftEmailInput, 'sessionId'>;
 
 @Controller('tools/email')
 export class EmailController {
   constructor(private readonly emailService: EmailService) {}
 
   @Post('draft')
-  async draft(@Body() body: DraftEmailRequest) {
-    return this.emailService.draftEmail(body);
+  async draft(@Req() req: Request, @Body() body: DraftEmailBody) {
+    const sessionId = getSessionId(req);
+    return this.emailService.draftEmail({ ...body, sessionId });
   }
 }

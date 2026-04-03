@@ -56,7 +56,7 @@ Planned top‑level structure:
 
 3. **Frontend** (`frontend/`): copy `.env.local.example` → `.env.local` and set `NEXT_PUBLIC_API_BASE_URL=http://localhost:4000`. Run `npm run dev` (default port **3000**).
 
-Open [http://localhost:3000](http://localhost:3000). The app stores a **session id** in `localStorage` (so the backend can tie memory + conversations to the same browser profile); **chat messages** are loaded from the API / database, not from the browser cache.
+Open [http://localhost:3000](http://localhost:3000). The backend issues an anonymous **HttpOnly cookie** (`laura_session`) after `GET /session`; the frontend calls the API with **`credentials: 'include'`** so memory, conversations, and Google OAuth stay tied to the same browser. **Chat messages** load from the API / database, not from browser cache. For split origins in production, configure **`CORS_ORIGIN`** and **`SESSION_COOKIE_SAME_SITE`** on the backend (see `backend/.env.example`).
 
 4. **Google OAuth (optional)** — To connect Gmail + Calendar for your session, create a project in google console and set up the client id and secret, enable the appropriate oauth steps**, set the Google vars in `backend/.env`, run `npm run db:migrate`, then use **Connect Google** on the chat screen.
 

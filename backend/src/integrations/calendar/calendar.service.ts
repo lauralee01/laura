@@ -51,7 +51,7 @@ export class CalendarService {
 
     const sessionId = requireCalendarSessionId(
       input.sessionId,
-      'sessionId is required to create a calendar event (use the same value as laura_session_id from the browser).',
+      'session is required to create a calendar event (use the same browser session as chat: HttpOnly laura_session cookie).',
     );
 
     const auth = await this.googleOAuth.getOAuth2ClientForSession(sessionId);
@@ -125,7 +125,7 @@ export class CalendarService {
 
     const sessionId = requireCalendarSessionId(
       input.sessionId,
-      'sessionId is required to list calendar events (use the same value as laura_session_id from the browser).',
+      'session is required to list calendar events (use the same browser session as chat: HttpOnly laura_session cookie).',
     );
 
     const auth = await this.googleOAuth.getOAuth2ClientForSession(sessionId);
