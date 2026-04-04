@@ -2,20 +2,16 @@
 
 import { useId } from 'react';
 
-/** Concave 4-point sparkle (Material-style silhouette) — not a circle/globe. */
-const SPARKLE_PATH =
-  'M12 0L11.5 4.5L8 5L11.5 5.5L12 10L12.5 5.5L16 5L12.5 4.5L12 0Z';
-
 /**
- * Shiny multicolour sparkle mark + small accents (AI / “magic” vibe).
+ * Colourful glassy orb inside a soft rounded “tile” — reads as a sphere in a box,
+ * not a flat sparkle.
  */
 export function LauraMark({ className }: { className?: string }) {
   const uid = useId().replace(/:/g, '');
-  const mainGrad = `lm-main-${uid}`;
-  const shineGrad = `lm-shine-${uid}`;
-  const miniGold = `lm-gold-${uid}`;
-  const miniCyan = `lm-cyan-${uid}`;
-  const miniPink = `lm-pink-${uid}`;
+  const frameGrad = `lm-frame-${uid}`;
+  const sphereGrad = `lm-sphere-${uid}`;
+  const specGrad = `lm-spec-${uid}`;
+  const rimGrad = `lm-rim-${uid}`;
 
   return (
     <svg
@@ -26,77 +22,86 @@ export function LauraMark({ className }: { className?: string }) {
       aria-hidden
     >
       <defs>
+        {/* Gradient frame — “box” around the orb */}
         <linearGradient
-          id={mainGrad}
-          x1="2"
-          y1="2"
-          x2="38"
-          y2="38"
+          id={frameGrad}
+          x1="4"
+          y1="4"
+          x2="36"
+          y2="36"
           gradientUnits="userSpaceOnUse"
         >
-          <stop stopColor="#a855f7" />
-          <stop offset="0.15" stopColor="#d946ef" />
-          <stop offset="0.32" stopColor="#f472b6" />
-          <stop offset="0.48" stopColor="#fb7185" />
-          <stop offset="0.62" stopColor="#22d3ee" />
-          <stop offset="0.78" stopColor="#34d399" />
-          <stop offset="0.9" stopColor="#fbbf24" />
-          <stop offset="1" stopColor="#fb923c" />
+          <stop stopColor="#fbbf24" />
+          <stop offset="0.22" stopColor="#fb7185" />
+          <stop offset="0.45" stopColor="#e879f9" />
+          <stop offset="0.62" stopColor="#818cf8" />
+          <stop offset="0.82" stopColor="#22d3ee" />
+          <stop offset="1" stopColor="#34d399" />
         </linearGradient>
 
-        <linearGradient id={shineGrad} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.75" />
-          <stop offset="28%" stopColor="#ffffff" stopOpacity="0.15" />
-          <stop offset="55%" stopColor="#ffffff" stopOpacity="0" />
-          <stop offset="100%" stopColor="#fef08a" stopOpacity="0.35" />
-        </linearGradient>
+        <radialGradient
+          id={sphereGrad}
+          cx="32%"
+          cy="30%"
+          r="72%"
+          gradientUnits="objectBoundingBox"
+        >
+          <stop offset="0%" stopColor="#fffbeb" stopOpacity="0.98" />
+          <stop offset="0.08" stopColor="#fef08a" />
+          <stop offset="0.22" stopColor="#fda4af" />
+          <stop offset="0.38" stopColor="#e879f9" />
+          <stop offset="0.55" stopColor="#a78bfa" />
+          <stop offset="0.72" stopColor="#6366f1" />
+          <stop offset="0.88" stopColor="#0ea5e9" />
+          <stop offset="1" stopColor="#164e63" />
+        </radialGradient>
 
-        <linearGradient id={miniGold} x1="0" y1="0" x2="1" y2="1">
-          <stop stopColor="#fef08a" />
-          <stop offset="0.5" stopColor="#fbbf24" />
-          <stop offset="1" stopColor="#f59e0b" />
-        </linearGradient>
-        <linearGradient id={miniCyan} x1="0" y1="0" x2="1" y2="1">
-          <stop stopColor="#a5f3fc" />
-          <stop offset="0.5" stopColor="#22d3ee" />
-          <stop offset="1" stopColor="#0284c7" />
-        </linearGradient>
-        <linearGradient id={miniPink} x1="0" y1="0" x2="1" y2="1">
-          <stop stopColor="#fbcfe8" />
-          <stop offset="0.45" stopColor="#f472b6" />
-          <stop offset="1" stopColor="#db2777" />
+        <radialGradient
+          id={specGrad}
+          cx="28%"
+          cy="26%"
+          r="42%"
+          gradientUnits="objectBoundingBox"
+        >
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
+          <stop offset="0.35" stopColor="#ffffff" stopOpacity="0.35" />
+          <stop offset="0.7" stopColor="#ffffff" stopOpacity="0.05" />
+          <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+        </radialGradient>
+
+        <linearGradient id={rimGrad} x1="0" y1="0" x2="1" y2="1">
+          <stop stopColor="#ffffff" stopOpacity="0.55" />
+          <stop offset="0.5" stopColor="#ffffff" stopOpacity="0.08" />
+          <stop offset="1" stopColor="#ffffff" stopOpacity="0.35" />
         </linearGradient>
       </defs>
 
-      <g transform="translate(20 20) scale(2.1) translate(-12 -5)">
-        <path d={SPARKLE_PATH} fill={`url(#${mainGrad})`} />
-        <path d={SPARKLE_PATH} fill={`url(#${shineGrad})`} opacity={0.85} />
-        <path
-          d={SPARKLE_PATH}
-          fill="none"
-          stroke="white"
-          strokeOpacity={0.35}
-          strokeWidth={0.4}
-        />
-      </g>
+      {/* Rounded square “tile” */}
+      <rect
+        x="3.5"
+        y="3.5"
+        width="33"
+        height="33"
+        rx="9"
+        stroke={`url(#${frameGrad})`}
+        strokeWidth="2.25"
+        fill="currentColor"
+        fillOpacity="0.06"
+      />
 
-      <g transform="translate(7 9) scale(0.42) translate(-12 -5)">
-        <path d={SPARKLE_PATH} fill={`url(#${miniGold})`} />
-        <path d={SPARKLE_PATH} fill="url(#shineGrad)" opacity={0.5} />
-      </g>
-      <g transform="translate(33 10) scale(0.38) translate(-12 -5)">
-        <path
-          d={SPARKLE_PATH}
-          fill={`url(#${miniCyan})`}
-          stroke="#e0f2fe"
-          strokeWidth={0.35}
-        />
-        <path d={SPARKLE_PATH} fill="url(#shineGrad)" opacity={0.45} />
-      </g>
-      <g transform="translate(21 31) scale(0.36) translate(-12 -5)">
-        <path d={SPARKLE_PATH} fill={`url(#${miniPink})`} />
-        <path d={SPARKLE_PATH} fill="url(#shineGrad)" opacity={0.5} />
-      </g>
+      {/* Main sphere */}
+      <circle cx="20" cy="20" r="12.25" fill={`url(#${sphereGrad})`} />
+      <circle cx="20" cy="20" r="12.25" fill={`url(#${specGrad})`} />
+
+      {/* Soft rim light */}
+      <circle
+        cx="20"
+        cy="20"
+        r="12.25"
+        fill="none"
+        stroke={`url(#${rimGrad})`}
+        strokeWidth="0.85"
+      />
     </svg>
   );
 }
