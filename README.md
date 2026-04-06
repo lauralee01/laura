@@ -40,9 +40,7 @@ laura is a full‑stack web application that gives each user a **personal AI age
 
 ## Project Structure
 
-Planned top‑level structure:
-
-- `frontend/` – Next.js application (chat UI, auth, settings).
+- `frontend/` – Next.js application (chat UI).
 - `backend/` – NestJS application (agent, tools, APIs).
 - `README.md` – this file.
 
@@ -58,7 +56,13 @@ Planned top‑level structure:
 
 Open [http://localhost:3000](http://localhost:3000). The backend issues an anonymous **HttpOnly cookie** (`laura_session`) after `GET /session`; the frontend calls the API with **`credentials: 'include'`** so memory, conversations, and Google OAuth stay tied to the same browser. **Chat messages** load from the API / database, not from browser cache. For split origins in production, configure **`CORS_ORIGIN`** and **`SESSION_COOKIE_SAME_SITE`** on the backend (see `backend/.env.example`).
 
-4. **Google OAuth (optional)** — To connect Gmail + Calendar for your session, create a project in google console and set up the client id and secret, enable the appropriate oauth steps**, set the Google vars in `backend/.env`, run `npm run db:migrate`, then use **Connect Google** on the chat screen.
+4. **Google OAuth (optional)** — Create a Google Cloud project, OAuth client, and enabled APIs (Gmail, Calendar). Set the Google-related variables in `backend/.env` (see `backend/.env.example`), run `npm run db:migrate` so OAuth tables exist, then use **Connect Google** in the app.
+
+---
+
+## Deployment (MVP)
+
+Production (Vercel + Render + Neon). In short: run **database migrations** against your hosted Postgres, set **`CORS_ORIGIN`** and **`SESSION_COOKIE_SAME_SITE`** (often `none` when UI and API are on different domains), point **`NEXT_PUBLIC_API_BASE_URL`** at your API, and register **production OAuth redirect URIs** in Google Cloud Console.
 
 ---
 
