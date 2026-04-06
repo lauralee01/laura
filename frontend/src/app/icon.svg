@@ -1,70 +1,10 @@
-<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient
-      id="f-frame"
-      x1="4"
-      y1="4"
-      x2="36"
-      y2="36"
-      gradientUnits="userSpaceOnUse"
-    >
-      <stop stop-color="#ffffff" />
-      <stop offset="0.28" stop-color="#d4d4d8" />
-      <stop offset="0.52" stop-color="#71717a" />
-      <stop offset="0.78" stop-color="#27272a" />
-      <stop offset="1" stop-color="#09090b" />
-    </linearGradient>
-    <radialGradient
-      id="f-sphere"
-      cx="32%"
-      cy="28%"
-      r="78%"
-      gradientUnits="objectBoundingBox"
-    >
-      <stop offset="0%" stop-color="#fafafa" />
-      <stop offset="0.12" stop-color="#e4e4e7" />
-      <stop offset="0.32" stop-color="#a1a1aa" />
-      <stop offset="0.52" stop-color="#52525b" />
-      <stop offset="0.72" stop-color="#27272a" />
-      <stop offset="0.9" stop-color="#18181b" />
-      <stop offset="1" stop-color="#09090b" />
-    </radialGradient>
-    <radialGradient
-      id="f-spec"
-      cx="26%"
-      cy="24%"
-      r="38%"
-      gradientUnits="objectBoundingBox"
-    >
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.92" />
-      <stop offset="0.4" stop-color="#ffffff" stop-opacity="0.22" />
-      <stop offset="0.75" stop-color="#ffffff" stop-opacity="0.03" />
-      <stop offset="1" stop-color="#ffffff" stop-opacity="0" />
-    </radialGradient>
-    <linearGradient id="f-rim" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#ffffff" stop-opacity="0.45" />
-      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0.06" />
-      <stop offset="1" stop-color="#a1a1aa" stop-opacity="0.5" />
-    </linearGradient>
-  </defs>
-  <rect
-    x="3.5"
-    y="3.5"
-    width="33"
-    height="33"
-    rx="9"
-    stroke="url(#f-frame)"
-    stroke-width="2.25"
-    fill="#09090b"
-  />
-  <circle cx="20" cy="20" r="12.25" fill="url(#f-sphere)" />
-  <circle cx="20" cy="20" r="12.25" fill="url(#f-spec)" />
-  <circle
-    cx="20"
-    cy="20"
-    r="12.25"
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <rect width="32" height="32" rx="8" fill="#ffffff" />
+  <path
     fill="none"
-    stroke="url(#f-rim)"
-    stroke-width="0.85"
+    stroke="#000000"
+    stroke-width="3.25"
+    stroke-linecap="round"
+    d="M16 25V9"
   />
 </svg>
