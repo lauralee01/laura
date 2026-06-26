@@ -30,7 +30,34 @@ export class ChatService {
     private readonly sessionPreferences: SessionPreferencesService,
     private readonly intentShadowService: IntentShadowService,
     private readonly intentRouter: IntentRouterService,
-  ) {}
+  ) { }
+
+  private getLastAssistantTurn(history?: LlmChatTurn[]): LlmChatTurn | undefined {
+    if (!history) return undefined;
+
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i].role === 'assistant') return history[i];
+    }
+
+    return undefined;
+  }
+
+  private isLikelyFollowUpAnswer(message: string, history?: LlmChatTurn[]): boolean {
+    const lastAssistantTurn = this.getLastAssistantTurn(history);
+    if (!lastAssistantTurn) return false;
+
+    const cleanMessage = message.trim();
+    const wordCount = cleanMessage.split(/\s+/).filter(Boolean).length;
+
+    const userReplyLooksShort = cleanMessage.length <= 160 && wordCount <= 25;
+
+    const assistantAskedQuestion =
+      /\?|what location|which location|where|when|what time|which day|what kind|which one|who is it for|are you looking for|do you mean|can you clarify|can you confirm/i.test(
+        lastAssistantTurn.content,
+      );
+
+    return assistantAskedQuestion && userReplyLooksShort;
+  }
 
   async replyTo(
     sessionId: string,
@@ -48,6 +75,13 @@ export class ChatService {
       message,
     );
 
+    let priorTurns: LlmChatTurn[] | undefined = history;
+    if (!priorTurns && dbConversationId) {
+      const turns =
+        await this.chatHistoryService.listTurnsForLlm(dbConversationId);
+      priorTurns = turns.slice(0, Math.max(0, turns.length - 1));
+    }
+
     const pendingHint = buildPendingHintForClassifier(
       sessionId,
       this.pendingRequestService,
@@ -63,6 +97,7 @@ export class ChatService {
         userMessage: message,
         pendingHint,
         sessionTimeZone: sessionTz ?? undefined,
+        history: priorTurns,
       });
     } catch {
       routingClassifyFailed = true;
@@ -239,16 +274,21 @@ export class ChatService {
       };
     }
 
-    if (envelope && (envelope.intent === 'clarify' || isLowConfidenceIntent)) {
+    const shouldTreatAsFollowUpAnswer =
+      envelope?.intent === 'clarify' &&
+      this.isLikelyFollowUpAnswer(message, priorTurns);
+
+    if (envelope && (envelope.intent === 'clarify' || isLowConfidenceIntent) && !shouldTreatAsFollowUpAnswer) {
       const clarifyReply =
-        'I did not fully catch that. Could you rephrase what you want me to do? ' +
-        'For example: "draft an email to ...", "show my calendar tomorrow", or "just answer this question: ...".';
+        'I did not fully catch that. Could you rephrase what you want me to do? ';
+
       await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
       await this.chatHistoryService.appendMessage(
         dbConversationId ?? '',
         'assistant',
         clarifyReply,
       );
+
       await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
         sessionId,
         message,
@@ -283,10 +323,13 @@ export class ChatService {
 
     // Phase 1 MVP: single-turn chat with retrieved memory (if sessionId is present).
     const systemBasePrompt =
-      'You are laura, a helpful personalized AI agent. ' +
-      'Be concise, ask clarifying questions when needed, and follow the user’s intent. ' +
-      'Important: Never claim you created/updated external resources (Gmail drafts, Google Calendar events, etc.) unless the server explicitly confirms it via a tool response. ' +
-      'If the user asks to do something that requires an integration and it has not run yet, ask for the missing info or explain what you need next.';
+      'You are laura, a helpful personalized AI assistant designed to help users plan their day, organize tasks, manage information, and make everyday life easier. ' +
+      'Be concise, practical, and conversational. Follow the user’s intent and ask clarifying questions only when needed. ' +
+      'If you ask the user a follow-up question, treat their next short reply as an answer to that question when it clearly fits the context. ' +
+      'Important: Never claim you created, updated, sent, deleted, or scheduled anything in external tools unless the server explicitly confirms it through a tool response. ' +
+      'If the user asks to do something that requires an integration and it has not run yet, ask for the missing info or explain what you need next. ' +
+      'You do not currently have access to a web browser, search engine, weather API, stock data, news, or other real-time data sources. ' +
+      'For real-time requests, explain that you cannot fetch live data yet and offer general help or suggest what information the user can provide.';
 
     let systemPrompt = systemBasePrompt;
 
@@ -315,12 +358,6 @@ export class ChatService {
     }
 
     // Phase 1 (user-visible): generate the reply using retrieved memory context.
-    let priorTurns: LlmChatTurn[] | undefined = history;
-    if (!priorTurns && dbConversationId) {
-      const turns =
-        await this.chatHistoryService.listTurnsForLlm(dbConversationId);
-      priorTurns = turns.slice(0, Math.max(0, turns.length - 1));
-    }
 
     const reply = await this.llmService.generate({
       systemPrompt,

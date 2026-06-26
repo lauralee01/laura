@@ -30,6 +30,8 @@ type GeminiGenerateResponse = {
 
 @Injectable()
 export class LlmService {
+  private readonly retryableStatuses = new Set([429, 500, 502, 503, 504]);
+
   /**
    * Maps our chat turns to Gemini's `contents` array.
    * Gemini uses role `model` for assistant replies (not `assistant`).
@@ -62,18 +64,50 @@ export class LlmService {
 
   async generate(input: GenerateInput): Promise<string> {
     const geminiKey = process.env.GEMINI_API_KEY?.trim();
-    if (geminiKey) {
-      return this.generateWithGemini(geminiKey, input);
+
+    if (!geminiKey) {
+      throw new Error('No LLM API key found');
     }
 
-    throw new Error('No LLM API key found');
+    return this.generateWithGemini(geminiKey, input);
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private isRetryableStatus(status: number): boolean {
+    return this.retryableStatuses.has(status);
+  }
+
+  private getFriendlyGeminiError(status: number): string {
+    if (status === 429) {
+      return (
+        'Laura is receiving too many requests right now. Please wait a moment and try again.'
+      );
+    }
+
+    if ([500, 502, 503, 504].includes(status)) {
+      return (
+        'Laura is having trouble reaching the AI model right now. Please try again in a moment.'
+      );
+    }
+
+    return (
+      'Laura could not complete the request right now. Please try again or rephrase your message.'
+    );
   }
 
   private async generateWithGemini(
     apiKey: string,
     input: GenerateInput,
   ): Promise<string> {
-    const model = process.env.GEMINI_MODEL?.trim() || 'gemini-flash-latest';
+    const model = process.env.GEMINI_MODEL?.trim();
+
+    if (!model) {
+      throw new Error('GEMINI_MODEL is missing (set backend/.env)');
+    }
+
     const url =
       'https://generativelanguage.googleapis.com/v1beta/models/' +
       encodeURIComponent(model) +
@@ -85,54 +119,81 @@ export class LlmService {
       systemInstruction: {
         parts: [{ text: input.systemPrompt }],
       },
+
       // Conversation so far + the latest user message as the final user turn.
       contents: this.buildGeminiContents(input),
+
       generationConfig: {
-        // how creative the model is
+        // How creative the model is.
         temperature: 0.4,
-        // max number of tokens to generate (how long the response is)
+
+        // Max number of tokens to generate.
         maxOutputTokens: 900,
       },
     };
 
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new Error(
-        `Gemini API error (${res.status}). ${text ? 'Details: ' + text : ''}`,
-      );
+    let lastStatus = 0;
+    let lastErrorText = '';
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        const jsonUnknown: unknown = await res.json();
+
+        if (typeof jsonUnknown !== 'object' || jsonUnknown === null) {
+          throw new Error('Gemini API returned an unexpected response shape');
+        }
+
+        const json = jsonUnknown as GeminiGenerateResponse;
+        const candidate = json.candidates?.[0];
+
+        const reply =
+          candidate?.content?.parts?.[0]?.text ??
+          candidate?.content?.parts?.[0]?.inlineData?.data;
+
+        if (reply != null && String(reply).trim() !== '') {
+          return String(reply);
+        }
+
+        const blockReason = json.promptFeedback?.blockReason;
+        const finishReason = candidate?.finishReason;
+
+        if (finishReason === 'UNEXPECTED_TOOL_CALL') {
+          return 'I realize I need a tool to answer that, but I don’t have access to the internet or real-time data like the weather. How else can I help?';
+        }
+
+        console.error('Gemini API empty reply or block. Response:', JSON.stringify(json, null, 2));
+
+        if (blockReason || finishReason) {
+          return (
+            'I couldn’t produce a reply just now. Try rephrasing your message or sending a shorter version.'
+          );
+        }
+
+        return 'I didn’t get any text back from the model. Please try again in a moment.';
+      }
+
+      lastStatus = res.status;
+      lastErrorText = await res.text().catch(() => '');
+
+      if (this.isRetryableStatus(res.status) && attempt < 3) {
+        await this.sleep(attempt * 1000);
+        continue;
+      }
+
+      break;
     }
 
-    const jsonUnknown: unknown = await res.json();
-    if (typeof jsonUnknown !== 'object' || jsonUnknown === null) {
-      throw new Error('Gemini API returned an unexpected response shape');
-    }
-
-    const json = jsonUnknown as GeminiGenerateResponse;
-    const candidate = json.candidates?.[0];
-    const reply =
-      candidate?.content?.parts?.[0]?.text ??
-      candidate?.content?.parts?.[0]?.inlineData?.data;
-
-    if (reply != null && String(reply).trim() !== '') {
-      return String(reply);
-    }
-
-    const blockReason = json.promptFeedback?.blockReason;
-    const finishReason = candidate?.finishReason;
-    if (blockReason || finishReason) {
-      return (
-        'I couldn’t produce a reply just now (the model blocked or stopped early). ' +
-        'Try rephrasing or sending a shorter message; if it keeps happening, check your API key and model settings.'
-      );
-    }
-
-    return (
-      'I didn’t get any text back from the model. Please try again in a moment.'
+    console.error(
+      `Gemini API error after retries (${lastStatus}). ${lastErrorText ? 'Details: ' + lastErrorText : ''
+      }`,
     );
+
+    return this.getFriendlyGeminiError(lastStatus);
   }
 }

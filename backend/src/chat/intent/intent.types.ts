@@ -51,6 +51,8 @@ export type IntentClassificationContext = {
   pendingHint?: string;
   /** Session default IANA zone if already known */
   sessionTimeZone?: string;
+  /** Prior conversation turns to provide context for intent classification. */
+  history?: Array<{ role: 'user' | 'assistant'; content: string }>;
 };
 
 export class IntentEnvelopeParseError extends Error {

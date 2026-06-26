@@ -33,6 +33,7 @@ Guidance:
 - calendar_create: user wants to add/schedule/create a new event.
 - calendar_update: user wants to move/reschedule/change/edit an existing event.
 - calendar_delete: user wants to cancel/delete/remove an event.
+- If the message is a short answer to the assistant’s previous follow-up question, classify it as general_chat unless pendingHint clearly indicates a tool action is waiting.
 
 Optional slots hints (execution still validates in code): e.g. titleHint, roughTimeHint strings for create; titleHint for update/delete.
 - email_draft: user wants to draft/send an email (initial draft request).
@@ -41,7 +42,7 @@ Optional slots hints (execution still validates in code): e.g. titleHint, roughT
 - pending_confirm: user confirms a pending action (e.g. yes/confirm) that is not email-send-specific.
 - pending_cancel: user is cancelling/dismissing the current pending action (e.g. cancel, never mind). Use when pendingHint describes what to cancel.
 - set_timezone: user is providing or setting a timezone (IANA).
-- clarify: the message is ambiguous and needs a follow-up question before routing.
+- clarify: use only when the message is ambiguous on its own and there is no pending context or previous assistant question that explains it.
 
 Confidence guidance:
 - Use lower confidence for uncertain guesses or weak wording overlap.

@@ -11,8 +11,15 @@ function buildClassifierUserMessage(c: IntentClassificationContext): string {
   const lines = [
     'Classify the following.',
     '',
-    `userMessage: ${c.userMessage}`,
   ];
+  if (c.history && c.history.length > 0) {
+    lines.push('Recent conversation:');
+    for (const turn of c.history.slice(-3)) { // Only include the last 3 turns to keep it focused
+      lines.push(`${turn.role === 'user' ? 'User' : 'Assistant'}: ${turn.content}`);
+    }
+    lines.push('');
+  }
+  lines.push(`userMessage: ${c.userMessage}`);
   if (c.pendingHint?.trim()) {
     lines.push(`pendingHint: ${c.pendingHint.trim()}`);
   }
