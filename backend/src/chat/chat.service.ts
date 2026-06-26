@@ -257,6 +257,7 @@ export class ChatService {
       const draftReply = await this.toolOrchestrator.handleEmailDraftIntent(
         sessionId,
         message,
+        envelope,
       );
       await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
       await this.chatHistoryService.appendMessage(

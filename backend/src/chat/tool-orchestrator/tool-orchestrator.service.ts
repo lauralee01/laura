@@ -18,7 +18,7 @@ export class ToolOrchestratorService {
     private readonly calendarTools: CalendarToolHandler,
     private readonly emailTools: EmailToolHandler,
     private readonly pendingFlow: ToolPendingFlowService,
-  ) {}
+  ) { }
 
   handleCalendarListIntent(
     sessionId: string,
@@ -56,8 +56,12 @@ export class ToolOrchestratorService {
     );
   }
 
-  handleEmailDraftIntent(sessionId: string, message: string): Promise<string> {
-    return this.emailTools.handleEmailDraftIntent(sessionId, message);
+  handleEmailDraftIntent(
+    sessionId: string,
+    message: string,
+    envelope?: IntentEnvelope,
+  ): Promise<string> {
+    return this.emailTools.handleEmailDraftIntent(sessionId, message, envelope);
   }
 
   handlePendingEmailSendTurn(

@@ -8,27 +8,180 @@ import type { IntentEnvelope } from '../intent/intent.types';
 import type { PendingEmailSendPayload } from './tool-orchestrator.types';
 import type { PendingRequest } from '../pending-request.service';
 
-/**
- * Gmail draft + send / revise / cancel while `email_send` is pending.
- * LLM is used only to extract structured draft args from free text.
- */
+type PendingEmailDraftPayload = {
+  recipients?: string[];
+  recipientName?: string;
+  subject?: string;
+  context?: string;
+  tone?: string;
+};
+
 @Injectable()
 export class EmailToolHandler {
   constructor(
     private readonly llmService: LlmService,
     private readonly emailService: EmailService,
     private readonly pendingRequestService: PendingRequestService,
-  ) {}
+  ) { }
 
   async handleEmailDraftIntent(
     sessionId: string,
     message: string,
+    envelope?: IntentEnvelope,
   ): Promise<string> {
-    const args = await extractDraftEmailArgs(this.llmService, message);
-    if (!args) {
-      return 'I can draft that email, but I need at least one recipient email address (e.g. jordan@example.com).';
+    const pendingDraft =
+      this.pendingRequestService.getPending<PendingEmailDraftPayload>(
+        sessionId,
+        'email_draft',
+      );
+
+    if (pendingDraft) {
+      return this.continuePendingEmailDraft(sessionId, message, pendingDraft, envelope);
     }
 
+    const args = await extractDraftEmailArgs(this.llmService, message);
+    const slots = envelope?.slots ?? {};
+
+    const recipients =
+      args?.recipients?.length
+        ? args.recipients
+        : typeof slots.recipientEmail === 'string'
+          ? [slots.recipientEmail]
+          : [];
+
+    const recipientName =
+      typeof slots.recipient === 'string' ? slots.recipient : undefined;
+
+    const subject =
+      args?.subject ??
+      (typeof slots.subject === 'string' ? slots.subject : undefined);
+
+    const context =
+      args?.context ??
+      (typeof slots.body === 'string' ? slots.body : undefined);
+
+    const tone = args?.tone;
+
+    if (!recipients.length || !context?.trim()) {
+      this.pendingRequestService.setPending<PendingEmailDraftPayload>(
+        sessionId,
+        {
+          actionType: 'email_draft',
+          originalMessage: message,
+          payload: {
+            recipients,
+            recipientName,
+            subject,
+            context,
+            tone,
+          },
+          missingSlots: !recipients.length ? ['recipientEmail'] : ['body'],
+          collectedSlots: {},
+        },
+      );
+
+      if (!recipients.length) {
+        return (
+          'I can draft that email, but I need the recipient email address first.'
+        );
+      }
+
+      return 'I have the recipient. What should the email say?';
+    }
+
+    return this.createGmailDraft(sessionId, message, {
+      recipients,
+      subject,
+      context,
+      tone,
+    });
+  }
+
+  private async continuePendingEmailDraft(
+    sessionId: string,
+    message: string,
+    pendingDraft: PendingRequest<PendingEmailDraftPayload>,
+    envelope?: IntentEnvelope,
+  ): Promise<string> {
+    const slots = envelope?.slots ?? {};
+    const emailFromMessage = this.extractEmail(message);
+
+    const recipients =
+      pendingDraft.payload.recipients?.length
+        ? pendingDraft.payload.recipients
+        : emailFromMessage
+          ? [emailFromMessage]
+          : typeof slots.recipientEmail === 'string'
+            ? [slots.recipientEmail]
+            : [];
+
+    const context =
+      pendingDraft.payload.context ??
+      (typeof slots.body === 'string' ? slots.body : undefined) ??
+      (!emailFromMessage ? message : undefined);
+
+    const subject =
+      pendingDraft.payload.subject ??
+      (typeof slots.subject === 'string' ? slots.subject : undefined);
+
+    const tone = pendingDraft.payload.tone;
+
+    if (!recipients.length) {
+      this.pendingRequestService.setPending<PendingEmailDraftPayload>(
+        sessionId,
+        {
+          actionType: 'email_draft',
+          originalMessage: pendingDraft.originalMessage,
+          payload: {
+            ...pendingDraft.payload,
+            context,
+          },
+          missingSlots: ['recipientEmail'],
+          collectedSlots: {},
+        },
+      );
+
+      return 'Got it. What email address should I send it to?';
+    }
+
+    if (!context?.trim()) {
+      this.pendingRequestService.setPending<PendingEmailDraftPayload>(
+        sessionId,
+        {
+          actionType: 'email_draft',
+          originalMessage: pendingDraft.originalMessage,
+          payload: {
+            ...pendingDraft.payload,
+            recipients,
+          },
+          missingSlots: ['body'],
+          collectedSlots: {},
+        },
+      );
+
+      return 'Got it. What should the email say?';
+    }
+
+    this.pendingRequestService.clearPending(sessionId, 'email_draft');
+
+    return this.createGmailDraft(sessionId, pendingDraft.originalMessage, {
+      recipients,
+      subject,
+      context,
+      tone,
+    });
+  }
+
+  private async createGmailDraft(
+    sessionId: string,
+    originalMessage: string,
+    args: {
+      recipients: string[];
+      subject?: string;
+      context: string;
+      tone?: string;
+    },
+  ): Promise<string> {
     try {
       const draft = await this.emailService.draftEmail({
         sessionId,
@@ -42,7 +195,7 @@ export class EmailToolHandler {
         sessionId,
         {
           actionType: 'email_send',
-          originalMessage: message,
+          originalMessage,
           payload: {
             draftId: draft.draftId,
             recipients: draft.recipients,
@@ -60,16 +213,13 @@ export class EmailToolHandler {
         `Subject: ${draft.subject}\n\n` +
         `${draft.body}\n\n` +
         `---\n` +
-        `Send it? Reply send or yes to send from your Gmail now, or say how you’d like it revised, or cancel to skip sending (the draft stays in Gmail).`
+        `Send it? Reply send or yes to send from your Gmail now, or say how you’d like it revised, or cancel to skip sending.`
       );
     } catch (e: unknown) {
       return formatToolFailureMessage('create the Gmail draft', e);
     }
   }
 
-  /**
-   * When a Gmail draft is waiting for send/revise/cancel. Returns null if no pending email_send.
-   */
   async handlePendingEmailSendTurn(
     sessionId: string,
     message: string,
@@ -80,6 +230,7 @@ export class EmailToolHandler {
         sessionId,
         'email_send',
       );
+
     if (!pendingSend) return null;
 
     if (envelope?.intent === 'pending_cancel') {
@@ -89,27 +240,39 @@ export class EmailToolHandler {
         'It’s still in your Gmail drafts if you want to send or edit it there.'
       );
     }
+
     if (envelope?.intent === 'email_send_confirm') {
       return this.sendPendingEmailDraftNow(sessionId, pendingSend);
     }
+
     if (envelope?.intent === 'email_draft_revise') {
       return this.revisePendingEmailDraftNow(sessionId, pendingSend, message);
     }
+
     return (
       'I still have a draft ready to send:\n' +
       `To: ${pendingSend.payload.recipients.join(', ')}\n` +
       `Subject: ${pendingSend.payload.subject}\n\n` +
       `${pendingSend.payload.body}\n\n` +
-      'Reply send or yes to send it now, or describe how you’d like the draft changed, or cancel to dismiss this prompt (the draft stays in Gmail).'
+      'Reply send or yes to send it now, describe a change, or cancel.'
     );
   }
 
-  /** Stage-1 email routing with envelope intent and slots only. */
   async tryLlmRoutedEmail(
     sessionId: string,
     message: string,
     envelope: IntentEnvelope,
   ): Promise<string | null> {
+    const pendingDraft =
+      this.pendingRequestService.getPending<PendingEmailDraftPayload>(
+        sessionId,
+        'email_draft',
+      );
+
+    if (pendingDraft) {
+      return this.continuePendingEmailDraft(sessionId, message, pendingDraft, envelope);
+    }
+
     const pendingSend =
       this.pendingRequestService.getPending<PendingEmailSendPayload>(
         sessionId,
@@ -124,22 +287,27 @@ export class EmailToolHandler {
           'It’s still in your Gmail drafts if you want to send or edit it there.'
         );
       }
+
       if (envelope.intent === 'email_send_confirm') {
         return this.sendPendingEmailDraftNow(sessionId, pendingSend);
       }
+
       if (envelope.intent === 'email_draft_revise') {
         return this.revisePendingEmailDraftNow(sessionId, pendingSend, message);
       }
+
       if (envelope.intent === 'email_draft') {
         this.pendingRequestService.clearPending(sessionId, 'email_send');
-        return this.handleEmailDraftIntent(sessionId, message);
+        return this.handleEmailDraftIntent(sessionId, message, envelope);
       }
+
       return null;
     }
 
     if (envelope.intent === 'email_draft') {
-      return this.handleEmailDraftIntent(sessionId, message);
+      return this.handleEmailDraftIntent(sessionId, message, envelope);
     }
+
     return null;
   }
 
@@ -152,7 +320,9 @@ export class EmailToolHandler {
         sessionId,
         pendingSend.payload.draftId,
       );
+
       this.pendingRequestService.clearPending(sessionId, 'email_send');
+
       return (
         `Email sent from your Gmail.\n\n` +
         `To: ${pendingSend.payload.recipients.join(', ')}\n` +
@@ -201,10 +371,15 @@ export class EmailToolHandler {
         `Subject: ${revised.subject}\n\n` +
         `${revised.body}\n\n` +
         `---\n` +
-        `Send it? Reply send or yes to send from your Gmail now, or ask for another change, or cancel to skip sending (the draft stays in Gmail).`
+        `Send it? Reply send or yes to send from your Gmail now, or ask for another change, or cancel.`
       );
     } catch (e: unknown) {
       return formatToolFailureMessage('update the Gmail draft', e);
     }
+  }
+
+  private extractEmail(value: string): string | null {
+    const match = value.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+    return match?.[0] ?? null;
   }
 }

@@ -6,6 +6,7 @@ export type PendingActionType =
   | 'calendar_delete'
   | 'calendar_update'
   | 'calendar_mutate_tz'
+  | 'email_draft'
   | 'email_send';
 
 export type PendingSlotName =
@@ -13,6 +14,9 @@ export type PendingSlotName =
   | 'confirmation'
   | 'calendarId'
   | 'recipient'
+  | 'recipientEmail'
+  | 'subject'
+  | 'body'
   | 'targetEvent';
 
 export type PendingRequest<TPayload> = {
