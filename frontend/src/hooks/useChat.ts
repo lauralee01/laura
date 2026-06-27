@@ -37,11 +37,13 @@ export function useChat() {
       const list = await fetchConversations();
       setConversations(list);
     } catch {
-      /* keep existing list */
+      // Keep existing list if sidebar refresh fails.
     }
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
     setMessages([]);
     setInitializing(true);
     setError(null);
@@ -49,21 +51,34 @@ export function useChat() {
 
     ensureSession()
       .then(() => {
+        if (cancelled) return null;
+
         setSessionReady(true);
         return Promise.all([fetchConversations(), fetchChatHistory()]);
       })
-      .then(([convs, hist]) => {
+      .then((result) => {
+        if (cancelled || !result) return;
+
+        const [convs, hist] = result;
         setConversations(convs);
         setMessages(hist.messages);
         setConversationId(hist.conversationId);
       })
       .catch(() => {
+        if (cancelled) return;
+
         setMessages([]);
         setError('Could not load data. Is the API running?');
       })
       .finally(() => {
+        if (cancelled) return;
+
         setInitializing(false);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -76,6 +91,7 @@ export function useChat() {
         setSidebarOpen(false);
       }
     };
+
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
@@ -85,9 +101,11 @@ export function useChat() {
       if (!sessionReady) {
         return;
       }
+
       setInitializing(true);
       setError(null);
       setConversationId(id);
+
       try {
         const hist = await fetchChatHistory(id);
         setMessages(hist.messages);
@@ -105,13 +123,15 @@ export function useChat() {
     if (!sessionReady || loading) {
       return;
     }
+
     setError(null);
     setSidebarOpen(false);
+
     try {
       const id = await createConversation();
       setConversationId(id);
       setMessages([]);
-      await reloadSidebar();
+      void reloadSidebar();
     } catch (e) {
       setError(
         e instanceof Error ? e.message : 'Could not start a new chat.'
@@ -122,44 +142,41 @@ export function useChat() {
   const handleSubmit = useCallback(
     async (e: FormEvent) => {
       e.preventDefault();
+
       const text = input.trim();
+
       if (!text || loading || !sessionReady) {
         return;
       }
 
       setError(null);
       setInput('');
+      setLoading(true);
 
       setMessages((prev) => [...prev, { role: 'user', content: text }]);
-      setLoading(true);
 
       try {
         const { reply, conversationId: idFromSend } = await sendChatMessage({
           conversationId,
           message: text,
         });
-        setConversationId(idFromSend ?? conversationId);
-        try {
-          const refreshed = await fetchChatHistory(
-            idFromSend ?? conversationId
-          );
-          setMessages(refreshed.messages);
-          setConversationId(
-            refreshed.conversationId ?? idFromSend ?? conversationId
-          );
-        } catch {
-          setError(
-            'Message was saved, but the thread could not be refreshed. Try reloading the page.'
-          );
-          setMessages((prev) => [
-            ...prev,
-            { role: 'assistant', content: reply },
-          ]);
+
+        const activeConversationId = idFromSend ?? conversationId;
+
+        if (activeConversationId) {
+          setConversationId(activeConversationId);
         }
-        await reloadSidebar();
+
+        setMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: reply },
+        ]);
+
+        void reloadSidebar();
       } catch (err) {
         const msg =
           err instanceof Error ? err.message : 'Something went wrong.';
+
         setError(msg);
         setMessages((prev) => prev.slice(0, -1));
         setInput(text);
@@ -167,6 +184,7 @@ export function useChat() {
         setLoading(false);
       }
     },
+
     [conversationId, input, loading, reloadSidebar, sessionReady]
   );
 
@@ -183,10 +201,12 @@ export function useChat() {
       if (!sessionReady) {
         return;
       }
+
       setError(null);
+
       try {
         await renameConversationApi(id, title);
-        await reloadSidebar();
+        void reloadSidebar();
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Could not rename chat.');
       }
@@ -199,15 +219,17 @@ export function useChat() {
       if (!sessionReady) {
         return;
       }
+
       setError(null);
+
       try {
         await deleteConversationApi(id);
+
         const list = await fetchConversations();
         setConversations(list);
+
         if (conversationId === id) {
           if (list.length === 0) {
-            // Empty sidebar until the user sends a message or clicks + — backend
-            // creates a conversation on first send via ensureConversation.
             setConversationId(undefined);
             setMessages([]);
           } else {

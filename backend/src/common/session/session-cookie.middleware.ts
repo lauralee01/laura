@@ -18,14 +18,18 @@ export class SessionCookieMiddleware implements NestMiddleware {
     let sid = readSessionTokenFromCookie(req);
     if (!isValidSessionToken(sid)) {
       sid = randomUUID();
+      const isProd = process.env.NODE_ENV === 'production';
+
       const sameSiteEnv =
         process.env.SESSION_COOKIE_SAME_SITE?.trim().toLowerCase();
+
       const sameSite: 'lax' | 'strict' | 'none' =
-        sameSiteEnv === 'none' || sameSiteEnv === 'strict' ? sameSiteEnv : 'lax';
-      const secure =
-        sameSite === 'none'
-          ? true
-          : process.env.NODE_ENV === 'production';
+        sameSiteEnv === 'none' || sameSiteEnv === 'strict'
+          ? sameSiteEnv
+          : 'lax';
+
+      // Only require Secure cookies in production when using SameSite=None.
+      const secure = isProd && sameSite === 'none';
 
       res.cookie(LAURA_SESSION_COOKIE, sid, {
         httpOnly: true,
