@@ -3,7 +3,6 @@
 import {
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type FormEvent,
@@ -222,10 +221,7 @@ export function useChat() {
     [conversationId, openThread, sessionReady]
   );
 
-  const showThinking = useMemo(
-    () => loading || initializing,
-    [initializing, loading]
-  );
+  const showThinking = loading;
 
   return {
     sessionReady,
