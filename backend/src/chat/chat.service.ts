@@ -180,6 +180,41 @@ export class ChatService {
       }
     }
 
+    if (envelope?.intent === 'current_datetime') {
+      const timeZone = sessionTz ?? 'America/Chicago';
+
+      const formatted = new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZoneName: 'short',
+      }).format(new Date());
+
+      const reply = `The current date and time in ${timeZone} is ${formatted}.`;
+
+      await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
+
+      await this.chatHistoryService.appendMessage(
+        dbConversationId ?? '',
+        'assistant',
+        reply,
+      );
+
+      await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
+        sessionId,
+        message,
+      );
+
+      return {
+        reply,
+        conversationId: dbConversationId ?? undefined,
+      };
+    }
+
     if (envelope?.intent === 'calendar_list') {
       const listReply =
         await this.toolOrchestrator.handleCalendarListIntent(

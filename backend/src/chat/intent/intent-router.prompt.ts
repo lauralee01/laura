@@ -38,6 +38,9 @@ Guidance:
   Do not use calendar_create for general planning, routines, study schedules, or suggested plans unless the user explicitly asks to add it to their calendar.
 - calendar_update: user explicitly wants to move/reschedule/change/edit an existing calendar event.
 - calendar_delete: user explicitly wants to cancel/delete/remove an existing calendar event.
+- current_datetime: user asks for the current time, today's date, current date, current day, or what time/date it is now.
+  Examples: "What time is it?", "What is the time currently?", "What's today's date?", "What day is it today?", "What date is today?"
+  Always use this intent for current date/time questions. Do not classify these as general_chat.
 - Only route to calendar_* intents when the user is asking about their actual calendar, events, meetings, appointments, or wants something placed on the calendar.
 - Do not route general life planning, productivity advice, weekly plans, routines, or to-do suggestions to calendar_* unless the user explicitly mentions their calendar or asks Laura to add/check events.
 - If the message is a short answer to the assistant’s previous follow-up question, classify it as general_chat unless pendingHint clearly indicates a tool action is waiting.

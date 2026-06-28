@@ -29,6 +29,7 @@ export const INTENT_IDS = [
   'pending_cancel',
   'set_timezone',
   'clarify',
+  'current_datetime',
 ] as const;
 
 export type IntentId = (typeof INTENT_IDS)[number];
