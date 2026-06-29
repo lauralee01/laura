@@ -37,6 +37,7 @@ import type { IntentEnvelope } from '../intent/intent.types';
  * Calendar integrations: list windows, create events, update/delete via search + pending picks.
  * Uses LLM extractors where natural language must become structured times or mutation targets.
  */
+const DEFAULT_TIME_ZONE = 'America/Chicago';
 @Injectable()
 export class CalendarToolHandler {
   constructor(
@@ -44,7 +45,7 @@ export class CalendarToolHandler {
     private readonly calendarService: CalendarService,
     private readonly sessionPreferences: SessionPreferencesService,
     private readonly pendingRequestService: PendingRequestService,
-  ) {}
+  ) { }
 
   async handleCalendarListIntent(
     sessionId: string,
@@ -53,7 +54,7 @@ export class CalendarToolHandler {
   ): Promise<string> {
     const tzCandidate = getSlotTimeZone(envelope);
     const storedTz = await this.sessionPreferences.getTimeZone(sessionId);
-    const timeZone = tzCandidate ?? storedTz;
+    const timeZone = tzCandidate ?? storedTz ?? DEFAULT_TIME_ZONE;
 
     if (tzCandidate) {
       await this.sessionPreferences.setTimeZone(sessionId, tzCandidate).catch(
@@ -80,10 +81,10 @@ export class CalendarToolHandler {
               ? { mode, weekOffset: 0, dayOffset }
               : mode === 'next_days'
                 ? {
-                    mode,
-                    weekOffset: 0,
-                    spanDays: Math.max(1, Math.min(60, Math.floor(spanDays))),
-                  }
+                  mode,
+                  weekOffset: 0,
+                  spanDays: Math.max(1, Math.min(60, Math.floor(spanDays))),
+                }
                 : mode === 'past'
                   ? { mode, weekOffset: 0, maxEvents }
                   : { mode: 'upcoming', weekOffset, maxEvents };
@@ -124,7 +125,7 @@ export class CalendarToolHandler {
             : undefined,
         maxEvents:
           pendingListRequest.mode === 'upcoming' ||
-          pendingListRequest.mode === 'past'
+            pendingListRequest.mode === 'past'
             ? pendingListRequest.maxEvents
             : undefined,
         rangeLocal: { start: startLocal, end: endLocal },
@@ -132,7 +133,7 @@ export class CalendarToolHandler {
 
       const maxFetch =
         pendingListRequest.mode === 'upcoming' ||
-        pendingListRequest.mode === 'past'
+          pendingListRequest.mode === 'past'
           ? pendingListRequest.maxEvents
           : undefined;
 
@@ -168,7 +169,7 @@ export class CalendarToolHandler {
   ): Promise<string> {
     const tzCandidate = getSlotTimeZone(envelope);
     const storedTz = await this.sessionPreferences.getTimeZone(sessionId);
-    const timeZone = tzCandidate ?? storedTz;
+    const timeZone = tzCandidate ?? storedTz ?? DEFAULT_TIME_ZONE;
 
     if (tzCandidate) {
       await this.sessionPreferences.setTimeZone(sessionId, tzCandidate).catch(
@@ -222,10 +223,9 @@ export class CalendarToolHandler {
         `Time zone: ${timeZone}\n` +
         `Local start: ${args.start}\n` +
         `Local end: ${args.end}\n` +
-        `Reminder (minutes before): ${
-          event.reminderMinutesBefore !== undefined
-            ? event.reminderMinutesBefore
-            : 'none'
+        `Reminder (minutes before): ${event.reminderMinutesBefore !== undefined
+          ? event.reminderMinutesBefore
+          : 'none'
         }\n` +
         `Calendar: primary\n` +
         (event.url ? `Open: ${event.url}\n` : '') +
@@ -243,7 +243,7 @@ export class CalendarToolHandler {
   ): Promise<string> {
     const tzCandidate = getSlotTimeZone(envelope);
     const storedTz = await this.sessionPreferences.getTimeZone(sessionId);
-    const timeZone = tzCandidate ?? storedTz;
+    const timeZone = tzCandidate ?? storedTz ?? DEFAULT_TIME_ZONE;
 
     if (tzCandidate) {
       await this.sessionPreferences.setTimeZone(sessionId, tzCandidate).catch(
@@ -305,10 +305,9 @@ export class CalendarToolHandler {
         `Time zone: ${timeZone}\n` +
         `Local start: ${args.start}\n` +
         `Local end: ${args.end}\n` +
-        `Reminder (minutes before): ${
-          event.reminderMinutesBefore !== undefined
-            ? event.reminderMinutesBefore
-            : 'none'
+        `Reminder (minutes before): ${event.reminderMinutesBefore !== undefined
+          ? event.reminderMinutesBefore
+          : 'none'
         }\n` +
         `Calendar: primary\n` +
         (event.url ? `Open: ${event.url}\n` : '') +
@@ -429,7 +428,7 @@ export class CalendarToolHandler {
       if (candidates.length === 0) {
         return (
           'I didn’t find a matching event in that window. Try listing your calendar or ' +
-            'being more specific about the title or date.'
+          'being more specific about the title or date.'
         );
       }
 
@@ -455,7 +454,7 @@ export class CalendarToolHandler {
           );
           return (
             `Delete “${c.title}” (${c.startText})?\n\n` +
-              `Reply yes to remove it from Google Calendar, or cancel.`
+            `Reply yes to remove it from Google Calendar, or cancel.`
           );
         }
 
