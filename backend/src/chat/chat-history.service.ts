@@ -158,35 +158,55 @@ export class ChatHistoryService implements OnModuleDestroy {
       return null;
     }
 
+    // If the client already supplied a conversation ID,
+    // verify that it belongs to this session.
     const incomingId = (conversationId ?? '').trim();
     if (incomingId) {
       const existing = await this.pool.query<{ id: string }>(
         `
-        SELECT id
-        FROM conversations
-        WHERE id = $1 AND session_id = $2
-        LIMIT 1;
-        `,
+      SELECT id
+      FROM conversations
+      WHERE id = $1
+        AND session_id = $2
+      LIMIT 1;
+      `,
         [incomingId, sid],
       );
+
       if (existing.rows[0]?.id) {
         return incomingId;
       }
     }
 
-    const latest = await this.getLatestConversation(sid);
-    if (latest?.conversationId) {
-      return latest.conversationId;
+    // Fetch ONLY the latest conversation ID.
+    // No need to load all the messages.
+    const latestRes = await this.pool.query<{ id: string }>(
+      `
+    SELECT id
+    FROM conversations
+    WHERE session_id = $1
+    ORDER BY updated_at DESC
+    LIMIT 1;
+    `,
+      [sid],
+    );
+
+    const latestId = latestRes.rows[0]?.id;
+    if (latestId) {
+      return latestId;
     }
 
+    // No conversation exists yet, so create one.
     const newId = randomUUID();
+
     await this.pool.query(
       `
-      INSERT INTO conversations (id, session_id)
-      VALUES ($1, $2);
-      `,
+    INSERT INTO conversations (id, session_id)
+    VALUES ($1, $2);
+    `,
       [newId, sid],
     );
+
     return newId;
   }
 

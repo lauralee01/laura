@@ -128,7 +128,7 @@ export class LlmService {
         temperature: 0.4,
 
         // Max number of tokens to generate.
-        maxOutputTokens: 900,
+        maxOutputTokens: 2000,
       },
     };
 
