@@ -147,10 +147,15 @@ export class ChatService {
             'assistant',
             emailLlm,
           );
-          await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
-            sessionId,
-            message,
-          );
+          // await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
+          //   sessionId,
+          //   message,
+          // );
+          void this.memoryPersistenceService
+            .writeExtractedMemoriesIfAny(sessionId, message)
+            .catch((e) => {
+              console.log('background memory write failed:', e);
+            });
           return {
             reply: emailLlm,
             conversationId: dbConversationId ?? undefined,
@@ -169,10 +174,15 @@ export class ChatService {
           'assistant',
           emailRegex,
         );
-        await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
-          sessionId,
-          message,
-        );
+        // await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
+        //   sessionId,
+        //   message,
+        // );
+        void this.memoryPersistenceService
+          .writeExtractedMemoriesIfAny(sessionId, message)
+          .catch((e) => {
+            console.log('background memory write failed:', e);
+          });
         return {
           reply: emailRegex,
           conversationId: dbConversationId ?? undefined,
@@ -204,11 +214,6 @@ export class ChatService {
         reply,
       );
 
-      await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
-        sessionId,
-        message,
-      );
-
       return {
         reply,
         conversationId: dbConversationId ?? undefined,
@@ -228,10 +233,11 @@ export class ChatService {
         'assistant',
         listReply,
       );
-      await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
-        sessionId,
-        message,
-      );
+      void this.memoryPersistenceService
+        .writeExtractedMemoriesIfAny(sessionId, message)
+        .catch((e) => {
+          console.log('background memory write failed:', e);
+        });
       return {
         reply: listReply,
         conversationId: dbConversationId ?? undefined,
@@ -251,10 +257,12 @@ export class ChatService {
         'assistant',
         createReply,
       );
-      await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
-        sessionId,
-        message,
-      );
+
+      void this.memoryPersistenceService
+        .writeExtractedMemoriesIfAny(sessionId, message)
+        .catch((e) => {
+          console.log('background memory write failed:', e);
+        });
       return {
         reply: createReply,
         conversationId: dbConversationId ?? undefined,
@@ -278,10 +286,12 @@ export class ChatService {
         'assistant',
         mutReply,
       );
-      await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
-        sessionId,
-        message,
-      );
+
+      void this.memoryPersistenceService
+        .writeExtractedMemoriesIfAny(sessionId, message)
+        .catch((e) => {
+          console.log('background memory write failed:', e);
+        });
       return {
         reply: mutReply,
         conversationId: dbConversationId ?? undefined,
@@ -300,10 +310,12 @@ export class ChatService {
         'assistant',
         draftReply,
       );
-      await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
-        sessionId,
-        message,
-      );
+
+      void this.memoryPersistenceService
+        .writeExtractedMemoriesIfAny(sessionId, message)
+        .catch((e) => {
+          console.log('background memory write failed:', e);
+        });
       return {
         reply: draftReply,
         conversationId: dbConversationId ?? undefined,
@@ -325,10 +337,12 @@ export class ChatService {
         clarifyReply,
       );
 
-      await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
-        sessionId,
-        message,
-      );
+
+      void this.memoryPersistenceService
+        .writeExtractedMemoriesIfAny(sessionId, message)
+        .catch((e) => {
+          console.log('background memory write failed:', e);
+        });
       return {
         reply: clarifyReply,
         conversationId: dbConversationId ?? undefined,
@@ -346,11 +360,12 @@ export class ChatService {
         'assistant',
         toolReply,
       );
-      // Keep implicit memory write even for tool paths.
-      await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
-        sessionId,
-        message,
-      );
+
+      void this.memoryPersistenceService
+        .writeExtractedMemoriesIfAny(sessionId, message)
+        .catch((e) => {
+          console.log('background memory write failed:', e);
+        });
       return {
         reply: toolReply,
         conversationId: dbConversationId ?? undefined,
@@ -406,10 +421,11 @@ export class ChatService {
       reply,
     );
 
-    await this.memoryPersistenceService.writeExtractedMemoriesIfAny(
-      sessionId,
-      message,
-    );
+    void this.memoryPersistenceService
+      .writeExtractedMemoriesIfAny(sessionId, message)
+      .catch((e) => {
+        console.log('background memory write failed:', e);
+      });
 
     return { reply, conversationId: dbConversationId ?? undefined };
   }
