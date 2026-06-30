@@ -15,6 +15,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "laura — personalized AI agent",
   description: "Chat with laura, your personalized AI assistant.",
+  icons: {
+    icon: '/icon.png',
+    shortcut: '/icon.png',
+    apple: '/icon.png',
+  }
 };
 
 export default function RootLayout({
