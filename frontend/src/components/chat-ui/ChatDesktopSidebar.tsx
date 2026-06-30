@@ -24,6 +24,17 @@ export function ChatDesktopSidebar({ sessionReady, ...props }: Props) {
         </div>
       </div>
       <SidebarConversationList {...props} />
+      <footer className="shrink-0 border-t border-zinc-800/80 px-4 py-3 text-center text-[11px] text-zinc-600">
+        <span>© {new Date().getFullYear()} Laura</span>
+        <span className="mx-1.5">•</span>
+        <a href="/privacy" className="transition hover:text-zinc-300">
+          Privacy
+        </a>
+        <span className="mx-1.5">•</span>
+        <a href="/terms" className="transition hover:text-zinc-300">
+          Terms
+        </a>
+      </footer>
     </aside>
   );
 }
