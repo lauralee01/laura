@@ -23,6 +23,11 @@ export function ChatMessageList({
           Hi, I&apos;m laura. How can I help you today?
         </p>
       )}
+      {initializing && messages.length === 0 && (
+        <div className="flex items-center justify-center py-16">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-600/20 border-t-zinc-600 dark:border-zinc-500/20 dark:border-t-zinc-300" />
+        </div>
+      )}
 
       <ul className="mx-auto flex max-w-2xl flex-col gap-3">
         {messages.map((m, i) => (
