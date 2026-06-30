@@ -29,6 +29,7 @@ export function Chat() {
     selectConversation,
     renameConversation,
     deleteConversation,
+    initializing,
   } = useChat();
 
   const sidebarDisabled = loading || !sessionReady;
@@ -71,6 +72,7 @@ export function Chat() {
           messages={messages}
           showThinking={showThinking}
           bottomRef={bottomRef}
+          initializing={initializing}
         />
 
         {error && <ChatErrorBanner message={error} />}

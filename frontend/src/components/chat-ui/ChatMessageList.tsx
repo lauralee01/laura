@@ -4,6 +4,7 @@ import type { StoredChatMessage } from '@/lib/session';
 type Props = {
   messages: StoredChatMessage[];
   showThinking: boolean;
+  initializing: boolean;
   bottomRef: RefObject<HTMLDivElement | null>;
 };
 
@@ -11,8 +12,9 @@ export function ChatMessageList({
   messages,
   showThinking,
   bottomRef,
+  initializing,
 }: Props) {
-  const empty = messages.length === 0 && !showThinking;
+  const empty = messages.length === 0 && !showThinking && !initializing;
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 md:px-6">
@@ -26,16 +28,14 @@ export function ChatMessageList({
         {messages.map((m, i) => (
           <li
             key={`${i}-${m.role}-${m.content.slice(0, 12)}`}
-            className={`flex ${
-              m.role === 'user' ? 'justify-end' : 'justify-start'
-            }`}
+            className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'
+              }`}
           >
             <div
-              className={`max-w-[min(100%,42rem)] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
-                m.role === 'user'
-                  ? 'bg-zinc-200/90 text-zinc-100 dark:bg-zinc-800 dark:text-zinc-100'
-                  : ' text-zinc-800 shadow-sm dark:text-zinc-100'
-              }`}
+              className={`max-w-[min(100%,42rem)] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${m.role === 'user'
+                ? 'bg-zinc-200/90 text-zinc-100 dark:bg-zinc-800 dark:text-zinc-100'
+                : ' text-zinc-800 shadow-sm dark:text-zinc-100'
+                }`}
             >
               {m.content}
             </div>
