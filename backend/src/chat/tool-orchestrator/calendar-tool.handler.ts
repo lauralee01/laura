@@ -47,6 +47,44 @@ export class CalendarToolHandler {
     private readonly pendingRequestService: PendingRequestService,
   ) { }
 
+  private formatTimezoneQuestion(): string {
+    return (
+      'Before I continue, what timezone should I use for your calendar?\n\n' +
+      'You can reply with something like:\n' +
+      '• Central\n' +
+      '• Eastern\n' +
+      '• Pacific\n' +
+      '• America/Chicago\n\n' +
+      'If you’re not sure, just tell me your city or state.'
+    );
+  }
+
+  private formatCalendarCreateSuccess(input: {
+    title: string;
+    start: string;
+    end: string;
+    timeZone: string;
+    url?: string;
+  }): string {
+    return (
+      `Done — I added it to your Google Calendar.\n\n` +
+      `**${input.title}**\n` +
+      `When: ${input.start} – ${input.end}\n` +
+      `Time zone: ${input.timeZone}` +
+      (input.url ? `\n\nOpen in Calendar: ${input.url}` : '')
+    );
+  }
+
+  private formatCalendarUpdateSuccess(input: {
+    title: string;
+    url?: string;
+  }): string {
+    return (
+      `Done — I updated **${input.title}** in your Google Calendar.` +
+      (input.url ? `\n\nOpen in Calendar: ${input.url}` : '')
+    );
+  }
+
   async handleCalendarListIntent(
     sessionId: string,
     message: string,
@@ -100,10 +138,7 @@ export class CalendarToolHandler {
           collectedSlots: {},
         },
       );
-      return (
-        'What timezone should I use for your events?\n\n' +
-        'Please reply with an IANA timezone like `America/Chicago` (Central), `America/New_York` (Eastern), or `America/Los_Angeles` (Pacific).'
-      );
+      return this.formatTimezoneQuestion();
     }
 
     try {
@@ -188,10 +223,7 @@ export class CalendarToolHandler {
           collectedSlots: {},
         },
       );
-      return (
-        'What timezone should I use for your events?\n\n' +
-        'Please reply with an IANA timezone like `America/Chicago` (Central), `America/New_York` (Eastern), or `America/Los_Angeles` (Pacific).'
-      );
+      return this.formatTimezoneQuestion();
     }
 
     try {
@@ -217,20 +249,13 @@ export class CalendarToolHandler {
         timeZone,
       });
 
-      return (
-        `Event added to Google Calendar.\n\n` +
-        `Title: ${event.title}\n` +
-        `Time zone: ${timeZone}\n` +
-        `Local start: ${args.start}\n` +
-        `Local end: ${args.end}\n` +
-        `Reminder (minutes before): ${event.reminderMinutesBefore !== undefined
-          ? event.reminderMinutesBefore
-          : 'none'
-        }\n` +
-        `Calendar: primary\n` +
-        (event.url ? `Open: ${event.url}\n` : '') +
-        `(event id: ${event.eventId})`
-      );
+      return this.formatCalendarCreateSuccess({
+        title: event.title,
+        start: args.start,
+        end: args.end,
+        timeZone,
+        url: event.url,
+      });
     } catch (e: unknown) {
       return formatToolFailureMessage('create the calendar event', e);
     }
@@ -262,10 +287,7 @@ export class CalendarToolHandler {
           collectedSlots: {},
         },
       );
-      return (
-        'What timezone should I use for your events?\n\n' +
-        'Please reply with an IANA timezone like `America/Chicago` (Central), `America/New_York` (Eastern), or `America/Los_Angeles` (Pacific).'
-      );
+      return this.formatTimezoneQuestion();
     }
 
     this.pendingRequestService.clearPending(sessionId, 'calendar_mutate_tz');
@@ -299,20 +321,13 @@ export class CalendarToolHandler {
         reminderMinutesBefore: args.reminderMinutesBefore,
         timeZone,
       });
-      return (
-        `Event added to Google Calendar.\n\n` +
-        `Title: ${event.title}\n` +
-        `Time zone: ${timeZone}\n` +
-        `Local start: ${args.start}\n` +
-        `Local end: ${args.end}\n` +
-        `Reminder (minutes before): ${event.reminderMinutesBefore !== undefined
-          ? event.reminderMinutesBefore
-          : 'none'
-        }\n` +
-        `Calendar: primary\n` +
-        (event.url ? `Open: ${event.url}\n` : '') +
-        `(event id: ${event.eventId})`
-      );
+      return this.formatCalendarCreateSuccess({
+        title: event.title,
+        start: args.start,
+        end: args.end,
+        timeZone,
+        url: event.url,
+      });
     } catch (e: unknown) {
       return formatToolFailureMessage('create the calendar event', e);
     }
@@ -453,8 +468,8 @@ export class CalendarToolHandler {
             },
           );
           return (
-            `Delete “${c.title}” (${c.startText})?\n\n` +
-            `Reply yes to remove it from Google Calendar, or cancel.`
+            `I found **${c.title}** scheduled for ${c.startText}.\n\n` +
+            `Do you want me to delete it from your Google Calendar? Reply yes to delete it, or cancel.`
           );
         }
 
@@ -483,11 +498,10 @@ export class CalendarToolHandler {
           start,
           end,
         });
-        return (
-          `Updated in Google Calendar: “${updated.title}”.\n` +
-          (updated.url ? `Open: ${updated.url}\n` : '') +
-          `(event id: ${updated.eventId})`
-        );
+        return this.formatCalendarUpdateSuccess({
+          title: updated.title,
+          url: updated.url,
+        });
       }
 
       const sliced = candidates.slice(0, 12);

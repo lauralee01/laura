@@ -208,12 +208,12 @@ export class EmailToolHandler {
       );
 
       return (
-        `Draft saved in Gmail.\n\n` +
-        `Recipients: ${draft.recipients.join(', ')}\n` +
+        `I drafted this email in Gmail.\n\n` +
+        `To: ${draft.recipients.join(', ')}\n` +
         `Subject: ${draft.subject}\n\n` +
         `${draft.body}\n\n` +
         `---\n` +
-        `Send it? Reply send or yes to send from your Gmail now, or say how you’d like it revised, or cancel to skip sending.`
+        `Want me to send it? Reply send or yes, or tell me what you’d like changed.`
       );
     } catch (e: unknown) {
       return formatToolFailureMessage('create the Gmail draft', e);
@@ -283,8 +283,7 @@ export class EmailToolHandler {
       if (envelope.intent === 'pending_cancel') {
         this.pendingRequestService.clearPending(sessionId, 'email_send');
         return (
-          'Okay — I won’t send that draft from here. ' +
-          'It’s still in your Gmail drafts if you want to send or edit it there.'
+          'No problem — I won’t send it. The draft is still saved in Gmail if you want to review it later.'
         );
       }
 
@@ -324,10 +323,9 @@ export class EmailToolHandler {
       this.pendingRequestService.clearPending(sessionId, 'email_send');
 
       return (
-        `Email sent from your Gmail.\n\n` +
+        `Done — your email has been sent.\n\n` +
         `To: ${pendingSend.payload.recipients.join(', ')}\n` +
-        `Subject: ${pendingSend.payload.subject}\n` +
-        (sent.messageId ? `Message id: ${sent.messageId}\n` : '')
+        `Subject: ${pendingSend.payload.subject}`
       );
     } catch (e: unknown) {
       return formatToolFailureMessage('send the email', e);
@@ -366,12 +364,12 @@ export class EmailToolHandler {
       );
 
       return (
-        `Updated your Gmail draft.\n\n` +
-        `Recipients: ${revised.recipients.join(', ')}\n` +
+        `I updated the draft for you.\n\n` +
+        `To: ${revised.recipients.join(', ')}\n` +
         `Subject: ${revised.subject}\n\n` +
         `${revised.body}\n\n` +
         `---\n` +
-        `Send it? Reply send or yes to send from your Gmail now, or ask for another change, or cancel.`
+        `Want me to send this version? Reply send or yes, or ask for another change.`
       );
     } catch (e: unknown) {
       return formatToolFailureMessage('update the Gmail draft', e);
