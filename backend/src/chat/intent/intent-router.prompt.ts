@@ -33,9 +33,10 @@ Guidance:
 - calendar_list: user explicitly wants to see, list, show, check, review, or summarize calendar events already on their calendar.
   Examples: "What's on my calendar today?", "Show my events this week", "Do I have meetings tomorrow?"
   Do not use calendar_list for broad planning requests like "help me plan my week", "organize my day", or "make me a weekly routine" unless the user explicitly asks to use/check their calendar.
-- calendar_create: user explicitly wants to create, add, book, schedule, or put a specific event/reminder on their calendar.
-  Examples: "Add dentist appointment tomorrow at 3pm", "Schedule a meeting with Sarah Friday", "Put gym on my calendar at 6."
-  Do not use calendar_create for general planning, routines, study schedules, or suggested plans unless the user explicitly asks to add it to their calendar.
+- calendar_create: user explicitly wants to create, add, book, schedule, remind, block time, or put a specific event/reminder on their calendar.
+  Examples: "Add dentist appointment tomorrow at 3pm", "Schedule a meeting with Sarah Friday", "Put gym on my calendar at 6", "Block 5 to 7 tomorrow for job applications."
+  Use this intent when the user agrees to a previous assistant suggestion to add/block/schedule something, if pendingHint indicates a calendar create action is waiting.
+  Do not use calendar_create for general planning, routines, study schedules, or suggested plans unless the user explicitly asks to add/block/schedule it on their calendar.
 - calendar_update: user explicitly wants to move/reschedule/change/edit an existing calendar event.
 - calendar_delete: user explicitly wants to cancel/delete/remove an existing calendar event.
 - current_datetime: user asks for the current time, today's date, current date, current day, or what time/date it is now.
@@ -69,11 +70,25 @@ calendar_list — use mode + offsets so the server can build the right time rang
 - "Today / tomorrow" or "today and tomorrow" in one message means two calendar days → use mode "next_days" and spanDays 2 (one window from start of today through end of tomorrow). Do not use mode "day" with dayOffset 0 for that; that would only list today.
 - Broader asks: mode "week" | "month" | "year" with weekOffset / monthOffset / yearOffset as needed; mode "upcoming" for generic "what's next" / next events with no specific day (optional maxEvents, default mentally 10); mode "past" for recent history.
 - Optional: timeZone (IANA) if the user named one; weekOffset, monthOffset, yearOffset, maxEvents, spanDays where applicable.
+calendar_create — use consistent camelCase slots:
+- Use titleHint for the event title.
+- Use startTime and endTime for specific start/end times.
+- Use roughTimeHint if the user gives vague timing like "tomorrow morning" or "after lunch".
+- Use dayOffset when the user says today/tomorrow/yesterday.
+- Never use snake_case keys like start_time or end_time.
+- Never use "title"; use "titleHint" instead.
+- If pendingHint indicates a calendar event is waiting for missing details, extract only the new detail from the user's reply and keep intent as calendar_create.
+  Examples:
+  - pendingHint: "Need time for calendar event: Job applications"; user: "July 2 17:00 to 19:00"
+    → slots: { "startTime": "July 2 17:00", "endTime": "July 2 19:00" }
+  - pendingHint: "Need title for calendar event from July 2 17:00 to 19:00"; user: "Use Job applications"
+    → slots: { "titleHint": "Job applications" }
 
 Other tool slots:
 - set_timezone: slots.timeZone as IANA (e.g. "America/Chicago").
 - Pending pick prompts: slots.selectedIndex as 1-based number.
 - pending_confirm: confirm-style replies for non-email pending actions.
+- calendar_create: slots must use camelCase only: titleHint, startTime, endTime, roughTimeHint, dayOffset.
 
 Intent classification prompt version: ${INTENT_CLASSIFICATION_PROMPT_VERSION}
 `.trim();

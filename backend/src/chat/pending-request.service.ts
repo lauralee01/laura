@@ -11,6 +11,8 @@ export type PendingActionType =
 
 export type PendingSlotName =
   | 'timeZone'
+  | 'title'
+  | 'timeRange'
   | 'confirmation'
   | 'calendarId'
   | 'recipient'

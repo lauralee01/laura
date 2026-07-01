@@ -227,18 +227,47 @@ export class CalendarToolHandler {
     }
 
     try {
-      this.pendingRequestService.clearPending(sessionId, 'calendar_create');
+      const pending =
+        this.pendingRequestService.getPending<PendingCalendarCreatePayload>(
+          sessionId,
+          'calendar_create',
+        );
+
+      const baseMessage = pending
+        ? `${pending.payload.message}\n\nAdditional user detail: ${message}`
+        : message;
+
       const args = await extractCalendarEventArgs(
         this.llmService,
-        message,
+        baseMessage,
         timeZone,
       );
-      if (!args) {
+
+      if (!args || !args.title?.trim() || !args.start?.trim() || !args.end?.trim()) {
+        this.pendingRequestService.setPending<PendingCalendarCreatePayload>(
+          sessionId,
+          {
+            actionType: 'calendar_create',
+            originalMessage: baseMessage,
+            payload: { message: baseMessage },
+            missingSlots: [
+              !args?.title?.trim() ? 'title' : null,
+              !args?.start?.trim() || !args?.end?.trim() ? 'timeRange' : null,
+            ].filter((x): x is 'title' | 'timeRange' => x !== null),
+            collectedSlots: {},
+          },
+        );
+
+        if (!args?.title?.trim()) {
+          return 'What should I call this calendar event?';
+        }
+
         return (
-          `I can create that calendar event, but I need start and end time in your local time (${timeZone}). ` +
-          `Example: March 26 12:00 to 13:00.`
+          `What time should I block for **${args.title}**?\n\n` +
+          `For example: tomorrow from 5 PM to 7 PM.`
         );
       }
+
       const event = await this.calendarService.createEvent({
         sessionId,
         title: args.title,
@@ -248,6 +277,8 @@ export class CalendarToolHandler {
         reminderMinutesBefore: args.reminderMinutesBefore,
         timeZone,
       });
+
+      this.pendingRequestService.clearPending(sessionId, 'calendar_create');
 
       return this.formatCalendarCreateSuccess({
         title: event.title,

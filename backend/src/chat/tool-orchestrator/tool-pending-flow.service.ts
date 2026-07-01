@@ -32,7 +32,7 @@ export class ToolPendingFlowService {
     private readonly pendingRequestService: PendingRequestService,
     private readonly calendarTools: CalendarToolHandler,
     private readonly emailTools: EmailToolHandler,
-  ) {}
+  ) { }
 
   async tryHandle(
     sessionId: string,
@@ -45,6 +45,25 @@ export class ToolPendingFlowService {
       envelope,
     );
     if (pendingEmail !== null) return pendingEmail;
+
+    const pendingCreate =
+      this.pendingRequestService.getPending<PendingCalendarCreatePayload>(
+        sessionId,
+        'calendar_create',
+      );
+
+    if (pendingCreate && envelope?.intent !== 'set_timezone') {
+      if (envelope?.intent === 'pending_cancel') {
+        this.pendingRequestService.clearPending(sessionId, 'calendar_create');
+        return 'No problem — I won’t add that to your calendar.';
+      }
+
+      return this.calendarTools.handleCalendarCreateIntent(
+        sessionId,
+        message,
+        envelope,
+      );
+    }
 
     const pendingDelete =
       this.pendingRequestService.getPending<PendingCalendarDeletePayload>(
@@ -86,7 +105,7 @@ export class ToolPendingFlowService {
         );
         return (
           `Delete “${opt.title}” (${opt.startText})?\n\n` +
-            `Reply yes to remove it from Google Calendar, or cancel.`
+          `Reply yes to remove it from Google Calendar, or cancel.`
         );
       }
       if (envelope?.intent === 'pending_confirm') {
