@@ -12,9 +12,17 @@ export type WebSearchResponse = {
     results: WebSearchResult[];
 };
 
+type WebSearchOptions = {
+    searchDepth?: 'basic' | 'advanced';
+    maxResults?: number;
+};
+
 @Injectable()
 export class WebSearchService {
-    async search(query: string): Promise<WebSearchResponse> {
+    async search(
+        query: string,
+        options: WebSearchOptions = {},
+    ): Promise<WebSearchResponse> {
         const apiKey = process.env.TAVILY_API_KEY?.trim();
 
         if (!apiKey) {
@@ -34,10 +42,10 @@ export class WebSearchService {
             },
             body: JSON.stringify({
                 query: q,
-                search_depth: 'basic',
+                search_depth: options.searchDepth ?? 'basic',
                 include_answer: true,
                 include_raw_content: false,
-                max_results: 5,
+                max_results: options.maxResults ?? 5,
             }),
         });
 
