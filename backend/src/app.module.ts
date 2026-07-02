@@ -7,6 +7,7 @@ import { MemoryModule } from './memory/memory.module';
 import { EmailModule } from './integrations/email/email.module';
 import { CalendarModule } from './integrations/calendar/calendar.module';
 import { GoogleOAuthModule } from './integrations/google/google-oauth.module';
+import { WebSearchModule } from './integrations/web-search/web-search.module';
 import { SessionCookieMiddleware } from './common/session/session-cookie.middleware';
 
 @Module({
@@ -19,6 +20,7 @@ import { SessionCookieMiddleware } from './common/session/session-cookie.middlew
     EmailModule,
     CalendarModule,
     GoogleOAuthModule,
+    WebSearchModule,
   ],
   controllers: [AppController],
   providers: [AppService, SessionCookieMiddleware],

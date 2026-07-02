@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { CalendarToolHandler } from './calendar-tool.handler';
 import { EmailToolHandler } from './email-tool.handler';
+import { WebSearchToolHandler } from './web-search-tool.handler';
 import { ToolPendingFlowService } from './tool-pending-flow.service';
 import type { IntentEnvelope } from '../intent/intent.types';
 
@@ -17,6 +18,7 @@ export class ToolOrchestratorService {
   constructor(
     private readonly calendarTools: CalendarToolHandler,
     private readonly emailTools: EmailToolHandler,
+    private readonly webSearchTools: WebSearchToolHandler,
     private readonly pendingFlow: ToolPendingFlowService,
   ) { }
 
@@ -74,6 +76,13 @@ export class ToolOrchestratorService {
       message,
       envelope,
     );
+  }
+
+  handleWebSearchIntent(
+    message: string,
+    envelope?: IntentEnvelope,
+  ): Promise<string> {
+    return this.webSearchTools.handleWebSearchIntent(message, envelope);
   }
 
   tryLlmRoutedEmail(

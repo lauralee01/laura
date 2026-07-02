@@ -5,6 +5,8 @@ import { LlmModule } from '../llm/llm.module';
 import { MemoryModule } from '../memory/memory.module';
 import { EmailModule } from '../integrations/email/email.module';
 import { CalendarModule } from '../integrations/calendar/calendar.module';
+import { WebSearchModule } from '../integrations/web-search/web-search.module';
+import { WebSearchToolHandler } from './tool-orchestrator/web-search-tool.handler';
 import {
   CalendarToolHandler,
   EmailToolHandler,
@@ -18,12 +20,13 @@ import { PendingRequestService } from './pending-request.service';
 import { IntentRouterService, IntentShadowService } from './intent';
 
 @Module({
-  imports: [LlmModule, MemoryModule, EmailModule, CalendarModule],
+  imports: [LlmModule, MemoryModule, EmailModule, CalendarModule, WebSearchModule],
   controllers: [ChatController],
   providers: [
     ChatService,
     IntentRouterService,
     IntentShadowService,
+    WebSearchToolHandler,
     CalendarToolHandler,
     EmailToolHandler,
     ToolPendingFlowService,
@@ -34,4 +37,4 @@ import { IntentRouterService, IntentShadowService } from './intent';
     PendingRequestService,
   ],
 })
-export class ChatModule {}
+export class ChatModule { }

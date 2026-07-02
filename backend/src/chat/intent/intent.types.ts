@@ -30,6 +30,7 @@ export const INTENT_IDS = [
   'set_timezone',
   'clarify',
   'current_datetime',
+  'web_search',
 ] as const;
 
 export type IntentId = (typeof INTENT_IDS)[number];

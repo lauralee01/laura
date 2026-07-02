@@ -213,6 +213,28 @@ export class ChatService {
       };
     }
 
+    if (envelope?.intent === 'web_search') {
+      const reply = await this.toolOrchestrator.handleWebSearchIntent(
+        message,
+        envelope,
+      );
+
+      await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
+
+      if (dbConversationId) {
+        await this.chatHistoryService.appendMessage(
+          dbConversationId,
+          'assistant',
+          reply,
+        );
+      }
+
+      return {
+        reply,
+        conversationId: dbConversationId ?? undefined,
+      };
+    }
+
     if (envelope?.intent === 'calendar_list') {
       const listReply =
         await this.toolOrchestrator.handleCalendarListIntent(

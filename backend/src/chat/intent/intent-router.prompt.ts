@@ -42,6 +42,10 @@ Guidance:
 - current_datetime: user asks for the current time, today's date, current date, current day, or what time/date it is now.
   Examples: "What time is it?", "What is the time currently?", "What's today's date?", "What day is it today?", "What date is today?"
   Always use this intent for current date/time questions. Do not classify these as general_chat.
+- web_search: user asks for current, live, recent, local, or externally updated information that Laura cannot reliably answer from general knowledge alone.
+  Examples: "What World Cup games are today?", "What is the weather tomorrow?", "Latest OpenAI news", "Restaurants open near me", "Best events in Birmingham this weekend", "Current stock price", "Who won the game last night?"
+  Use web_search for sports schedules, weather, news, current events, local places, opening hours, prices, availability, rankings, live status, or anything that may have changed recently.
+  Do not use web_search for general advice, writing, planning, coding help, or timeless knowledge unless the user specifically asks for current/latest/live information.
 - Only route to calendar_* intents when the user is asking about their actual calendar, events, meetings, appointments, or wants something placed on the calendar.
 - Do not route general life planning, productivity advice, weekly plans, routines, or to-do suggestions to calendar_* unless the user explicitly mentions their calendar or asks Laura to add/check events.
 - If the message is a short answer to the assistant’s previous follow-up question, classify it as general_chat unless pendingHint clearly indicates a tool action is waiting.
@@ -83,6 +87,10 @@ calendar_create — use consistent camelCase slots:
     → slots: { "startTime": "July 2 17:00", "endTime": "July 2 19:00" }
   - pendingHint: "Need title for calendar event from July 2 17:00 to 19:00"; user: "Use Job applications"
     → slots: { "titleHint": "Job applications" }
+web_search — use:
+- query: the best search query to answer the user.
+- locationHint: city/state/country if the user provided one.
+- freshness: "live" | "recent" | "general" when obvious.
 
 Other tool slots:
 - set_timezone: slots.timeZone as IANA (e.g. "America/Chicago").
