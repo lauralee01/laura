@@ -75,11 +75,54 @@ export class ChatService {
       message,
     );
 
+
     let priorTurns: LlmChatTurn[] | undefined = history;
     if (!priorTurns && dbConversationId) {
       const turns =
         await this.chatHistoryService.listTurnsForLlm(dbConversationId);
       priorTurns = turns.slice(0, Math.max(0, turns.length - 1));
+    }
+
+    const pendingAction = sessionId
+      ? await this.sessionPreferences.getPendingAction(sessionId)
+      : null;
+
+    if (pendingAction?.type === 'web_search_missing_location') {
+      const location = message.trim();
+
+      // Save the user's location for future searches
+      await this.sessionPreferences.setLocation(sessionId, location);
+
+      // This pending action has now been handled
+      await this.sessionPreferences.clearPendingAction(sessionId);
+
+      const resumedEnvelope = {
+        ...pendingAction.envelope,
+        slots: {
+          ...(pendingAction.envelope?.slots ?? {}),
+          locationHint: location,
+          userLocationHint: location,
+        },
+      };
+
+      const reply = await this.toolOrchestrator.handleWebSearchIntent(
+        sessionId,
+        pendingAction.message,
+        resumedEnvelope,
+      );
+
+      if (dbConversationId) {
+        await this.chatHistoryService.appendMessage(
+          dbConversationId,
+          'assistant',
+          reply,
+        );
+      }
+
+      return {
+        reply,
+        conversationId: dbConversationId ?? undefined,
+      };
     }
 
     const pendingHint = buildPendingHintForClassifier(
@@ -123,6 +166,17 @@ export class ChatService {
       skipDuplicateClassify: routingClassifyFailed,
     });
 
+    const userLocationHint =
+      typeof envelope?.slots?.userLocationHint === 'string'
+        ? envelope.slots.userLocationHint.trim()
+        : '';
+
+    if (sessionId && userLocationHint) {
+      await this.sessionPreferences
+        .setLocation(sessionId, userLocationHint)
+        .catch(() => undefined);
+    }
+
     const shouldClearPendingEmailFromEnvelope =
       envelope?.intent === 'calendar_list' ||
       envelope?.intent === 'calendar_create' ||
@@ -133,244 +187,111 @@ export class ChatService {
       this.pendingRequestService.clearPending(sessionId, 'email_send');
     }
 
-    if (this.pendingRequestService.getPending(sessionId, 'email_send')) {
+    let toolReply: string | null = null;
+    const isEmailSendPending = this.pendingRequestService.getPending(sessionId, 'email_send');
+
+    if (isEmailSendPending) {
       if (envelope) {
-        const emailLlm = await this.toolOrchestrator.tryLlmRoutedEmail(
+        toolReply = await this.toolOrchestrator.tryLlmRoutedEmail(
           sessionId,
           message,
           envelope,
         );
-        if (emailLlm !== null) {
-          await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
-          await this.chatHistoryService.appendMessage(
-            dbConversationId ?? '',
-            'assistant',
-            emailLlm,
+      }
+      if (toolReply === null) {
+        toolReply = await this.toolOrchestrator.handlePendingEmailSendTurn(
+          sessionId,
+          message,
+          envelope,
+        );
+      }
+    }
+
+    if (toolReply === null) {
+      switch (envelope?.intent) {
+        case 'current_datetime': {
+          const timeZone = sessionTz ?? 'America/Chicago';
+          const formatted = new Intl.DateTimeFormat('en-US', {
+            timeZone,
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            timeZoneName: 'short',
+          }).format(new Date());
+          toolReply = `The current date and time in ${timeZone} is ${formatted}.`;
+          break;
+        }
+        case 'web_search': {
+          toolReply = await this.toolOrchestrator.handleWebSearchIntent(
+            sessionId,
+            message,
+            envelope,
           );
-          void this.memoryPersistenceService
-            .writeExtractedMemoriesIfAny(sessionId, message)
-            .catch((e) => {
-              console.log('background memory write failed:', e);
+          if (toolReply === '__WEB_SEARCH_NEEDS_LOCATION__') {
+            await this.sessionPreferences.setPendingAction(sessionId, {
+              type: 'web_search_missing_location',
+              message,
+              envelope,
             });
-          return {
-            reply: emailLlm,
-            conversationId: dbConversationId ?? undefined,
-          };
+            toolReply = 'Which town or city should I use for this search?';
+          }
+          break;
+        }
+        case 'calendar_list': {
+          toolReply = await this.toolOrchestrator.handleCalendarListIntent(
+            sessionId,
+            message,
+            envelope,
+          );
+          break;
+        }
+        case 'calendar_create': {
+          toolReply = await this.toolOrchestrator.handleCalendarCreateIntent(
+            sessionId,
+            message,
+            envelope,
+          );
+          break;
+        }
+        case 'calendar_update':
+        case 'calendar_delete': {
+          toolReply = await this.toolOrchestrator.handleCalendarMutationIntent(
+            sessionId,
+            message,
+            envelope,
+          );
+          break;
+        }
+        case 'email_draft': {
+          if (!isEmailSendPending) {
+            toolReply = await this.toolOrchestrator.handleEmailDraftIntent(
+              sessionId,
+              message,
+              envelope,
+            );
+          }
+          break;
         }
       }
-      const emailRegex = await this.toolOrchestrator.handlePendingEmailSendTurn(
-        sessionId,
-        message,
-        envelope,
-      );
-      if (emailRegex !== null) {
-        await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
-        await this.chatHistoryService.appendMessage(
-          dbConversationId ?? '',
-          'assistant',
-          emailRegex,
-        );
-
-        void this.memoryPersistenceService
-          .writeExtractedMemoriesIfAny(sessionId, message)
-          .catch((e) => {
-            console.log('background memory write failed:', e);
-          });
-        return {
-          reply: emailRegex,
-          conversationId: dbConversationId ?? undefined,
-        };
-      }
-    }
-
-    if (envelope?.intent === 'current_datetime') {
-      const timeZone = sessionTz ?? 'America/Chicago';
-
-      const formatted = new Intl.DateTimeFormat('en-US', {
-        timeZone,
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        timeZoneName: 'short',
-      }).format(new Date());
-
-      const reply = `The current date and time in ${timeZone} is ${formatted}.`;
-
-      await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
-
-      await this.chatHistoryService.appendMessage(
-        dbConversationId ?? '',
-        'assistant',
-        reply,
-      );
-
-      return {
-        reply,
-        conversationId: dbConversationId ?? undefined,
-      };
-    }
-
-    if (envelope?.intent === 'web_search') {
-      const reply = await this.toolOrchestrator.handleWebSearchIntent(
-        sessionId,
-        message,
-        envelope,
-      );
-
-      await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
-
-      if (dbConversationId) {
-        await this.chatHistoryService.appendMessage(
-          dbConversationId,
-          'assistant',
-          reply,
-        );
-      }
-
-      return {
-        reply,
-        conversationId: dbConversationId ?? undefined,
-      };
-    }
-
-    if (envelope?.intent === 'calendar_list') {
-      const listReply =
-        await this.toolOrchestrator.handleCalendarListIntent(
-          sessionId,
-          message,
-          envelope,
-        );
-      await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
-      await this.chatHistoryService.appendMessage(
-        dbConversationId ?? '',
-        'assistant',
-        listReply,
-      );
-      void this.memoryPersistenceService
-        .writeExtractedMemoriesIfAny(sessionId, message)
-        .catch((e) => {
-          console.log('background memory write failed:', e);
-        });
-      return {
-        reply: listReply,
-        conversationId: dbConversationId ?? undefined,
-      };
-    }
-
-    if (envelope?.intent === 'calendar_create') {
-      const createReply =
-        await this.toolOrchestrator.handleCalendarCreateIntent(
-          sessionId,
-          message,
-          envelope,
-        );
-      await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
-      await this.chatHistoryService.appendMessage(
-        dbConversationId ?? '',
-        'assistant',
-        createReply,
-      );
-
-      void this.memoryPersistenceService
-        .writeExtractedMemoriesIfAny(sessionId, message)
-        .catch((e) => {
-          console.log('background memory write failed:', e);
-        });
-      return {
-        reply: createReply,
-        conversationId: dbConversationId ?? undefined,
-      };
-    }
-
-    if (
-      envelope &&
-      (envelope.intent === 'calendar_update' ||
-        envelope.intent === 'calendar_delete')
-    ) {
-      const mutReply =
-        await this.toolOrchestrator.handleCalendarMutationIntent(
-          sessionId,
-          message,
-          envelope,
-        );
-      await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
-      await this.chatHistoryService.appendMessage(
-        dbConversationId ?? '',
-        'assistant',
-        mutReply,
-      );
-
-      void this.memoryPersistenceService
-        .writeExtractedMemoriesIfAny(sessionId, message)
-        .catch((e) => {
-          console.log('background memory write failed:', e);
-        });
-      return {
-        reply: mutReply,
-        conversationId: dbConversationId ?? undefined,
-      };
-    }
-
-    if (envelope?.intent === 'email_draft' && !this.pendingRequestService.getPending(sessionId, 'email_send')) {
-      const draftReply = await this.toolOrchestrator.handleEmailDraftIntent(
-        sessionId,
-        message,
-        envelope,
-      );
-      await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
-      await this.chatHistoryService.appendMessage(
-        dbConversationId ?? '',
-        'assistant',
-        draftReply,
-      );
-
-      void this.memoryPersistenceService
-        .writeExtractedMemoriesIfAny(sessionId, message)
-        .catch((e) => {
-          console.log('background memory write failed:', e);
-        });
-      return {
-        reply: draftReply,
-        conversationId: dbConversationId ?? undefined,
-      };
     }
 
     const shouldTreatAsFollowUpAnswer =
       envelope?.intent === 'clarify' &&
       this.isLikelyFollowUpAnswer(message, priorTurns);
 
-    if (envelope && (envelope.intent === 'clarify' || isLowConfidenceIntent) && !shouldTreatAsFollowUpAnswer) {
-      const clarifyReply =
-        'I did not fully catch that. Could you rephrase what you want me to do? ';
-
-      await this.intentShadowService.maybeLogLlmIntent(shadowLog(envelope));
-      await this.chatHistoryService.appendMessage(
-        dbConversationId ?? '',
-        'assistant',
-        clarifyReply,
-      );
-
-
-      void this.memoryPersistenceService
-        .writeExtractedMemoriesIfAny(sessionId, message)
-        .catch((e) => {
-          console.log('background memory write failed:', e);
-        });
-      return {
-        reply: clarifyReply,
-        conversationId: dbConversationId ?? undefined,
-      };
+    if (toolReply === null && envelope && (envelope.intent === 'clarify' || isLowConfidenceIntent) && !shouldTreatAsFollowUpAnswer) {
+      toolReply = 'I did not fully catch that. Could you rephrase what you want me to do? ';
     }
 
-    const toolReply = isChatLikeIntent
-      ? null
-      : await this.toolOrchestrator.tryHandle(sessionId, message, envelope);
+    if (toolReply === null && !isChatLikeIntent) {
+      toolReply = await this.toolOrchestrator.tryHandle(sessionId, message, envelope);
+    }
 
-    await this.intentShadowService.maybeLogLlmIntent(shadowLog(precomputedEnvelope));
-    if (toolReply) {
+    if (toolReply !== null) {
+      await this.intentShadowService.maybeLogLlmIntent(shadowLog(precomputedEnvelope));
       await this.chatHistoryService.appendMessage(
         dbConversationId ?? '',
         'assistant',
@@ -382,11 +303,14 @@ export class ChatService {
         .catch((e) => {
           console.log('background memory write failed:', e);
         });
+
       return {
         reply: toolReply,
         conversationId: dbConversationId ?? undefined,
       };
     }
+
+
 
     const systemBasePrompt =
       'You are Laura, a calm, thoughtful, and practical personal AI assistant. ' +
@@ -422,6 +346,14 @@ export class ChatService {
 
     let systemPrompt = systemBasePrompt;
 
+    const storedLocation =
+      sessionId ? await this.sessionPreferences.getLocation(sessionId) : null;
+
+    if (storedLocation) {
+      systemPrompt +=
+        ` The user's saved location is ${storedLocation}. ` +
+        `When the user refers to their current area (for example "near me", "nearby", "around here", "in town", or similar), treat it as referring to this saved location unless the user specifies a different one.`;
+    }
     // If we have a sessionId, retrieve relevant memory and provide it to the model.
     if (sessionId) {
       const memories = await this.memoryService.searchMemories({

@@ -89,14 +89,51 @@ calendar_create — use consistent camelCase slots:
     → slots: { "titleHint": "Job applications" }
 web_search — use:
 - query: the best search query to answer the user.
-- locationHint: city/state/country if the user provided one.
+- locationHint: location relevant to this request.
+- userLocationHint: only when the user is explicitly telling Laura where they are or asking Laura to remember their location.
 - freshness: "live" | "recent" | "general" when obvious.
+
+Important location rules:
+- locationHint is for the current request only.
+- userLocationHint means "save this as the user's location."
+- Do not set userLocationHint simply because the user is searching for a place.
+
+- If the user specifies a real location, extract that location exactly.
+  Examples:
+  - "Restaurants in Lagos" → "Lagos, Nigeria"
+  - "Coffee shops in Birmingham" → "Birmingham, Alabama"
+
+- If the user refers to their current area using relative phrases, normalize locationHint to "USER_CURRENT_LOCATION".
+  This includes phrases such as:
+  - near me
+  - nearby
+  - around me
+  - in town
+  - close to me
+  - around here
+  - in my area
+  - within 20 miles of me
+  - within a 30 minute drive
+  - any other wording that clearly refers to the user's present location.
+
+- Never return vague phrases such as "near me", "nearby", "in town", or "my area" as locationHint.
+  Instead, return:
+  "locationHint": "USER_CURRENT_LOCATION"
+
+Examples:
+- "Restaurants in Lagos for my friends" → slots: { "query": "restaurants", "locationHint": "Lagos, Nigeria" }
+- "Nice churches in Birmingham" → slots: { "query": "nice churches", "locationHint": "Birmingham, Alabama" }
+- "I live in Birmingham, Alabama" → slots: { "userLocationHint": "Birmingham, Alabama" }
+- "I'm in Atlanta this weekend" → slots: { "userLocationHint": "Atlanta" }
+- "Use Birmingham as my location" → slots: { "userLocationHint": "Birmingham, Alabama" }
+- "Good restaurants in town" → slots: { "query": "good restaurants", "locationHint": "USER_CURRENT_LOCATION" }
 
 Other tool slots:
 - set_timezone: slots.timeZone as IANA (e.g. "America/Chicago").
 - Pending pick prompts: slots.selectedIndex as 1-based number.
 - pending_confirm: confirm-style replies for non-email pending actions.
 - calendar_create: slots must use camelCase only: titleHint, startTime, endTime, roughTimeHint, dayOffset.
+- For any intent, use slots.locationHint for a location relevant to the current request, and slots.userLocationHint only when the user clearly states their own location.
 
 Intent classification prompt version: ${INTENT_CLASSIFICATION_PROMPT_VERSION}
 `.trim();

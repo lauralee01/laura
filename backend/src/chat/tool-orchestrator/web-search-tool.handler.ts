@@ -6,13 +6,7 @@ import { formatToolFailureMessage } from './tool-orchestrator.utils';
 import { SessionPreferencesService } from '../session-preferences.service';
 import type { IntentEnvelope } from '../intent/intent.types';
 
-const vagueLocations = new Set([
-    'in town',
-    'near me',
-    'around me',
-    'my area',
-    'nearby',
-]);
+const USER_CURRENT_LOCATION = 'USER_CURRENT_LOCATION';
 
 function getSearchQuery(message: string, envelope?: IntentEnvelope): string {
     const slots = envelope?.slots ?? {};
@@ -100,24 +94,24 @@ export class WebSearchToolHandler {
                     ? envelope.slots.locationHint.trim()
                     : '';
 
-            const isVagueLocation =
-                rawLocationHint &&
-                vagueLocations.has(rawLocationHint.toLowerCase());
-
             const storedLocation = await this.sessionPreferences.getLocation?.(sessionId);
-            if (isVagueLocation && !storedLocation) {
-                return 'Which town or city should I use for this search?';
+
+            console.log({
+                "logs": true,
+                rawLocationHint,
+                storedLocation,
+                equals: rawLocationHint === USER_CURRENT_LOCATION,
+                missingLocation: !storedLocation,
+            });
+
+            if (rawLocationHint === USER_CURRENT_LOCATION && !storedLocation) {
+                return '__WEB_SEARCH_NEEDS_LOCATION__';
             }
 
-            if (rawLocationHint && !isVagueLocation) {
-                await this.sessionPreferences
-                    .setLocation(sessionId, rawLocationHint)
-                    .catch(() => undefined);
-            }
-
-            const locationHint = isVagueLocation
-                ? storedLocation ?? ''
-                : rawLocationHint || storedLocation || '';
+            const locationHint =
+                rawLocationHint === USER_CURRENT_LOCATION
+                    ? storedLocation ?? ''
+                    : rawLocationHint || '';
 
             const rawQueryWithLocation = locationHint
                 ? `${rawQuery} in ${locationHint}`
