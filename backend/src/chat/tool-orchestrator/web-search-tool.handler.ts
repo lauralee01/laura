@@ -3,7 +3,16 @@ import { DateTime } from 'luxon';
 import { LlmService } from '../../llm/llm.service';
 import { WebSearchService } from 'src/integrations/web-search/web-search.service';
 import { formatToolFailureMessage } from './tool-orchestrator.utils';
+import { SessionPreferencesService } from '../session-preferences.service';
 import type { IntentEnvelope } from '../intent/intent.types';
+
+const vagueLocations = new Set([
+    'in town',
+    'near me',
+    'around me',
+    'my area',
+    'nearby',
+]);
 
 function getSearchQuery(message: string, envelope?: IntentEnvelope): string {
     const slots = envelope?.slots ?? {};
@@ -54,6 +63,7 @@ function buildLiveAwareQuery(input: {
         `Prefer official or highly reliable sources.`,
         `If the query is about sports, include the league/tournament name, match date, teams, and start times if available.`,
         `If the query is about places, include current availability details only if the source supports them.`,
+        `If a location is provided, only return results in that location and ignore other cities or states.`,
     ].join('\n');
 }
 
@@ -74,22 +84,45 @@ export class WebSearchToolHandler {
     constructor(
         private readonly webSearch: WebSearchService,
         private readonly llm: LlmService,
+        private readonly sessionPreferences: SessionPreferencesService,
     ) { }
 
     async handleWebSearchIntent(
+        sessionId: string,
         message: string,
         envelope?: IntentEnvelope,
     ): Promise<string> {
         try {
             const rawQuery = getSearchQuery(message, envelope);
-            const locationHint =
+
+            const rawLocationHint =
                 typeof envelope?.slots?.locationHint === 'string'
                     ? envelope.slots.locationHint.trim()
                     : '';
 
+            const isVagueLocation =
+                rawLocationHint &&
+                vagueLocations.has(rawLocationHint.toLowerCase());
+
+            const storedLocation = await this.sessionPreferences.getLocation?.(sessionId);
+            if (isVagueLocation && !storedLocation) {
+                return 'Which town or city should I use for this search?';
+            }
+
+            if (rawLocationHint && !isVagueLocation) {
+                await this.sessionPreferences
+                    .setLocation(sessionId, rawLocationHint)
+                    .catch(() => undefined);
+            }
+
+            const locationHint = isVagueLocation
+                ? storedLocation ?? ''
+                : rawLocationHint || storedLocation || '';
+
             const rawQueryWithLocation = locationHint
                 ? `${rawQuery} in ${locationHint}`
                 : rawQuery;
+
             const freshness = getFreshness(envelope);
             const timeZone = 'America/Chicago';
 
@@ -123,16 +156,20 @@ export class WebSearchToolHandler {
                 'Do not invent facts, schedules, scores, dates, times, prices, ratings, or availability that are not supported by the sources. ' +
                 'If the sources do not clearly answer the question, say that clearly and explain what you could verify. ' +
                 'For date-sensitive questions, be very careful: only say something is happening today if the sources clearly support today’s date. ' +
+                'If the user provided a location, only include results for that location. ' +
+                'Do not include businesses, events, restaurants, salons, or places from other cities or states. ' +
+                'If the search results are mostly from the wrong location, say you could not verify good local results instead of giving irrelevant results. ' +
                 'Keep the answer concise and useful. ' +
                 'Do not use markdown headings like ### or ##. ' +
                 'Do not use raw markdown tables. ' +
                 'Do not expose URLs inline inside the main answer. ' +
-                'At the end, include a compact source line in this exact style: Sources: Source Title 1; Source Title 2. ' +
+                'At the end, include one plain-text source line only, exactly like this: Sources: Source Title 1; Source Title 2. Do not bold it. Do not add bullets. Do not add URLs. ' +
                 'Do not include more than three source titles.';
 
             const userMessage =
                 `User asked: ${message}\n\n` +
                 `Search query used:\n${query}\n\n` +
+                (locationHint ? `Location constraint: ${locationHint}\n\n` : '') +
                 (search.answer ? `Search answer:\n${search.answer}\n\n` : '') +
                 `Search sources:\n${sources}`;
 

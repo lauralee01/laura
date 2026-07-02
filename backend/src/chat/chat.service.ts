@@ -215,6 +215,7 @@ export class ChatService {
 
     if (envelope?.intent === 'web_search') {
       const reply = await this.toolOrchestrator.handleWebSearchIntent(
+        sessionId,
         message,
         envelope,
       );

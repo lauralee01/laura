@@ -79,10 +79,11 @@ export class ToolOrchestratorService {
   }
 
   handleWebSearchIntent(
+    sessionId: string,
     message: string,
     envelope?: IntentEnvelope,
   ): Promise<string> {
-    return this.webSearchTools.handleWebSearchIntent(message, envelope);
+    return this.webSearchTools.handleWebSearchIntent(sessionId, message, envelope);
   }
 
   tryLlmRoutedEmail(

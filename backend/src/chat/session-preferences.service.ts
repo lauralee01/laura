@@ -63,5 +63,43 @@ export class SessionPreferencesService implements OnModuleDestroy {
       [sid, tz],
     );
   }
+
+  async getLocation(sessionId: string): Promise<string | null> {
+    const sid = (sessionId ?? '').trim();
+    if (!sid) return null;
+
+    const res = await this.pool.query<{ location: string | null }>(
+      `
+    SELECT location
+    FROM session_preferences
+    WHERE session_id = $1
+    LIMIT 1;
+    `,
+      [sid],
+    );
+
+    return res.rows[0]?.location ?? null;
+  }
+
+  async setLocation(sessionId: string, location: string): Promise<void> {
+    const sid = (sessionId ?? '').trim();
+    if (!sid) return;
+
+    const loc = (location ?? '').trim();
+    if (!loc) {
+      throw new BadRequestException('location must not be empty');
+    }
+
+    await this.pool.query(
+      `
+    INSERT INTO session_preferences (session_id, location)
+    VALUES ($1, $2)
+    ON CONFLICT (session_id)
+    DO UPDATE SET location = EXCLUDED.location, updated_at = now();
+    `,
+      [sid, loc],
+    );
+  }
 }
+
 
