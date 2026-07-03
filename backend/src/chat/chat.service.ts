@@ -12,6 +12,7 @@ import {
   IntentRouterService,
   type IntentEnvelope,
 } from './intent';
+import { GoogleOAuthService } from '../integrations/google/google-oauth.service';
 
 type ChatReply = {
   reply: string;
@@ -30,6 +31,7 @@ export class ChatService {
     private readonly sessionPreferences: SessionPreferencesService,
     private readonly intentShadowService: IntentShadowService,
     private readonly intentRouter: IntentRouterService,
+    private readonly googleOAuthService: GoogleOAuthService,
   ) { }
 
   private getLastAssistantTurn(history?: LlmChatTurn[]): LlmChatTurn | undefined {
@@ -190,7 +192,26 @@ export class ChatService {
     let toolReply: string | null = null;
     const isEmailSendPending = this.pendingRequestService.getPending(sessionId, 'email_send');
 
-    if (isEmailSendPending) {
+    const isGoogleIntent =
+      envelope?.intent === 'calendar_list' ||
+      envelope?.intent === 'calendar_create' ||
+      envelope?.intent === 'calendar_update' ||
+      envelope?.intent === 'calendar_delete' ||
+      envelope?.intent === 'email_draft';
+
+    if (isGoogleIntent && sessionId && toolReply === null) {
+      const isConnected = await this.googleOAuthService.isConnected(sessionId);
+      if (!isConnected) {
+        const action = envelope?.intent === 'email_draft' ? 'create the Gmail draft' : 'access Google Calendar';
+        toolReply = `I couldn't ${action}. Google is not connected for this session. Use 'Connect Google' in the app, then try again.`;
+        
+        if (envelope?.intent === 'email_draft') {
+          this.pendingRequestService.clearPending(sessionId, 'email_draft');
+        }
+      }
+    }
+
+    if (isEmailSendPending && toolReply === null) {
       if (envelope) {
         toolReply = await this.toolOrchestrator.tryLlmRoutedEmail(
           sessionId,

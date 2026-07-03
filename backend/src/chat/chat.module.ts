@@ -18,9 +18,10 @@ import { ChatHistoryService } from './chat-history.service';
 import { SessionPreferencesService } from './session-preferences.service';
 import { PendingRequestService } from './pending-request.service';
 import { IntentRouterService, IntentShadowService } from './intent';
+import { GoogleOAuthModule } from '../integrations/google/google-oauth.module';
 
 @Module({
-  imports: [LlmModule, MemoryModule, EmailModule, CalendarModule, WebSearchModule],
+  imports: [LlmModule, MemoryModule, EmailModule, CalendarModule, WebSearchModule, GoogleOAuthModule],
   controllers: [ChatController],
   providers: [
     ChatService,
