@@ -204,7 +204,7 @@ export class ChatService {
       if (!isConnected) {
         const action = envelope?.intent === 'email_draft' ? 'create the Gmail draft' : 'access Google Calendar';
         toolReply = `I couldn't ${action}. Google is not connected for this session. Use 'Connect Google' in the app, then try again.`;
-        
+
         if (envelope?.intent === 'email_draft') {
           this.pendingRequestService.clearPending(sessionId, 'email_draft');
         }
@@ -332,7 +332,6 @@ export class ChatService {
     }
 
 
-
     const systemBasePrompt =
       'You are Laura, a calm, thoughtful, and practical personal AI assistant. ' +
       'Your goal is to help users manage their life more effortlessly by organizing information, planning tasks, managing calendars, drafting and sending emails (when authorized), remembering important details, answering everyday questions, discovering places to visit, and helping users stay organized and productive. ' +
@@ -365,17 +364,17 @@ export class ChatService {
 
       'Above all, your goal is to make users feel organized, supported, understood, and confident that they have a capable personal assistant helping them.';
 
-    let systemPrompt = systemBasePrompt;
+    let extraContext = '';
 
     const storedLocation =
       sessionId ? await this.sessionPreferences.getLocation(sessionId) : null;
 
     if (storedLocation) {
-      systemPrompt +=
-        ` The user's saved location is ${storedLocation}. ` +
-        `When the user refers to their current area (for example "near me", "nearby", "around here", "in town", or similar), treat it as referring to this saved location unless the user specifies a different one.`;
+      extraContext +=
+        `\n\nThe user's saved location is ${storedLocation}. ` +
+        `When the user refers to their current area, for example "near me", "nearby", "around here", "in town", or similar, treat it as referring to this saved location unless the user specifies a different one.`;
     }
-    // If we have a sessionId, retrieve relevant memory and provide it to the model.
+
     if (sessionId) {
       const memories = await this.memoryService.searchMemories({
         userId: sessionId,
@@ -384,22 +383,18 @@ export class ChatService {
       });
 
       if (memories.length > 0) {
+        console.log('memories', memories)
         const memoryContext = memories.map((m) => `- ${m.content}`).join('\n');
 
-        systemPrompt =
-          systemBasePrompt +
-          '\n\nUser session preferences / facts (use as hard constraints):\n' +
+        extraContext +=
+          '\n\nUser session preferences / facts:\n' +
           memoryContext +
-          '\n\nWhen generating your reply, follow these constraints exactly. ' +
-          'If a requested detail conflicts with a constraint, ask a clarifying question.';
-      } else {
-        systemPrompt =
-          systemBasePrompt +
-          '\n\nNo relevant memories found for this session. Proceed normally.';
+          '\n\nWhen generating your reply, use these facts naturally when relevant. ' +
+          'If a requested detail conflicts with a known user preference or fact, ask a clarifying question.';
       }
     }
 
-    // Phase 1 (user-visible): generate the reply using retrieved memory context.
+    const systemPrompt = systemBasePrompt + extraContext;
 
     const reply = await this.llmService.generate({
       systemPrompt,
