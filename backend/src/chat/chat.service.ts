@@ -383,7 +383,6 @@ export class ChatService {
       });
 
       if (memories.length > 0) {
-        console.log('memories', memories)
         const memoryContext = memories.map((m) => `- ${m.content}`).join('\n');
 
         extraContext +=
