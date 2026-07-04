@@ -112,14 +112,31 @@ export class WebSearchToolHandler {
             const freshness = getFreshness(envelope);
             const timeZone = 'America/Chicago';
 
-            const query = buildLiveAwareQuery({
+            // const query = buildLiveAwareQuery({
+            //     message,
+            //     query: rawQueryWithLocation,
+            //     freshness,
+            //     timeZone,
+            // });
+
+            // const search = await this.webSearch.search(query, {
+            //     searchDepth:
+            //         freshness === 'live' || freshness === 'recent'
+            //             ? 'advanced'
+            //             : 'basic',
+            //     maxResults: 5,
+            // });
+
+            const searchQuery = rawQueryWithLocation;
+
+            const contextForAnswer = buildLiveAwareQuery({
                 message,
                 query: rawQueryWithLocation,
                 freshness,
                 timeZone,
             });
 
-            const search = await this.webSearch.search(query, {
+            const search = await this.webSearch.search(searchQuery, {
                 searchDepth:
                     freshness === 'live' || freshness === 'recent'
                         ? 'advanced'
@@ -158,7 +175,8 @@ export class WebSearchToolHandler {
                 'Never place URLs anywhere else in the answer.';
             const userMessage =
                 `User asked: ${message}\n\n` +
-                `Search query used:\n${query}\n\n` +
+                `Search query used:\n${searchQuery}\n\n` +
+                `Answering instructions:\n${contextForAnswer}\n\n` +
                 (locationHint ? `Location constraint: ${locationHint}\n\n` : '') +
                 (search.answer ? `Search answer:\n${search.answer}\n\n` : '') +
                 `Search sources:\n${sources}`;
