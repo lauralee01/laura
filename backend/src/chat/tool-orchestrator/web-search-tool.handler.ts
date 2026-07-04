@@ -96,14 +96,6 @@ export class WebSearchToolHandler {
 
             const storedLocation = await this.sessionPreferences.getLocation?.(sessionId);
 
-            console.log({
-                "logs": true,
-                rawLocationHint,
-                storedLocation,
-                equals: rawLocationHint === USER_CURRENT_LOCATION,
-                missingLocation: !storedLocation,
-            });
-
             if (rawLocationHint === USER_CURRENT_LOCATION && !storedLocation) {
                 return '__WEB_SEARCH_NEEDS_LOCATION__';
             }
@@ -157,9 +149,13 @@ export class WebSearchToolHandler {
                 'Do not use markdown headings like ### or ##. ' +
                 'Do not use raw markdown tables. ' +
                 'Do not expose URLs inline inside the main answer. ' +
-                'At the end, include one plain-text source line only, exactly like this: Sources: Source Title 1; Source Title 2. Do not bold it. Do not add bullets. Do not add URLs. ' +
-                'Do not include more than three source titles.';
-
+                'After answering the question, include a Sources section. ' +
+                'Use Markdown links for every source. ' +
+                'Example:\n' +
+                'Sources: [Wikipedia](https://example.com); [BBC](https://example.com)\n' +
+                'Only use URLs that appear in the provided search results. ' +
+                'Never invent URLs or change them. ' +
+                'Never place URLs anywhere else in the answer.';
             const userMessage =
                 `User asked: ${message}\n\n` +
                 `Search query used:\n${query}\n\n` +
