@@ -18,7 +18,7 @@ export class GoogleOAuthService {
     private readonly persistence: GoogleOAuthPersistenceService,
     private readonly credentials: GoogleOAuthCredentialsService,
     private readonly flow: GoogleOAuthFlowService,
-  ) {}
+  ) { }
 
   async getCredentialsForSession(
     sessionId: string,
@@ -27,7 +27,10 @@ export class GoogleOAuthService {
   }
 
   async isConnected(sessionId: string): Promise<boolean> {
-    const tokens = await this.getCredentialsForSession(sessionId);
+    const sid = sessionId.trim();
+    if (!sid) return false;
+    const tokens = await this.getCredentialsForSession(sid);
+
     return tokens !== null;
   }
 

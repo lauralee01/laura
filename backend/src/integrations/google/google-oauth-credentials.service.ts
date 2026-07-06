@@ -23,7 +23,7 @@ export class GoogleOAuthCredentialsService {
   constructor(
     private readonly config: GoogleOAuthConfigService,
     private readonly persistence: GoogleOAuthPersistenceService,
-  ) {}
+  ) { }
 
   async getOAuth2ClientForSession(sessionId: string): Promise<OAuth2Client> {
     this.config.assertConfigured();
@@ -78,11 +78,32 @@ export class GoogleOAuthCredentialsService {
 
     const { clientId, clientSecret } = this.config.getClientSecrets();
 
-    const tokens = await exchangeRefreshTokenForAccess(this.logger, {
-      refreshToken: creds.refreshToken,
-      clientId,
-      clientSecret,
-    });
+    let tokens;
+
+    try {
+      tokens = await exchangeRefreshTokenForAccess(this.logger, {
+        refreshToken: creds.refreshToken,
+        clientId,
+        clientSecret,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const normalizedMessage = message.toLowerCase();
+
+      if (
+        normalizedMessage.includes('invalid_grant') ||
+        normalizedMessage.includes('expired or revoked') ||
+        normalizedMessage.includes('token has been expired')
+      ) {
+        await this.persistence.deleteCredentials(sessionId);
+
+        throw new BadRequestException(
+          'Your Google connection expired. Please connect Google again.',
+        );
+      }
+
+      throw err;
+    }
     await this.persistence.upsertTokens(sessionId, tokens);
 
     const next = await this.persistence.loadCredentials(sessionId);

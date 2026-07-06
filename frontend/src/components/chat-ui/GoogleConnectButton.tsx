@@ -50,6 +50,24 @@ export function GoogleConnectButton({
     };
   }, [refresh]);
 
+  useEffect(() => {
+    const onGoogleConnectionChanged = () => {
+      refresh();
+    };
+
+    window.addEventListener(
+      'google-connection-changed',
+      onGoogleConnectionChanged,
+    );
+
+    return () => {
+      window.removeEventListener(
+        'google-connection-changed',
+        onGoogleConnectionChanged,
+      );
+    };
+  }, [refresh]);
+
   const onConnect = useCallback(async () => {
     if (!sessionReady || busy) {
       return;

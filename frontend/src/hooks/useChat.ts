@@ -18,6 +18,17 @@ import {
 } from '@/lib/chat-api';
 import { ensureSession, type StoredChatMessage } from '@/lib/session';
 
+function shouldRefreshGoogleStatus(reply: string): boolean {
+  const lower = reply.toLowerCase();
+
+  return (
+    lower.includes('connect google again') ||
+    lower.includes('google session could not be renewed') ||
+    lower.includes('google connection expired') ||
+    lower.includes('google is not connected')
+  );
+}
+
 export function useChat() {
   const [sessionReady, setSessionReady] = useState(false);
   const [conversationId, setConversationId] = useState<string | undefined>();
@@ -40,6 +51,7 @@ export function useChat() {
       // Keep existing list if sidebar refresh fails.
     }
   }, []);
+
 
   useEffect(() => {
     let cancelled = false;
@@ -171,6 +183,11 @@ export function useChat() {
           ...prev,
           { role: 'assistant', content: reply },
         ]);
+
+        if (shouldRefreshGoogleStatus(reply)) {
+          console.log('Dispatching google-connection-changed');
+          window.dispatchEvent(new Event('google-connection-changed'));
+        }
 
         void reloadSidebar();
       } catch (err) {

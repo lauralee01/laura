@@ -134,4 +134,19 @@ export class GoogleOAuthPersistenceService implements OnModuleDestroy {
     );
     return st.rows[0]?.session_id ?? null;
   }
+
+  async deleteCredentials(sessionId: string): Promise<void> {
+    const sid = sessionId.trim();
+    if (!sid) return;
+
+    await this.pool.query(
+      `
+    DELETE FROM google_oauth_tokens
+    WHERE session_id = $1
+    `,
+      [sid],
+    );
+
+    this.logger.log(`[OAuth] deleted Google credentials for session`);
+  }
 }
