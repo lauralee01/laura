@@ -40,6 +40,7 @@ export async function fetchMergedEventsFromAllCalendars(
   const calendarIds = await fetchAllCalendarIds(calendar);
   debugCalendarLog('[calendar.listEvents] calendars', {
     count: calendarIds.length,
+    calendarIds,
   });
 
   const all: SortableCalendarEvent[] = [];
@@ -60,6 +61,18 @@ export async function fetchMergedEventsFromAllCalendars(
       });
 
       const items = data.items ?? [];
+      console.log(
+        `[Calendar] ${calendarId} returned ${items.length} event(s)`
+      );
+
+      for (const event of items) {
+        console.log({
+          calendarId,
+          summary: event.summary,
+          start: event.start,
+          end: event.end,
+        });
+      }
       debugCalendarLog('[calendar.listEvents] page', {
         calendarId,
         nextPageTokenPresent: !!data.nextPageToken,

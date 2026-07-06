@@ -25,7 +25,7 @@ export type {
 
 @Injectable()
 export class CalendarService {
-  constructor(private readonly googleOAuth: GoogleOAuthService) {}
+  constructor(private readonly googleOAuth: GoogleOAuthService) { }
 
   /**
    * Creates an event on the user’s **primary** Google calendar.
@@ -130,6 +130,14 @@ export class CalendarService {
 
     const auth = await this.googleOAuth.getOAuth2ClientForSession(sessionId);
     const calendar = google.calendar({ version: 'v3', auth });
+
+    console.log('[CalendarService] listEvents', {
+      timeZone: input.timeZone,
+      localStart: input.start,
+      localEnd: input.end,
+      utcStart: startUtcIso,
+      utcEnd: endUtcIso,
+    });
 
     return fetchMergedEventsFromAllCalendars(calendar, {
       timeZone: input.timeZone.trim(),
