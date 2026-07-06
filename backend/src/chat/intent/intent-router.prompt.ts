@@ -67,12 +67,62 @@ Confidence guidance:
 Slots guidance (important for tool execution):
 
 calendar_list — use mode + offsets so the server can build the right time range:
+- Use calendar_list when the user explicitly wants to view, check, review, summarize, or understand their calendar, schedule, agenda, events, meetings, appointments, availability, or what they have planned.
+
+- Also use calendar_list for natural schedule-review phrases, even if the word "calendar" is not mentioned:
+  Examples:
+  - "How's my week looking?"
+  - "How's the week looking?"
+  - "What does my week look like?"
+  - "What's my week looking like?"
+  - "How's my day looking?"
+  - "What does tomorrow look like?"
+  - "Do I have anything going on this week?"
+  - "What do I have planned today?"
+  - "Am I free this afternoon?"
+  - "What's my schedule like this week?"
+
+- Do not classify broad planning/advice requests as calendar_list unless the user is asking to check their actual schedule/calendar.
+  Examples that are NOT calendar_list:
+  - "Help me plan my week" → general_chat
+  - "Make me a weekly routine" → general_chat
+  - "Suggest a productive schedule" → general_chat
+  - "What should I do this weekend?" → general_chat or web_search if current/local info is needed
+
 - Single calendar day → always use mode "day" and dayOffset (integer; 0 = today in the user's zone, 1 = tomorrow, -1 = yesterday).
-  Examples (intent is always calendar_list; slots must include mode and dayOffset):
+  Examples:
   - "What's on my calendar today?" → slots: { "mode": "day", "dayOffset": 0 }
   - "What's on my calendar tomorrow?" → slots: { "mode": "day", "dayOffset": 1 }
-- "Today / tomorrow" or "today and tomorrow" in one message means two calendar days → use mode "next_days" and spanDays 2 (one window from start of today through end of tomorrow). Do not use mode "day" with dayOffset 0 for that; that would only list today.
-- Broader asks: mode "week" | "month" | "year" with weekOffset / monthOffset / yearOffset as needed; mode "upcoming" for generic "what's next" / next events with no specific day (optional maxEvents, default mentally 10); mode "past" for recent history.
+  - "How's today looking?" → slots: { "mode": "day", "dayOffset": 0 }
+  - "What does tomorrow look like?" → slots: { "mode": "day", "dayOffset": 1 }
+
+- "Today / tomorrow" or "today and tomorrow" in one message means two calendar days → use mode "next_days" and spanDays 2.
+  Example:
+  - "What do I have today and tomorrow?" → slots: { "mode": "next_days", "spanDays": 2 }
+
+- Week-style schedule-review requests should use mode "week" unless the user clearly asks for only upcoming events.
+  Examples:
+  - "How's my week looking?" → slots: { "mode": "week", "weekOffset": 0 }
+  - "How's the week looking?" → slots: { "mode": "week", "weekOffset": 0 }
+  - "What does my week look like?" → slots: { "mode": "week", "weekOffset": 0 }
+  - "What's my schedule like this week?" → slots: { "mode": "week", "weekOffset": 0 }
+  - "How's next week looking?" → slots: { "mode": "week", "weekOffset": 1 }
+
+- Broader asks: mode "week" | "month" | "year" with weekOffset / monthOffset / yearOffset as needed.
+  Examples:
+  - "What's on my calendar this month?" → slots: { "mode": "month", "monthOffset": 0 }
+  - "What does next month look like?" → slots: { "mode": "month", "monthOffset": 1 }
+
+- Use mode "upcoming" for generic next-event requests with no specific day/week/month.
+  Examples:
+  - "What's next on my calendar?" → slots: { "mode": "upcoming", "maxEvents": 10 }
+  - "What are my next events?" → slots: { "mode": "upcoming", "maxEvents": 10 }
+
+- Use mode "past" for recent history.
+  Example:
+  - "What meetings did I have yesterday?" → slots: { "mode": "day", "dayOffset": -1 }
+  - "What did I have on my calendar last week?" → slots: { "mode": "week", "weekOffset": -1 }
+
 - Optional: timeZone (IANA) if the user named one; weekOffset, monthOffset, yearOffset, maxEvents, spanDays where applicable.
 calendar_create — use consistent camelCase slots:
 - Use titleHint for the event title.

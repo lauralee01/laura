@@ -150,6 +150,12 @@ export class ChatService {
     }
 
     const envelope = precomputedEnvelope;
+    console.log('[intent-classify-local]', {
+      sessionId,
+      message,
+      envelope,
+      routingClassifyFailed,
+    });
     const minToolConfidence =
       this.intentRouter.getToolRoutingMinConfidence();
     const isLowConfidenceIntent =

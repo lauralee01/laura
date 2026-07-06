@@ -28,6 +28,16 @@ type GeminiGenerateResponse = {
   }>;
 };
 
+class GeminiApiError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly detail: string,
+    public readonly model: string,
+  ) {
+    super(`Gemini API failed for ${model} with status ${status}`);
+  }
+}
+
 @Injectable()
 export class LlmService {
   private readonly retryableStatuses = new Set([429, 500, 502, 503, 504]);
@@ -98,16 +108,11 @@ export class LlmService {
     );
   }
 
-  private async generateWithGemini(
+  private async generateWithGeminiModel(
     apiKey: string,
     input: GenerateInput,
+    model: string,
   ): Promise<string> {
-    const model = process.env.GEMINI_MODEL?.trim();
-
-    if (!model) {
-      throw new Error('GEMINI_MODEL is missing (set backend/.env)');
-    }
-
     const url =
       'https://generativelanguage.googleapis.com/v1beta/models/' +
       encodeURIComponent(model) +
@@ -115,19 +120,12 @@ export class LlmService {
       encodeURIComponent(apiKey);
 
     const payload = {
-      // System rules + memory context live here (not repeated every turn).
       systemInstruction: {
         parts: [{ text: input.systemPrompt }],
       },
-
-      // Conversation so far + the latest user message as the final user turn.
       contents: this.buildGeminiContents(input),
-
       generationConfig: {
-        // How creative the model is.
         temperature: 0.4,
-
-        // Max number of tokens to generate.
         maxOutputTokens: 2000,
       },
     };
@@ -167,12 +165,13 @@ export class LlmService {
           return 'I realize I need a tool to answer that, but I don’t have access to the internet or real-time data like the weather. How else can I help?';
         }
 
-        console.error('Gemini API empty reply or block. Response:', JSON.stringify(json, null, 2));
+        console.error(
+          'Gemini API empty reply or block. Response:',
+          JSON.stringify(json, null, 2),
+        );
 
         if (blockReason || finishReason) {
-          return (
-            'I couldn’t produce a reply just now. Try rephrasing your message or sending a shorter version.'
-          );
+          return 'I couldn’t produce a reply just now. Try rephrasing your message or sending a shorter version.';
         }
 
         return 'I didn’t get any text back from the model. Please try again in a moment.';
@@ -189,11 +188,60 @@ export class LlmService {
       break;
     }
 
-    console.error(
-      `Gemini API error after retries (${lastStatus}). ${lastErrorText ? 'Details: ' + lastErrorText : ''
-      }`,
-    );
+    throw new GeminiApiError(lastStatus, lastErrorText, model);
+  }
 
-    return this.getFriendlyGeminiError(lastStatus);
+  private async generateWithGemini(
+    apiKey: string,
+    input: GenerateInput,
+  ): Promise<string> {
+    const primaryModel = process.env.GEMINI_MODEL?.trim();
+
+    if (!primaryModel) {
+      throw new Error('GEMINI_MODEL is missing (set backend/.env)');
+    }
+
+    const fallbackModel = process.env.GEMINI_FALLBACK_MODEL?.trim();
+
+    try {
+      return await this.generateWithGeminiModel(apiKey, input, primaryModel);
+    } catch (err) {
+      if (!(err instanceof GeminiApiError)) {
+        throw err;
+      }
+
+      const canFallback =
+        fallbackModel &&
+        fallbackModel !== primaryModel &&
+        this.isRetryableStatus(err.status);
+
+      if (!canFallback) {
+        console.error(
+          `Gemini API error after retries (${err.status}) on ${err.model}. ${err.detail ? 'Details: ' + err.detail : ''
+          }`,
+        );
+
+        return this.getFriendlyGeminiError(err.status);
+      }
+
+      console.warn(
+        `Gemini primary model failed (${err.status}) on ${primaryModel}. Trying fallback model ${fallbackModel}.`,
+      );
+
+      try {
+        return await this.generateWithGeminiModel(apiKey, input, fallbackModel);
+      } catch (fallbackErr) {
+        if (fallbackErr instanceof GeminiApiError) {
+          console.error(
+            `Gemini fallback model also failed (${fallbackErr.status}) on ${fallbackErr.model}. ${fallbackErr.detail ? 'Details: ' + fallbackErr.detail : ''
+            }`,
+          );
+
+          return this.getFriendlyGeminiError(fallbackErr.status);
+        }
+
+        throw fallbackErr;
+      }
+    }
   }
 }
