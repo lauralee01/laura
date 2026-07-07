@@ -26,3 +26,22 @@ export async function ensureSession(): Promise<void> {
     throw new Error(`Session bootstrap failed (${res.status})`);
   }
 }
+
+/**
+ * Syncs the browser timezone with the server. This should be called after `ensureSession`.
+ */
+export async function syncBrowserTimeZone(): Promise<void> {
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  console.log(`Browser timezone: ${timeZone}`);
+
+  if (!timeZone) return;
+
+  await fetch(`${getApiBaseUrl()}/session`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ timeZone }),
+  });
+}

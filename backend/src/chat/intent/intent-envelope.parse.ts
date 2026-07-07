@@ -17,6 +17,7 @@ function normalizeClassifierRawText(raw: string): string {
   if (fenced?.[1]) {
     return fenced[1].trim();
   }
+
   t = t.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '');
   return t.trim();
 }

@@ -32,7 +32,7 @@ function buildClassifierUserMessage(c: IntentClassificationContext): string {
 /** Stage-1: LLM → structured {@link IntentEnvelope} used by ChatService routing/fallback logic. */
 @Injectable()
 export class IntentRouterService {
-  constructor(private readonly llm: LlmService) {}
+  constructor(private readonly llm: LlmService) { }
 
   /**
    * Minimum confidence required to run tool orchestration from Stage-1 intent.

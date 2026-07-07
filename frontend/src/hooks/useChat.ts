@@ -16,7 +16,7 @@ import {
   sendChatMessage,
   type ConversationSummary,
 } from '@/lib/chat-api';
-import { ensureSession, type StoredChatMessage } from '@/lib/session';
+import { ensureSession, type StoredChatMessage, syncBrowserTimeZone } from '@/lib/session';
 
 function shouldRefreshGoogleStatus(reply: string): boolean {
   const lower = reply.toLowerCase();
@@ -62,8 +62,10 @@ export function useChat() {
     setSessionReady(false);
 
     ensureSession()
-      .then(() => {
+      .then(async () => {
         if (cancelled) return null;
+
+        await syncBrowserTimeZone().catch(() => undefined);
 
         setSessionReady(true);
         return Promise.all([fetchConversations(), fetchChatHistory()]);

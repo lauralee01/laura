@@ -1,6 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { SessionPreferencesService } from './chat/session-preferences.service';
 import { ChatModule } from './chat/chat.module';
 import { ConfigModule } from '@nestjs/config';
 import { MemoryModule } from './memory/memory.module';
@@ -23,7 +24,7 @@ import { SessionCookieMiddleware } from './common/session/session-cookie.middlew
     WebSearchModule,
   ],
   controllers: [AppController],
-  providers: [AppService, SessionCookieMiddleware],
+  providers: [AppService, SessionPreferencesService, SessionCookieMiddleware],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
