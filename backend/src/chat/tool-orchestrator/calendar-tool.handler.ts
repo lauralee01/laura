@@ -37,7 +37,7 @@ import type { IntentEnvelope } from '../intent/intent.types';
  * Calendar integrations: list windows, create events, update/delete via search + pending picks.
  * Uses LLM extractors where natural language must become structured times or mutation targets.
  */
-const DEFAULT_TIME_ZONE = 'America/Chicago';
+
 @Injectable()
 export class CalendarToolHandler {
   constructor(
@@ -46,6 +46,27 @@ export class CalendarToolHandler {
     private readonly sessionPreferences: SessionPreferencesService,
     private readonly pendingRequestService: PendingRequestService,
   ) { }
+
+  private async resolveTimeZone(
+    sessionId: string,
+    envelope?: IntentEnvelope,
+  ): Promise<string | null> {
+    const tzCandidate = getSlotTimeZone(envelope);
+
+    if (tzCandidate?.trim()) {
+      const timeZone = tzCandidate.trim();
+
+      await this.sessionPreferences
+        .setTimeZone(sessionId, timeZone)
+        .catch(() => undefined);
+
+      return timeZone;
+    }
+
+    const storedTz = await this.sessionPreferences.getTimeZone(sessionId);
+
+    return storedTz?.trim() || null;
+  }
 
   private formatTimezoneQuestion(): string {
     return (
@@ -90,15 +111,7 @@ export class CalendarToolHandler {
     message: string,
     envelope?: IntentEnvelope,
   ): Promise<string> {
-    const tzCandidate = getSlotTimeZone(envelope);
-    const storedTz = await this.sessionPreferences.getTimeZone(sessionId);
-    const timeZone = tzCandidate ?? storedTz ?? DEFAULT_TIME_ZONE;
-
-    if (tzCandidate) {
-      await this.sessionPreferences.setTimeZone(sessionId, tzCandidate).catch(
-        () => undefined,
-      );
-    }
+    const timeZone = await this.resolveTimeZone(sessionId, envelope);
 
     const mode = getSlotListMode(envelope);
     const weekOffset = getSlotNumber(envelope, 'weekOffset') ?? 0;
@@ -202,15 +215,7 @@ export class CalendarToolHandler {
     message: string,
     envelope?: IntentEnvelope,
   ): Promise<string> {
-    const tzCandidate = getSlotTimeZone(envelope);
-    const storedTz = await this.sessionPreferences.getTimeZone(sessionId);
-    const timeZone = tzCandidate ?? storedTz ?? DEFAULT_TIME_ZONE;
-
-    if (tzCandidate) {
-      await this.sessionPreferences.setTimeZone(sessionId, tzCandidate).catch(
-        () => undefined,
-      );
-    }
+    const timeZone = await this.resolveTimeZone(sessionId, envelope);
 
     if (!timeZone) {
       this.pendingRequestService.setPending<PendingCalendarCreatePayload>(
@@ -297,15 +302,7 @@ export class CalendarToolHandler {
     message: string,
     envelope?: IntentEnvelope,
   ): Promise<string> {
-    const tzCandidate = getSlotTimeZone(envelope);
-    const storedTz = await this.sessionPreferences.getTimeZone(sessionId);
-    const timeZone = tzCandidate ?? storedTz ?? DEFAULT_TIME_ZONE;
-
-    if (tzCandidate) {
-      await this.sessionPreferences.setTimeZone(sessionId, tzCandidate).catch(
-        () => undefined,
-      );
-    }
+    const timeZone = await this.resolveTimeZone(sessionId, envelope);
 
     if (!timeZone) {
       this.pendingRequestService.setPending<PendingCalendarMutateTzPayload>(
