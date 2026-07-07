@@ -372,8 +372,19 @@ export class ChatService {
 
     let extraContext = '';
 
-    const storedLocation =
-      sessionId ? await this.sessionPreferences.getLocation(sessionId) : null;
+    const [storedLocation, storedTimeZone] = sessionId
+      ? await Promise.all([
+        this.sessionPreferences.getLocation(sessionId),
+        this.sessionPreferences.getTimeZone(sessionId),
+      ])
+      : [null, null];
+
+    if (storedTimeZone) {
+      extraContext +=
+        `\n\nThe user's saved timezone is ${storedTimeZone}. ` +
+        `Treat this as the user's default local timezone unless they explicitly tell you they are traveling or using a different timezone. ` +
+        `Use it whenever reasoning about dates, times, schedules, calendar events, reminders, local time, or when the user asks about their timezone.`;
+    }
 
     if (storedLocation) {
       extraContext +=
@@ -400,7 +411,6 @@ export class ChatService {
     }
 
     const systemPrompt = systemBasePrompt + extraContext;
-
     const reply = await this.llmService.generate({
       systemPrompt,
       userMessage: message,
