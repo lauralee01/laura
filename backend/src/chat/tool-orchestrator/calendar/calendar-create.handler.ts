@@ -15,9 +15,9 @@ export class CalendarCreateHandler {
     private readonly calendarService: CalendarService,
     private readonly pendingRequestService: PendingRequestService,
     private readonly timezoneService: CalendarTimezoneService,
-  ) {}
+  ) { }
 
-  formatCalendarCreateSuccess(input: {
+  private formatCalendarCreateSuccess(input: {
     title: string;
     start: string;
     end: string;
@@ -131,8 +131,30 @@ export class CalendarCreateHandler {
         originalMessage,
         timeZone,
       );
-      if (!args) {
-        return `I saved your timezone as ${timeZone}, but I still need a valid start and end time to create the event.`;
+      if (!args || !args.title?.trim() || !args.start?.trim() || !args.end?.trim()) {
+        this.pendingRequestService.setPending<PendingCalendarCreatePayload>(
+          sessionId,
+          {
+            actionType: 'calendar_create',
+            originalMessage,
+            payload: { message: originalMessage },
+            missingSlots: [
+              !args?.title?.trim() ? 'title' : null,
+              !args?.start?.trim() || !args?.end?.trim() ? 'timeRange' : null,
+            ].filter((x): x is 'title' | 'timeRange' => x !== null),
+            collectedSlots: {},
+          },
+        );
+
+        if (!args?.title?.trim()) {
+          return `I saved your timezone as ${timeZone}. What should I call this calendar event?`;
+        }
+
+        return (
+          `I saved your timezone as ${timeZone}. ` +
+          `What time should I block for **${args.title}**?\n\n` +
+          `For example: tomorrow from 5 PM to 7 PM.`
+        );
       }
 
       const event = await this.calendarService.createEvent({
