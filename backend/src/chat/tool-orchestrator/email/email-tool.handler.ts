@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { EmailService } from '../../integrations/email/email.service';
-import { LlmService } from '../../llm/llm.service';
-import { PendingRequestService } from '../pending-request.service';
-import { extractDraftEmailArgs } from './tool-orchestrator-llm-extractors';
-import { formatToolFailureMessage } from './tool-orchestrator.utils';
-import type { IntentEnvelope } from '../intent/intent.types';
-import type { PendingEmailSendPayload } from './tool-orchestrator.types';
-import type { PendingRequest } from '../pending-request.service';
+import { EmailService } from '../../../integrations/email/email.service';
+import { LlmService } from '../../../llm/llm.service';
+import { PendingRequestService } from '../../pending-request.service';
+import { extractDraftEmailArgs } from '../tool-orchestrator-llm-extractors';
+import { formatToolFailureMessage } from '../tool-orchestrator.utils';
+import type { IntentEnvelope } from '../../intent/intent.types';
+import type { PendingEmailSendPayload } from '../tool-orchestrator.types';
+import type { PendingRequest } from '../../pending-request.service';
 
 type PendingEmailDraftPayload = {
   recipients?: string[];

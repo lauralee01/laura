@@ -1,14 +1,14 @@
 import { DateTime } from 'luxon';
-import type { ListCalendarEventSummary } from '../../integrations/calendar/calendar.types';
-import type { CalendarListMode } from './tool-orchestrator.types';
-import { formatCalendarEventLines } from './tool-orchestrator.calendar-format';
+import type { ListCalendarEventSummary } from '../../../integrations/calendar/calendar.types';
+import type { CalendarListMode } from '../tool-orchestrator.types';
+import { formatCalendarEventLines } from './calendar-format';
 import {
   describeDayWindow,
   describeNextDaysSpan,
   formatMonToSunRange,
   formatMonthWindowLabel,
   formatYearWindowLabel,
-} from './tool-orchestrator.calendar-ranges';
+} from './calendar-ranges';
 
 export function buildCalendarListUserMessage(params: {
   mode: CalendarListMode;

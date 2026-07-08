@@ -1,13 +1,15 @@
 import { Injectable } from '@nestjs/common';
-import { CalendarToolHandler } from './calendar-tool.handler';
-import { EmailToolHandler } from './email-tool.handler';
-import { WebSearchToolHandler } from './web-search-tool.handler';
+import { CalendarListHandler } from './calendar/calendar-list.handler';
+import { CalendarCreateHandler } from './calendar/calendar-create.handler';
+import { CalendarMutationHandler } from './calendar/calendar-mutation.handler';
+import { EmailToolHandler } from './email/email-tool.handler';
+import { WebSearchToolHandler } from './web-search/web-search-tool.handler';
 import { ToolPendingFlowService } from './tool-pending-flow.service';
 import type { IntentEnvelope } from '../intent/intent.types';
 
 /**
  * Facade for chat tool actions. Delegates to:
- * - {@link CalendarToolHandler} — list/create/update/delete via Google Calendar + LLM extractors
+ * - CalendarHandlers — list/create/update/delete via Google Calendar + LLM extractors
  * - {@link EmailToolHandler} — Gmail drafts, send, revise while pending
  * - {@link ToolPendingFlowService} — multi-turn pending state and `set_timezone` resumes
  *
@@ -16,7 +18,9 @@ import type { IntentEnvelope } from '../intent/intent.types';
 @Injectable()
 export class ToolOrchestratorService {
   constructor(
-    private readonly calendarTools: CalendarToolHandler,
+    private readonly calendarListHandler: CalendarListHandler,
+    private readonly calendarCreateHandler: CalendarCreateHandler,
+    private readonly calendarMutationHandler: CalendarMutationHandler,
     private readonly emailTools: EmailToolHandler,
     private readonly webSearchTools: WebSearchToolHandler,
     private readonly pendingFlow: ToolPendingFlowService,
@@ -27,7 +31,7 @@ export class ToolOrchestratorService {
     message: string,
     envelope?: IntentEnvelope,
   ): Promise<string> {
-    return this.calendarTools.handleCalendarListIntent(
+    return this.calendarListHandler.handleCalendarListIntent(
       sessionId,
       message,
       envelope,
@@ -39,7 +43,7 @@ export class ToolOrchestratorService {
     message: string,
     envelope?: IntentEnvelope,
   ): Promise<string> {
-    return this.calendarTools.handleCalendarCreateIntent(
+    return this.calendarCreateHandler.handleCalendarCreateIntent(
       sessionId,
       message,
       envelope,
@@ -51,7 +55,7 @@ export class ToolOrchestratorService {
     message: string,
     envelope?: IntentEnvelope,
   ): Promise<string> {
-    return this.calendarTools.handleCalendarMutationIntent(
+    return this.calendarMutationHandler.handleCalendarMutationIntent(
       sessionId,
       message,
       envelope,

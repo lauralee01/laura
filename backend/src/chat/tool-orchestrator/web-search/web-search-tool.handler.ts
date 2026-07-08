@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { DateTime } from 'luxon';
-import { LlmService } from '../../llm/llm.service';
+import { LlmService } from '../../../llm/llm.service';
 import { WebSearchService } from 'src/integrations/web-search/web-search.service';
-import { formatToolFailureMessage } from './tool-orchestrator.utils';
-import { SessionPreferencesService } from '../session-preferences.service';
-import type { IntentEnvelope } from '../intent/intent.types';
+import { formatToolFailureMessage } from '../tool-orchestrator.utils';
+import { SessionPreferencesService } from '../../session-preferences.service';
+import type { IntentEnvelope } from '../../intent/intent.types';
 
 const USER_CURRENT_LOCATION = 'USER_CURRENT_LOCATION';
 

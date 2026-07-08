@@ -1,4 +1,4 @@
-import type { ListCalendarEventSummary } from '../../integrations/calendar/calendar.types';
+import type { ListCalendarEventSummary } from '../../../integrations/calendar/calendar.types';
 
 export function filterEventsForMutation(
   events: ListCalendarEventSummary[],

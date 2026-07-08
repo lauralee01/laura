@@ -7,8 +7,8 @@ import {
   getPastRangeLocal,
   getSingleDayRangeLocal,
   getUpcomingRangeLocal,
-} from './tool-orchestrator.calendar-ranges';
-import type { PendingCalendarListPayload } from './tool-orchestrator.types';
+} from './calendar-ranges';
+import type { PendingCalendarListPayload } from '../tool-orchestrator.types';
 
 /**
  * Maps a stored list payload + “now” in the user’s zone to API [start, end) window strings.

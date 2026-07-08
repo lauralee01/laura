@@ -1,4 +1,4 @@
-import { mergeTimeOnlyUpdateOntoEventDay } from './tool-orchestrator.calendar-update-merge';
+import { mergeTimeOnlyUpdateOntoEventDay } from './calendar-update-merge';
 
 describe('mergeTimeOnlyUpdateOntoEventDay', () => {
   const tz = 'America/Chicago';

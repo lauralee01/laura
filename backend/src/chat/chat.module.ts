@@ -6,9 +6,12 @@ import { MemoryModule } from '../memory/memory.module';
 import { EmailModule } from '../integrations/email/email.module';
 import { CalendarModule } from '../integrations/calendar/calendar.module';
 import { WebSearchModule } from '../integrations/web-search/web-search.module';
-import { WebSearchToolHandler } from './tool-orchestrator/web-search-tool.handler';
+import { WebSearchToolHandler } from './tool-orchestrator/web-search/web-search-tool.handler';
 import {
-  CalendarToolHandler,
+  CalendarTimezoneService,
+  CalendarListHandler,
+  CalendarCreateHandler,
+  CalendarMutationHandler,
   EmailToolHandler,
   ToolOrchestratorService,
   ToolPendingFlowService,
@@ -28,7 +31,10 @@ import { GoogleOAuthModule } from '../integrations/google/google-oauth.module';
     IntentRouterService,
     IntentShadowService,
     WebSearchToolHandler,
-    CalendarToolHandler,
+    CalendarTimezoneService,
+    CalendarListHandler,
+    CalendarCreateHandler,
+    CalendarMutationHandler,
     EmailToolHandler,
     ToolPendingFlowService,
     ToolOrchestratorService,

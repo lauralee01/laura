@@ -2,9 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { CalendarService } from '../../integrations/calendar/calendar.service';
 import { SessionPreferencesService } from '../session-preferences.service';
 import { PendingRequestService } from '../pending-request.service';
-import { CalendarToolHandler } from './calendar-tool.handler';
-import { EmailToolHandler } from './email-tool.handler';
-import { mergeTimeOnlyUpdateOntoEventDay } from './tool-orchestrator.calendar-update-merge';
+import { CalendarListHandler } from './calendar/calendar-list.handler';
+import { CalendarCreateHandler } from './calendar/calendar-create.handler';
+import { CalendarMutationHandler } from './calendar/calendar-mutation.handler';
+import { EmailToolHandler } from './email/email-tool.handler';
+import { mergeTimeOnlyUpdateOntoEventDay } from './calendar/calendar-update-merge';
 import { formatToolFailureMessage } from './tool-orchestrator.utils';
 import {
   getSlotSelectedIndex,
@@ -30,7 +32,9 @@ export class ToolPendingFlowService {
     private readonly calendarService: CalendarService,
     private readonly sessionPreferences: SessionPreferencesService,
     private readonly pendingRequestService: PendingRequestService,
-    private readonly calendarTools: CalendarToolHandler,
+    private readonly calendarListHandler: CalendarListHandler,
+    private readonly calendarCreateHandler: CalendarCreateHandler,
+    private readonly calendarMutationHandler: CalendarMutationHandler,
     private readonly emailTools: EmailToolHandler,
   ) { }
 
@@ -58,7 +62,7 @@ export class ToolPendingFlowService {
         return 'No problem — I won’t add that to your calendar.';
       }
 
-      return this.calendarTools.handleCalendarCreateIntent(
+      return this.calendarCreateHandler.handleCalendarCreateIntent(
         sessionId,
         message,
         envelope,
@@ -110,7 +114,7 @@ export class ToolPendingFlowService {
       }
       if (envelope?.intent === 'pending_confirm') {
         try {
-          await this.calendarTools['calendarService']?.deleteEvent?.(
+          await this.calendarService.deleteEvent(
             sessionId,
             p.calendarId,
             p.eventId,
@@ -200,7 +204,7 @@ export class ToolPendingFlowService {
       );
       if (pending) {
         this.pendingRequestService.clearPending(sessionId, 'calendar_create');
-        return this.calendarTools.completeCreateAfterTimezone(
+        return this.calendarCreateHandler.completeCreateAfterTimezone(
           sessionId,
           tzCandidate,
           pending.payload.message,
@@ -213,7 +217,7 @@ export class ToolPendingFlowService {
       );
       if (pendingList) {
         this.pendingRequestService.clearPending(sessionId, 'calendar_list');
-        return this.calendarTools.completeListAfterTimezone(
+        return this.calendarListHandler.completeListAfterTimezone(
           sessionId,
           tzCandidate,
           pendingList.payload,
@@ -227,7 +231,7 @@ export class ToolPendingFlowService {
         );
       if (pendingMutTz) {
         this.pendingRequestService.clearPending(sessionId, 'calendar_mutate_tz');
-        return this.calendarTools.runCalendarMutation(
+        return this.calendarMutationHandler.runCalendarMutation(
           sessionId,
           pendingMutTz.payload.message,
           tzCandidate,
