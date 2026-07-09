@@ -17,7 +17,7 @@ export class CalendarListHandler {
     private readonly calendarService: CalendarService,
     private readonly pendingRequestService: PendingRequestService,
     private readonly timezoneService: CalendarTimezoneService,
-  ) {}
+  ) { }
 
   async handleCalendarListIntent(
     sessionId: string,
@@ -71,8 +71,6 @@ export class CalendarListHandler {
       const nowLocal = DateTime.now().setZone(timeZone);
       const { startLocal, endLocal } = resolvePendingListRange(
         nowLocal,
-        timeZone,
-        weekOffset,
         pendingListRequest,
       );
 
@@ -132,8 +130,6 @@ export class CalendarListHandler {
       const nowLocal = DateTime.now().setZone(timeZone);
       const { startLocal, endLocal } = resolvePendingListRange(
         nowLocal,
-        timeZone,
-        payload.weekOffset,
         payload,
       );
 

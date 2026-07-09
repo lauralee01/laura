@@ -27,7 +27,7 @@ export class CalendarMutationHandler {
     private readonly calendarService: CalendarService,
     private readonly pendingRequestService: PendingRequestService,
     private readonly timezoneService: CalendarTimezoneService,
-  ) {}
+  ) { }
 
   formatCalendarUpdateSuccess(input: {
     title: string;
@@ -97,7 +97,6 @@ export class CalendarMutationHandler {
     if (extracted.searchWholeWeek) {
       ({ startLocal, endLocal } = getMonToSunRangeLocal(
         nowLocal,
-        timeZone,
         0,
       ));
     } else if (extracted.dayOffset !== null) {
