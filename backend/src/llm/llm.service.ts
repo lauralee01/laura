@@ -133,7 +133,7 @@ export class LlmService {
     let lastStatus = 0;
     let lastErrorText = '';
 
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -180,8 +180,8 @@ export class LlmService {
       lastStatus = res.status;
       lastErrorText = await res.text().catch(() => '');
 
-      if (this.isRetryableStatus(res.status) && attempt < 3) {
-        await this.sleep(attempt * 1000);
+      if (this.isRetryableStatus(res.status) && attempt < 2) {
+        await this.sleep(attempt * 300);
         continue;
       }
 
