@@ -10,9 +10,8 @@ import {
   formatYearWindowLabel,
 } from './calendar-ranges';
 
-export function buildCalendarListUserMessage(params: {
+type CalendarListMessageParams = {
   mode: CalendarListMode;
-  timeZone: string;
   nowLocal: DateTime;
   weekOffset: number;
   dayOffset: number;
@@ -21,7 +20,11 @@ export function buildCalendarListUserMessage(params: {
   spanDays?: number;
   maxEventsDefault: number;
   events: ListCalendarEventSummary[];
-}): string {
+};
+
+function getWindowLabel(
+  params: CalendarListMessageParams,
+): string | null {
   const {
     mode,
     nowLocal,
@@ -29,19 +32,92 @@ export function buildCalendarListUserMessage(params: {
     dayOffset,
     monthOffset,
     yearOffset,
-    spanDays: spanDaysParam,
-    maxEventsDefault,
-    events,
+    spanDays = 2,
   } = params;
 
-  const spanDays = spanDaysParam ?? 2;
+  switch (mode) {
+    case 'week':
+      return formatMonToSunRange(nowLocal, weekOffset);
+
+    case 'month':
+      return formatMonthWindowLabel(nowLocal, monthOffset);
+
+    case 'year':
+      return formatYearWindowLabel(nowLocal, yearOffset);
+
+    case 'day':
+      return describeDayWindow(nowLocal, dayOffset);
+
+    case 'next_days':
+      return describeNextDaysSpan(spanDays);
+
+    default:
+      return null;
+  }
+}
+
+function getEmptyCalendarMessage(
+  params: CalendarListMessageParams,
+): string {
+  const {
+    mode,
+    nowLocal,
+    weekOffset,
+    dayOffset,
+    monthOffset,
+    yearOffset,
+    spanDays = 2,
+  } = params;
+
+  switch (mode) {
+    case 'past':
+      return 'I don’t see any recent past events on your calendar.';
+
+    case 'week':
+      if (weekOffset === 0) return 'Your calendar is clear this week.';
+      if (weekOffset === 1) return 'Your calendar is clear next week.';
+      return 'I don’t see any events for that week.';
+
+    case 'month':
+      return `I don’t see any events for ${formatMonthWindowLabel(
+        nowLocal,
+        monthOffset,
+      )}.`;
+
+    case 'year':
+      return `I don’t see any events for ${formatYearWindowLabel(
+        nowLocal,
+        yearOffset,
+      )}.`;
+
+    case 'day':
+      if (dayOffset === 0) return 'Your calendar is clear today.';
+      if (dayOffset === 1) return 'Your calendar is clear tomorrow.';
+
+      return `I don’t see any events for ${describeDayWindow(
+        nowLocal,
+        dayOffset,
+      )}.`;
+
+    case 'next_days':
+      return `I don’t see any events for ${describeNextDaysSpan(spanDays)}.`;
+
+    case 'upcoming':
+    default:
+      return 'I don’t see any upcoming events on your calendar.';
+  }
+}
+
+export function buildCalendarListUserMessage(
+  params: CalendarListMessageParams,
+): string {
+  const { mode, maxEventsDefault, events } = params;
 
   if (mode === 'past') {
-    const max = maxEventsDefault;
-    const recent = events.slice(-max).reverse();
+    const recent = events.slice(-maxEventsDefault).reverse();
 
     if (recent.length === 0) {
-      return 'I don’t see any recent past events on your calendar.';
+      return getEmptyCalendarMessage(params);
     }
 
     return (
@@ -51,66 +127,15 @@ export function buildCalendarListUserMessage(params: {
   }
 
   if (events.length === 0) {
-    if (mode === 'week') {
-      return weekOffset === 1
-        ? 'Your calendar is clear next week.'
-        : weekOffset === 0
-          ? 'Your calendar is clear this week.'
-          : 'I don’t see any events for that week.';
-    }
-
-    if (mode === 'month') {
-      const label = formatMonthWindowLabel(nowLocal, monthOffset);
-      return `I don’t see any events for ${label}.`;
-    }
-
-    if (mode === 'year') {
-      const label = formatYearWindowLabel(nowLocal, yearOffset);
-      return `I don’t see any events for ${label}.`;
-    }
-
-    if (mode === 'day') {
-      return dayOffset === 0
-        ? 'Your calendar is clear today.'
-        : dayOffset === 1
-          ? 'Your calendar is clear tomorrow.'
-          : `I don’t see any events for ${describeDayWindow(nowLocal, dayOffset)}.`;
-    }
-
-    if (mode === 'next_days') {
-      return `I don’t see any events for ${describeNextDaysSpan(spanDays)}.`;
-    }
-
-    return 'I don’t see any upcoming events on your calendar.';
+    return getEmptyCalendarMessage(params);
   }
 
-  if (mode === 'week') {
-    const range = formatMonToSunRange(nowLocal, weekOffset);
-    return `Here are your events for ${range}:\n\n${formatCalendarEventLines(events)}`;
+  const formattedEvents = formatCalendarEventLines(events);
+  const label = getWindowLabel(params);
+
+  if (label) {
+    return `Here are your events for ${label}:\n\n${formattedEvents}`;
   }
 
-  if (mode === 'month') {
-    const label = formatMonthWindowLabel(nowLocal, monthOffset);
-    return `Here are your events for ${label}:\n\n${formatCalendarEventLines(events)}`;
-  }
-
-  if (mode === 'year') {
-    const label = formatYearWindowLabel(nowLocal, yearOffset);
-    return `Here are your events for ${label}:\n\n${formatCalendarEventLines(events)}`;
-  }
-
-  if (mode === 'day') {
-    const dayText = describeDayWindow(nowLocal, dayOffset);
-    return `Here are your events for ${dayText}:\n\n${formatCalendarEventLines(events)}`;
-  }
-
-  if (mode === 'next_days') {
-    const label = describeNextDaysSpan(spanDays);
-    return `Here are your events for ${label}:\n\n${formatCalendarEventLines(events)}`;
-  }
-
-  return (
-    `Here are your next ${maxEventsDefault} events:\n\n` +
-    formatCalendarEventLines(events)
-  );
+  return `Here are your next ${events.length} events:\n\n${formattedEvents}`;
 }

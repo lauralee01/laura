@@ -106,7 +106,6 @@ export class CalendarListHandler {
 
       return buildCalendarListUserMessage({
         mode: pendingListRequest.mode,
-        timeZone,
         nowLocal,
         weekOffset,
         dayOffset: pendingListRequest.dayOffset ?? 0,
@@ -148,7 +147,6 @@ export class CalendarListHandler {
 
       return buildCalendarListUserMessage({
         mode: payload.mode,
-        timeZone,
         nowLocal,
         weekOffset: payload.weekOffset,
         dayOffset: payload.dayOffset ?? 0,
