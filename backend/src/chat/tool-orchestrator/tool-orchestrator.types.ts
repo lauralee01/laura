@@ -54,25 +54,45 @@ export type PendingCalendarMutateTzPayload = {
 /** User must pick which event when several match. */
 export type PendingCalendarDeletePayload =
   | {
-      phase: 'pick';
-      timeZone: string;
-      options: PendingCalendarMutationOption[];
-    }
+    phase: 'pick';
+    timeZone: string;
+    options: PendingCalendarMutationOption[];
+  }
   | {
-      phase: 'confirm';
-      timeZone: string;
+    phase: 'confirm';
+    timeZone: string;
+    eventId: string;
+    calendarId: string;
+    title: string;
+    startText: string;
+  };
+
+/** Update applies after pick (no second confirm). */
+export type PendingCalendarUpdatePayload =
+  | {
+    phase: 'pick';
+    timeZone: string;
+    newTitle: string | null;
+    newStart: string | null;
+    newEnd: string | null;
+    options: Array<{
+      index: number;
       eventId: string;
       calendarId: string;
       title: string;
       startText: string;
-    };
+      startLocalIso?: string;
+      endLocalIso?: string;
+    }>;
+  }
+  | {
+    phase: 'details';
+    timeZone: string;
+    eventId: string;
+    calendarId: string;
+    title: string;
+    startText: string;
+    startLocalIso?: string;
+    endLocalIso?: string;
+  };
 
-/** Update applies after pick (no second confirm). */
-export type PendingCalendarUpdatePayload = {
-  phase: 'pick';
-  timeZone: string;
-  newTitle: string | null;
-  newStart: string | null;
-  newEnd: string | null;
-  options: PendingCalendarMutationOption[];
-};

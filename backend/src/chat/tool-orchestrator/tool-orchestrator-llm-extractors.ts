@@ -125,6 +125,7 @@ export type CalendarMutationExtraction = {
   operation: 'delete' | 'update';
   titleKeywords: string;
   dayOffset: number | null;
+  weekOffset: number | null;
   searchWholeWeek: boolean;
   searchNextDays: number | null;
   newTitle: string | null;
@@ -184,6 +185,14 @@ Rules:
         ? dayOffsetUnknown
         : null;
 
+  const weekOffsetUnknown = parsed['weekOffset'];
+  const weekOffset =
+    weekOffsetUnknown === null || weekOffsetUnknown === undefined
+      ? null
+      : typeof weekOffsetUnknown === 'number'
+        ? weekOffsetUnknown
+        : null;
+
   const searchWholeWeek = parsed['searchWholeWeek'] === true;
   const searchNextDaysUnknown = parsed['searchNextDays'];
   const searchNextDays =
@@ -199,6 +208,7 @@ Rules:
     operation,
     titleKeywords,
     dayOffset,
+    weekOffset,
     searchWholeWeek,
     searchNextDays,
     newTitle: typeof newTitle === 'string' ? newTitle : null,

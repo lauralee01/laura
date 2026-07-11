@@ -75,6 +75,7 @@ export class CalendarMutationHandler {
       userMessage,
       timeZone,
     );
+
     if (!extracted) {
       return (
         'I couldn’t tell which event or what to change. Try naming the event and the day ' +
@@ -82,22 +83,23 @@ export class CalendarMutationHandler {
       );
     }
 
-    if (extracted.operation === 'update') {
-      if (!extracted.newTitle && !extracted.newStart && !extracted.newEnd) {
-        return (
-          'What should I change—title, time, or both? For example: “rename it to Budget review” or “move it to 4pm”.'
-        );
-      }
-    }
+    // Do not return immediately when update details are missing.
+    // Laura should first search the calendar and resolve the target event.
+    const updateDetailsMissing =
+      extracted.operation === 'update' &&
+      !extracted.newTitle &&
+      !extracted.newStart &&
+      !extracted.newEnd;
 
     const nowLocal = DateTime.now().setZone(timeZone);
+
     let startLocal: string;
     let endLocal: string;
 
     if (extracted.searchWholeWeek) {
       ({ startLocal, endLocal } = getMonToSunRangeLocal(
         nowLocal,
-        0,
+        extracted.weekOffset ?? 0,
       ));
     } else if (extracted.dayOffset !== null) {
       ({ startLocal, endLocal } = getSingleDayRangeLocal(
@@ -106,7 +108,11 @@ export class CalendarMutationHandler {
       ));
     } else {
       const days = extracted.searchNextDays ?? 14;
-      ({ startLocal, endLocal } = getNextDaysRangeLocal(nowLocal, days));
+
+      ({ startLocal, endLocal } = getNextDaysRangeLocal(
+        nowLocal,
+        days,
+      ));
     }
 
     try {
@@ -131,7 +137,8 @@ export class CalendarMutationHandler {
       }
 
       if (candidates.length === 1) {
-        const c = candidates[0];
+        const candidate = candidates[0];
+
         if (extracted.operation === 'delete') {
           this.pendingRequestService.setPending<PendingCalendarDeletePayload>(
             sessionId,
@@ -141,61 +148,111 @@ export class CalendarMutationHandler {
               payload: {
                 phase: 'confirm',
                 timeZone,
-                eventId: c.eventId,
-                calendarId: c.calendarId,
-                title: c.title,
-                startText: c.startText,
+                eventId: candidate.eventId,
+                calendarId: candidate.calendarId,
+                title: candidate.title,
+                startText: candidate.startText,
               },
               missingSlots: ['confirmation'],
               collectedSlots: {},
             },
           );
+
           return (
-            `I found **${c.title}** scheduled for ${c.startText}.\n\n` +
-            `Do you want me to delete it from your Google Calendar? Reply yes to delete it, or cancel.`
+            `I found **${candidate.title}** scheduled for ${candidate.startText}.\n\n` +
+            'Do you want me to delete it from your Google Calendar? ' +
+            'Reply yes to delete it, or cancel.'
+          );
+        }
+
+        /*
+         * The event is now known, but the user has not said what should change.
+         * Store the resolved target so a reply such as "move it to 4pm" can
+         * continue without searching for the event again.
+         */
+        if (updateDetailsMissing) {
+          this.pendingRequestService.setPending<PendingCalendarUpdatePayload>(
+            sessionId,
+            {
+              actionType: 'calendar_update',
+              originalMessage: userMessage,
+              payload: {
+                phase: 'details',
+                timeZone,
+                eventId: candidate.eventId,
+                calendarId: candidate.calendarId,
+                title: candidate.title,
+                startText: candidate.startText,
+                startLocalIso: candidate.startLocalIso,
+                endLocalIso: candidate.endLocalIso,
+              },
+              missingSlots: ['updateDetails'],
+              collectedSlots: {},
+            },
+          );
+
+          return (
+            `I found **${candidate.title}** scheduled for ${candidate.startText}.\n\n` +
+            'What should I change—the title, time, or both? For example, ' +
+            '“rename it to Budget review” or “move it to 4pm”.'
           );
         }
 
         let start = extracted.newStart ?? undefined;
         let end = extracted.newEnd ?? undefined;
-        if (!c.isAllDay && c.startLocalIso && (start || end)) {
+
+        /*
+         * When the user supplies only a new clock time, preserve the
+         * original event date and merge the new time onto that date.
+         */
+        if (
+          !candidate.isAllDay &&
+          candidate.startLocalIso &&
+          (start || end)
+        ) {
           const merged = mergeTimeOnlyUpdateOntoEventDay({
             userMessage,
             timeZone,
-            eventStartLocalIso: c.startLocalIso,
-            eventEndLocalIso: c.endLocalIso,
+            eventStartLocalIso: candidate.startLocalIso,
+            eventEndLocalIso: candidate.endLocalIso,
             newStart: extracted.newStart,
             newEnd: extracted.newEnd,
           });
+
           if (merged) {
             start = merged.start;
             end = merged.end;
           }
         }
+
         const updated = await this.calendarService.updateEvent({
           sessionId,
-          calendarId: c.calendarId,
-          eventId: c.eventId,
+          calendarId: candidate.calendarId,
+          eventId: candidate.eventId,
           timeZone,
           title: extracted.newTitle ?? undefined,
           start,
           end,
         });
+
         return this.formatCalendarUpdateSuccess({
           title: updated.title,
           url: updated.url,
         });
       }
 
-      const sliced = candidates.slice(0, 12);
-      const options = sliced.map((e, i) => ({
-        index: i + 1,
-        eventId: e.eventId,
-        calendarId: e.calendarId,
-        title: e.title,
-        startText: e.startText,
-        startLocalIso: e.startLocalIso,
-        endLocalIso: e.endLocalIso,
+      /*
+       * More than one event matched, so Laura must let the user choose
+       * rather than guessing which event should be changed or deleted.
+       */
+      const options = candidates.slice(0, 12).map((event, index) => ({
+        index: index + 1,
+        eventId: event.eventId,
+        calendarId: event.calendarId,
+        title: event.title,
+        startText: event.startText,
+        startLocalIso: event.startLocalIso,
+        endLocalIso: event.endLocalIso,
       }));
 
       if (extracted.operation === 'delete') {
@@ -204,7 +261,11 @@ export class CalendarMutationHandler {
           {
             actionType: 'calendar_delete',
             originalMessage: userMessage,
-            payload: { phase: 'pick', timeZone, options },
+            payload: {
+              phase: 'pick',
+              timeZone,
+              options,
+            },
             missingSlots: ['targetEvent'],
             collectedSlots: {},
           },
@@ -230,15 +291,20 @@ export class CalendarMutationHandler {
       }
 
       const lines = options.map(
-        (o) => `${o.index}. ${o.title} — ${o.startText}`,
+        (option) =>
+          `${option.index}. ${option.title} — ${option.startText}`,
       );
+
       return (
         `I found several events. Reply with a number (1–${options.length}):\n\n` +
         `${lines.join('\n')}\n\n` +
-        `Or say cancel.`
+        'Or say cancel.'
       );
     } catch (e: unknown) {
-      return formatToolFailureMessage('search or change calendar events', e);
+      return formatToolFailureMessage(
+        'search or change calendar events',
+        e,
+      );
     }
   }
 }

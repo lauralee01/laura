@@ -19,7 +19,8 @@ export type PendingSlotName =
   | 'recipientEmail'
   | 'subject'
   | 'body'
-  | 'targetEvent';
+  | 'targetEvent'
+  | 'updateDetails';
 
 export type PendingRequest<TPayload> = {
   actionType: PendingActionType;
