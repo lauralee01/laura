@@ -46,6 +46,45 @@ Guidance:
   Examples: "What World Cup games are today?", "What is the weather tomorrow?", "Latest OpenAI news", "Restaurants open near me", "Best events in Birmingham this weekend", "Current stock price", "Who won the game last night?"
   Use web_search for sports schedules, weather, news, current events, local places, opening hours, prices, availability, rankings, live status, or anything that may have changed recently.
   Do not use web_search for general advice, writing, planning, coding help, or timeless knowledge unless the user specifically asks for current/latest/live information.
+Web-search follow-up rules:
+- A follow-up question about sports, news, weather, prices, schedules, live events, rankings, availability, or any other time-sensitive subject must remain web_search, even when the message sounds conversational.
+- Use recent conversation history to resolve pronouns and implied subjects such as "they", "them", "it", "that team", "the tournament", "that one", or "there".
+- slots.query must always be a complete, standalone search query that makes sense without access to the conversation history.
+- Never return a vague query such as "are they still playing", "did they win", "is it still happening", or "what happened to them".
+- Include the specific person, company, team, league, tournament, place, product, or event being discussed.
+
+Examples:
+- Previous topic: United States men's national team in the 2026 FIFA World Cup
+  User: "Are they still in the tournament?"
+  → intent: web_search
+  → slots: {
+      "query": "Is the United States men's national team still in the 2026 FIFA World Cup tournament?",
+      "freshness": "live"
+    }
+
+- Previous topic: United States men's national team in the 2026 FIFA World Cup
+  User: "So USA is out then?"
+  → intent: web_search
+  → slots: {
+      "query": "Has the United States men's national team been eliminated from the 2026 FIFA World Cup?",
+      "freshness": "live"
+    }
+
+- Previous topic: Los Angeles Lakers
+  User: "Did they win last night?"
+  → intent: web_search
+  → slots: {
+      "query": "Did the Los Angeles Lakers win their game last night?",
+      "freshness": "live"
+    }
+
+- Previous topic: OpenAI
+  User: "What happened with them today?"
+  → intent: web_search
+  → slots: {
+      "query": "Latest OpenAI news today",
+      "freshness": "recent"
+    }  
 - Only route to calendar_* intents when the user is asking about their actual calendar, events, meetings, appointments, or wants something placed on the calendar.
 - Do not route general life planning, productivity advice, weekly plans, routines, or to-do suggestions to calendar_* unless the user explicitly mentions their calendar or asks Laura to add/check events.
 - If the message is a short answer to the assistant’s previous follow-up question, classify it as general_chat unless pendingHint clearly indicates a tool action is waiting.
@@ -138,7 +177,7 @@ calendar_create — use consistent camelCase slots:
   - pendingHint: "Need title for calendar event from July 2 17:00 to 19:00"; user: "Use Job applications"
     → slots: { "titleHint": "Job applications" }
 web_search — use:
-- query: the best search query to answer the user.
+- query: a complete, standalone search query that can answer the user without needing conversation history. Resolve pronouns and omitted subjects from recent conversation before writing the query.
 - locationHint: location relevant to this request.
 - userLocationHint: only when the user is explicitly telling Laura where they are or asking Laura to remember their location.
 - freshness: "live" | "recent" | "general" when obvious.

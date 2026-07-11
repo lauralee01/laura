@@ -244,18 +244,23 @@ export class ChatHistoryService implements OnModuleDestroy {
     limit: number,
   ): Promise<StoredMessage[]> {
     const capped = Math.max(1, Math.min(limit, 200));
+
     const res = await this.pool.query<{
       role: 'user' | 'assistant';
       content: string;
       created_at: Date;
     }>(
       `
-      SELECT role, content, created_at
+    SELECT role, content, created_at
+    FROM (
+      SELECT id, role, content, created_at
       FROM messages
       WHERE conversation_id = $1
-      ORDER BY created_at ASC
-      LIMIT $2;
-      `,
+      ORDER BY created_at DESC, id DESC
+      LIMIT $2
+    ) AS recent_messages
+    ORDER BY created_at ASC, id ASC;
+    `,
       [conversationId, capped],
     );
 

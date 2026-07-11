@@ -112,21 +112,6 @@ export class WebSearchToolHandler {
             const freshness = getFreshness(envelope);
             const timeZone = 'America/Chicago';
 
-            // const query = buildLiveAwareQuery({
-            //     message,
-            //     query: rawQueryWithLocation,
-            //     freshness,
-            //     timeZone,
-            // });
-
-            // const search = await this.webSearch.search(query, {
-            //     searchDepth:
-            //         freshness === 'live' || freshness === 'recent'
-            //             ? 'advanced'
-            //             : 'basic',
-            //     maxResults: 5,
-            // });
-
             const searchQuery = rawQueryWithLocation;
 
             const contextForAnswer = buildLiveAwareQuery({
