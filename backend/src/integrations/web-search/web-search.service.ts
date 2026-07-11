@@ -12,9 +12,19 @@ export type WebSearchResponse = {
     results: WebSearchResult[];
 };
 
-type WebSearchOptions = {
-    searchDepth?: 'basic' | 'advanced';
+export type WebSearchOptions = {
+    searchDepth?: 'basic' | 'advanced' | 'fast' | 'ultra-fast';
     maxResults?: number;
+};
+
+type TavilySearchApiResponse = {
+    answer?: unknown;
+    results?: Array<{
+        title?: unknown;
+        url?: unknown;
+        content?: unknown;
+        score?: unknown;
+    }>;
 };
 
 @Injectable()
@@ -30,24 +40,47 @@ export class WebSearchService {
         }
 
         const q = query.trim();
+
         if (!q) {
             throw new Error('Search query is required');
         }
 
-        const res = await fetch('https://api.tavily.com/search', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-                query: q,
-                search_depth: options.searchDepth ?? 'basic',
-                include_answer: true,
-                include_raw_content: false,
-                max_results: options.maxResults ?? 5,
-            }),
-        });
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 12_000);
+
+        let res: Response;
+
+        try {
+            res = await fetch('https://api.tavily.com/search', {
+                method: 'POST',
+                signal: controller.signal,
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${apiKey}`,
+                },
+                body: JSON.stringify({
+                    query: q,
+                    search_depth: options.searchDepth ?? 'basic',
+                    include_answer: true,
+                    include_raw_content: false,
+                    max_results: Math.max(
+                        1,
+                        Math.min(options.maxResults ?? 5, 20),
+                    ),
+                }),
+            });
+        } catch (error: unknown) {
+            if (
+                error instanceof Error &&
+                error.name === 'AbortError'
+            ) {
+                throw new Error('Tavily search timed out');
+            }
+
+            throw error;
+        } finally {
+            clearTimeout(timeout);
+        }
 
         const rawText = await res.text();
 
@@ -57,28 +90,43 @@ export class WebSearchService {
             );
         }
 
-        const data = JSON.parse(rawText) as {
-            answer?: unknown;
-            results?: Array<{
-                title?: unknown;
-                url?: unknown;
-                content?: unknown;
-                score?: unknown;
-            }>;
-        };
+        let data: TavilySearchApiResponse;
+
+        try {
+            data = JSON.parse(rawText) as TavilySearchApiResponse;
+        } catch {
+            throw new Error('Tavily returned an invalid JSON response');
+        }
+
+        const results = Array.isArray(data.results)
+            ? data.results
+                .map((result) => ({
+                    title:
+                        typeof result.title === 'string'
+                            ? result.title.trim()
+                            : '',
+                    url:
+                        typeof result.url === 'string'
+                            ? result.url.trim()
+                            : '',
+                    content:
+                        typeof result.content === 'string'
+                            ? result.content.trim()
+                            : '',
+                    score:
+                        typeof result.score === 'number'
+                            ? result.score
+                            : undefined,
+                }))
+                .filter((result) => result.title && result.url)
+            : [];
 
         return {
-            answer: typeof data.answer === 'string' ? data.answer : undefined,
-            results: Array.isArray(data.results)
-                ? data.results
-                    .map((r) => ({
-                        title: typeof r.title === 'string' ? r.title : '',
-                        url: typeof r.url === 'string' ? r.url : '',
-                        content: typeof r.content === 'string' ? r.content : '',
-                        score: typeof r.score === 'number' ? r.score : undefined,
-                    }))
-                    .filter((r) => r.title && r.url)
-                : [],
+            answer:
+                typeof data.answer === 'string'
+                    ? data.answer.trim()
+                    : undefined,
+            results,
         };
     }
 }

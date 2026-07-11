@@ -121,11 +121,11 @@ export class WebSearchToolHandler {
                 timeZone,
             });
 
+            const isCurrentInformation =
+                freshness === 'live' || freshness === 'recent';
+
             const search = await this.webSearch.search(searchQuery, {
-                searchDepth:
-                    freshness === 'live' || freshness === 'recent'
-                        ? 'advanced'
-                        : 'basic',
+                searchDepth: isCurrentInformation ? 'advanced' : 'basic',
                 maxResults: 5,
             });
 
@@ -160,7 +160,11 @@ export class WebSearchToolHandler {
                 'Only use URLs that appear in the provided search results. ' +
                 'Never invent, modify, or shorten URLs. ' +
                 'Include no more than three sources. ' +
-                'Do not place source URLs anywhere except inside the Sources section.';
+                'Do not place source URLs anywhere except inside the Sources section. ' +
+                'For live sports questions, prioritize official tournament, federation, league, or major sports-news sources over generic summaries, Wikipedia pages, previews, or older articles. ' +
+                'Check the publication date and event date carefully. ' +
+                'If the sources conflict about whether a team remains in a tournament, do not choose one silently. State that the results conflict and explain what the most recent authoritative source supports. ' +
+                'Do not infer current tournament status from qualification, group-stage advancement, or host-nation status alone. ';
 
             const userMessage =
                 `User asked: ${message}\n\n` +
