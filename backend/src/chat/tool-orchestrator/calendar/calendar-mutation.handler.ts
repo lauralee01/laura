@@ -131,8 +131,8 @@ export class CalendarMutationHandler {
 
       if (candidates.length === 0) {
         return (
-          'I didn’t find a matching event in that window. Try listing your calendar or ' +
-          'being more specific about the title or date.'
+          'I couldn\'t find an event that matches what you described.' +
+          'Could you tell me the event name or the day it\'s scheduled? That should help me find the right one.'
         );
       }
 
