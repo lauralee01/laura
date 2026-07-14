@@ -2,7 +2,7 @@
 
 Laura is a full-stack AI agent that understands natural language, reasons about user intent, remembers user preferences and autonomously uses tools like Gmail, Google Calendar, long-term memory and web search to complete real-world tasks.
 
-Rather than simply generating text, Laura plans actions, selects the appropriate tools, executes them, and responds with grounded, context-aware answers.
+Rather than simply generating text, Laura plans actions, remembers meaninful context, selects the appropriate tools, executes them, and responds with grounded, context-aware answers.
 
 ---
 
