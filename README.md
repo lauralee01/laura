@@ -29,6 +29,7 @@ Laura can understand requests like:
 - "Schedule lunch with James next Tuesday at noon."
 - "Find coffee shops near me that are open now."
 - "Remember that I prefer React over Angular."
+- "what are my appointments for the next 7 days?"
 - "What's the latest news about OpenAI?"
 
 Laura automatically determines which tools are required and executes them before responding.
