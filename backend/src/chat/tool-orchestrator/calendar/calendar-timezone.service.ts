@@ -10,16 +10,20 @@ export class CalendarTimezoneService {
   async resolveTimeZone(
     sessionId: string,
     envelope?: IntentEnvelope,
-  ): Promise<string | null> {
+  ): Promise<string> {
     const requestTimeZone = getSlotTimeZone(envelope)?.trim();
 
     if (requestTimeZone) {
       return requestTimeZone;
     }
 
-    const browserTimeZone =
+    const storedTimeZone =
       await this.sessionPreferences.getTimeZone(sessionId);
 
-    return browserTimeZone?.trim() || null;
+    if (!storedTimeZone?.trim()) {
+      throw new Error('No timezone is available for the current session.');
+    }
+
+    return storedTimeZone.trim();
   }
 }

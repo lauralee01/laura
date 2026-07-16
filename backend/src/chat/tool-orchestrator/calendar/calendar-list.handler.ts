@@ -24,76 +24,72 @@ export class CalendarListHandler {
     message: string,
     envelope?: IntentEnvelope,
   ): Promise<string> {
-    const timeZone = await this.timezoneService.resolveTimeZone(sessionId, envelope);
-
-    const mode = getSlotListMode(envelope);
-    const weekOffset = getSlotNumber(envelope, 'weekOffset') ?? 0;
-    const monthOffset = getSlotNumber(envelope, 'monthOffset') ?? 0;
-    const yearOffset = getSlotNumber(envelope, 'yearOffset') ?? 0;
-    const dayOffset = getSlotNumber(envelope, 'dayOffset') ?? 0;
-    const maxEvents = getSlotNumber(envelope, 'maxEvents') ?? 10;
-    const spanDays = getSlotNumber(envelope, 'spanDays') ?? 2;
-
-    const pendingListRequest: PendingCalendarListPayload =
-      mode === 'week'
-        ? { mode, weekOffset }
-        : mode === 'month'
-          ? { mode, weekOffset: 0, monthOffset }
-          : mode === 'year'
-            ? { mode, weekOffset: 0, yearOffset }
-            : mode === 'day'
-              ? { mode, weekOffset: 0, dayOffset }
-              : mode === 'next_days'
-                ? {
-                  mode,
-                  weekOffset: 0,
-                  spanDays: Math.max(1, Math.min(60, Math.floor(spanDays))),
-                }
-                : mode === 'past'
-                  ? { mode, weekOffset: 0, maxEvents }
-                  : { mode: 'upcoming', weekOffset, maxEvents };
-
-    if (!timeZone) {
-      this.pendingRequestService.setPending<PendingCalendarListPayload>(
-        sessionId,
-        {
-          actionType: 'calendar_list',
-          originalMessage: message,
-          payload: pendingListRequest,
-          missingSlots: ['timeZone'],
-          collectedSlots: {},
-        },
-      );
-      return this.timezoneService.formatTimezoneQuestion();
-    }
-
     try {
+      const timeZone = await this.timezoneService.resolveTimeZone(
+        sessionId,
+        envelope,
+      );
+
+      const mode = getSlotListMode(envelope);
+      const weekOffset = getSlotNumber(envelope, 'weekOffset') ?? 0;
+      const monthOffset = getSlotNumber(envelope, 'monthOffset') ?? 0;
+      const yearOffset = getSlotNumber(envelope, 'yearOffset') ?? 0;
+      const dayOffset = getSlotNumber(envelope, 'dayOffset') ?? 0;
+      const maxEvents = getSlotNumber(envelope, 'maxEvents') ?? 10;
+      const spanDays = getSlotNumber(envelope, 'spanDays') ?? 2;
+
+      const listRequest: PendingCalendarListPayload =
+        mode === 'week'
+          ? { mode, weekOffset }
+          : mode === 'month'
+            ? { mode, weekOffset: 0, monthOffset }
+            : mode === 'year'
+              ? { mode, weekOffset: 0, yearOffset }
+              : mode === 'day'
+                ? { mode, weekOffset: 0, dayOffset }
+                : mode === 'next_days'
+                  ? {
+                    mode,
+                    weekOffset: 0,
+                    spanDays: Math.max(
+                      1,
+                      Math.min(60, Math.floor(spanDays)),
+                    ),
+                  }
+                  : mode === 'past'
+                    ? { mode, weekOffset: 0, maxEvents }
+                    : { mode: 'upcoming', weekOffset, maxEvents };
+
       const nowLocal = DateTime.now().setZone(timeZone);
+
       const { startLocal, endLocal } = resolvePendingListRange(
         nowLocal,
-        pendingListRequest,
+        listRequest,
       );
 
       debugCalendarLog('[tool-orchestrator.list] request', {
-        mode: pendingListRequest.mode,
+        mode: listRequest.mode,
         timeZone,
         weekOffset,
         spanDays:
-          pendingListRequest.mode === 'next_days'
-            ? pendingListRequest.spanDays
+          listRequest.mode === 'next_days'
+            ? listRequest.spanDays
             : undefined,
         maxEvents:
-          pendingListRequest.mode === 'upcoming' ||
-            pendingListRequest.mode === 'past'
-            ? pendingListRequest.maxEvents
+          listRequest.mode === 'upcoming' ||
+            listRequest.mode === 'past'
+            ? listRequest.maxEvents
             : undefined,
-        rangeLocal: { start: startLocal, end: endLocal },
+        rangeLocal: {
+          start: startLocal,
+          end: endLocal,
+        },
       });
 
       const maxFetch =
-        pendingListRequest.mode === 'upcoming' ||
-          pendingListRequest.mode === 'past'
-          ? pendingListRequest.maxEvents
+        listRequest.mode === 'upcoming' ||
+          listRequest.mode === 'past'
+          ? listRequest.maxEvents
           : undefined;
 
       const events = await this.calendarService.listEvents({
@@ -101,18 +97,18 @@ export class CalendarListHandler {
         timeZone,
         start: startLocal,
         end: endLocal,
-        maxEvents: pendingListRequest.mode === 'past' ? undefined : maxFetch,
+        maxEvents: listRequest.mode === 'past' ? undefined : maxFetch,
       });
 
       return buildCalendarListUserMessage({
-        mode: pendingListRequest.mode,
+        mode: listRequest.mode,
         nowLocal,
         weekOffset,
-        dayOffset: pendingListRequest.dayOffset ?? 0,
-        monthOffset: pendingListRequest.monthOffset ?? 0,
-        yearOffset: pendingListRequest.yearOffset ?? 0,
-        spanDays: pendingListRequest.spanDays ?? 2,
-        maxEventsDefault: pendingListRequest.maxEvents ?? 10,
+        dayOffset: listRequest.dayOffset ?? 0,
+        monthOffset: listRequest.monthOffset ?? 0,
+        yearOffset: listRequest.yearOffset ?? 0,
+        spanDays: listRequest.spanDays ?? 2,
+        maxEventsDefault: listRequest.maxEvents ?? 10,
         events,
       });
     } catch (e: unknown) {

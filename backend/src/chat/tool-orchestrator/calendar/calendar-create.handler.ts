@@ -38,23 +38,12 @@ export class CalendarCreateHandler {
     message: string,
     envelope?: IntentEnvelope,
   ): Promise<string> {
-    const timeZone = await this.timezoneService.resolveTimeZone(sessionId, envelope);
-
-    if (!timeZone) {
-      this.pendingRequestService.setPending<PendingCalendarCreatePayload>(
-        sessionId,
-        {
-          actionType: 'calendar_create',
-          originalMessage: message,
-          payload: { message },
-          missingSlots: ['timeZone'],
-          collectedSlots: {},
-        },
-      );
-      return this.timezoneService.formatTimezoneQuestion();
-    }
-
     try {
+      const timeZone = await this.timezoneService.resolveTimeZone(
+        sessionId,
+        envelope,
+      );
+
       const pending =
         this.pendingRequestService.getPending<PendingCalendarCreatePayload>(
           sessionId,
@@ -71,17 +60,29 @@ export class CalendarCreateHandler {
         timeZone,
       );
 
-      if (!args || !args.title?.trim() || !args.start?.trim() || !args.end?.trim()) {
+      if (
+        !args ||
+        !args.title?.trim() ||
+        !args.start?.trim() ||
+        !args.end?.trim()
+      ) {
+        const missingSlots: Array<'title' | 'timeRange'> = [];
+
+        if (!args?.title?.trim()) {
+          missingSlots.push('title');
+        }
+
+        if (!args?.start?.trim() || !args?.end?.trim()) {
+          missingSlots.push('timeRange');
+        }
+
         this.pendingRequestService.setPending<PendingCalendarCreatePayload>(
           sessionId,
           {
             actionType: 'calendar_create',
             originalMessage: baseMessage,
             payload: { message: baseMessage },
-            missingSlots: [
-              !args?.title?.trim() ? 'title' : null,
-              !args?.start?.trim() || !args?.end?.trim() ? 'timeRange' : null,
-            ].filter((x): x is 'title' | 'timeRange' => x !== null),
+            missingSlots,
             collectedSlots: {},
           },
         );
@@ -92,7 +93,7 @@ export class CalendarCreateHandler {
 
         return (
           `What time should I block for **${args.title}**?\n\n` +
-          `For example: tomorrow from 5 PM to 7 PM.`
+          'For example: tomorrow from 5 PM to 7 PM.'
         );
       }
 

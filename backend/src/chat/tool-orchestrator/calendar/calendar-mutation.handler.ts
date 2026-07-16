@@ -44,25 +44,20 @@ export class CalendarMutationHandler {
     message: string,
     envelope?: IntentEnvelope,
   ): Promise<string> {
-    const timeZone = await this.timezoneService.resolveTimeZone(sessionId, envelope);
-
-    if (!timeZone) {
-      this.pendingRequestService.setPending<PendingCalendarMutateTzPayload>(
+    try {
+      const timeZone = await this.timezoneService.resolveTimeZone(
         sessionId,
-        {
-          actionType: 'calendar_mutate_tz',
-          originalMessage: message,
-          payload: { message },
-          missingSlots: ['timeZone'],
-          collectedSlots: {},
-        },
+        envelope,
       );
-      return this.timezoneService.formatTimezoneQuestion();
+
+      return await this.runCalendarMutation(
+        sessionId,
+        message,
+        timeZone,
+      );
+    } catch (e: unknown) {
+      return formatToolFailureMessage('update the calendar event', e);
     }
-
-    this.pendingRequestService.clearPending(sessionId, 'calendar_mutate_tz');
-
-    return this.runCalendarMutation(sessionId, message, timeZone);
   }
 
   async runCalendarMutation(
