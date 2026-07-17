@@ -143,89 +143,224 @@ export class ToolPendingFlowService {
       );
 
     if (pendingUpdate) {
-      const pu = pendingUpdate.payload;
-
-      if (pu.phase === 'details') {
-        const extracted = await extractCalendarMutationArgs(
-          this.llmService,
-          message,
-          pu.timeZone,
-        );
-
-        if (
-          !extracted ||
-          extracted.operation !== 'update' ||
-          (!extracted.newTitle && !extracted.newStart && !extracted.newEnd)
-        ) {
-          return (
-            `What should I change for **${pu.title}**—the title, time, or both?\n\n` +
-            `For example: “rename it to Budget review” or “move it to 4pm”.`
-          );
-        }
-
-        let start = extracted.newStart ?? undefined;
-        let end = extracted.newEnd ?? undefined;
-
-        if (pu.startLocalIso && (start || end)) {
-          const merged = mergeTimeOnlyUpdateOntoEventDay({
-            userMessage: message,
-            timeZone: pu.timeZone,
-            eventStartLocalIso: pu.startLocalIso,
-            eventEndLocalIso: pu.endLocalIso,
-            newStart: extracted.newStart,
-            newEnd: extracted.newEnd,
-          });
-
-          if (merged) {
-            start = merged.start;
-            end = merged.end;
-          }
-        }
-
-        const updated = await this.calendarService.updateEvent({
-          sessionId,
-          calendarId: pu.calendarId,
-          eventId: pu.eventId,
-          timeZone: pu.timeZone,
-          title: extracted.newTitle ?? undefined,
-          start,
-          end,
-        });
-
+      if (envelope?.intent === 'pending_cancel') {
         this.pendingRequestService.clearPending(
           sessionId,
           'calendar_update',
         );
 
+        return 'Okay — I won’t update anything.';
+      }
+
+      const pendingUpdatePayload = pendingUpdate.payload;
+
+      console.debug('[pending-calendar-update] handling pending update', {
+        phase: pendingUpdatePayload.phase,
+        currentUserMessage: message,
+        originalUpdateRequest: pendingUpdate.originalMessage,
+        envelopeIntent: envelope?.intent,
+        envelopeSlots: envelope?.slots,
+      });
+
+      /*
+       * DETAILS PHASE
+       *
+       * The target event is already known, but the original request did not
+       * contain a title/time change. The current message should therefore
+       * contain the missing update details.
+       */
+      if (pendingUpdatePayload.phase === 'details') {
+        const extractedUpdateDetails =
+          await extractCalendarMutationArgs(
+            this.llmService,
+            message,
+            pendingUpdatePayload.timeZone,
+          );
+
+        console.debug(
+          '[pending-calendar-update] extracted details reply',
+          {
+            currentUserMessage: message,
+            extractedUpdateDetails,
+          },
+        );
+
+        const validUpdateDetails =
+          extractedUpdateDetails?.operation === 'update' &&
+          Boolean(
+            extractedUpdateDetails.newTitle ||
+            extractedUpdateDetails.newStart ||
+            extractedUpdateDetails.newEnd,
+          );
+
+        if (!validUpdateDetails || !extractedUpdateDetails) {
+          return (
+            `What should I change for **${pendingUpdatePayload.title}**—` +
+            'the title, time, or both?\n\n' +
+            'For example: “rename it to Budget review” or “move it to 4pm”.'
+          );
+        }
+
+        let resolvedUpdatedStart =
+          extractedUpdateDetails.newStart ?? undefined;
+
+        let resolvedUpdatedEnd =
+          extractedUpdateDetails.newEnd ?? undefined;
+
+        if (
+          pendingUpdatePayload.startLocalIso &&
+          (resolvedUpdatedStart || resolvedUpdatedEnd)
+        ) {
+          const mergedTimeOnlyUpdate =
+            mergeTimeOnlyUpdateOntoEventDay({
+              userMessage: message,
+              timeZone: pendingUpdatePayload.timeZone,
+              eventStartLocalIso:
+                pendingUpdatePayload.startLocalIso,
+              eventEndLocalIso:
+                pendingUpdatePayload.endLocalIso,
+              newStart: extractedUpdateDetails.newStart,
+              newEnd: extractedUpdateDetails.newEnd,
+            });
+
+          if (mergedTimeOnlyUpdate) {
+            resolvedUpdatedStart = mergedTimeOnlyUpdate.start;
+            resolvedUpdatedEnd = mergedTimeOnlyUpdate.end;
+          }
+        }
+
+        try {
+          const updatedCalendarEvent =
+            await this.calendarService.updateEvent({
+              sessionId,
+              calendarId: pendingUpdatePayload.calendarId,
+              eventId: pendingUpdatePayload.eventId,
+              timeZone: pendingUpdatePayload.timeZone,
+              title:
+                extractedUpdateDetails.newTitle ?? undefined,
+              start: resolvedUpdatedStart,
+              end: resolvedUpdatedEnd,
+            });
+
+          this.pendingRequestService.clearPending(
+            sessionId,
+            'calendar_update',
+          );
+
+          return (
+            `Done — I updated **${updatedCalendarEvent.title}** ` +
+            'in your Google Calendar.' +
+            (updatedCalendarEvent.url
+              ? `\n\nOpen in Calendar: ${updatedCalendarEvent.url}`
+              : '')
+          );
+        } catch (error: unknown) {
+          return formatToolFailureMessage(
+            'update the calendar event',
+            error,
+          );
+        }
+      }
+
+      /*
+       * PICK PHASE
+       *
+       * More than one event was found. The current reply should only select
+       * an event. The actual requested changes must come from the saved pending
+       * request, not from the current reply such as "1".
+       */
+      const selectedOptionIndex = getSlotSelectedIndex(
+        envelope,
+        pendingUpdatePayload.options.length,
+      );
+
+      console.debug(
+        '[pending-calendar-update] resolving selected event',
+        {
+          selectedOptionIndex,
+          numberOfOptions:
+            pendingUpdatePayload.options.length,
+          currentUserMessage: message,
+        },
+      );
+
+      if (selectedOptionIndex === null) {
         return (
-          `Done — I updated **${updated.title}** in your Google Calendar.` +
-          (updated.url ? `\n\nOpen in Calendar: ${updated.url}` : '')
+          `Reply with a number 1–${pendingUpdatePayload.options.length} ` +
+          'for the event to update, or say cancel.'
         );
       }
 
-      // From here onward, TypeScript knows pu.phase === 'pick'.
-      const idx = getSlotSelectedIndex(envelope, pu.options.length);
+      const selectedCalendarEvent =
+        pendingUpdatePayload.options[selectedOptionIndex - 1];
 
-      if (!idx) {
+      if (!selectedCalendarEvent) {
         return (
-          `Reply with a number 1–${pu.options.length} for the event to update, ` +
-          `or say cancel.`
+          `Reply with a number 1–${pendingUpdatePayload.options.length} ` +
+          'for the event to update, or say cancel.'
         );
       }
 
-      const opt = pu.options[idx - 1];
+      /*
+       * Prefer the changes already saved when the pending selection was created.
+       */
+      let savedNewTitle =
+        pendingUpdatePayload.newTitle ?? null;
 
-      if (!opt) {
-        return (
-          `Reply with a number 1–${pu.options.length} for the event to update, ` +
-          `or say cancel.`
+      let savedNewStart =
+        pendingUpdatePayload.newStart ?? null;
+
+      let savedNewEnd =
+        pendingUpdatePayload.newEnd ?? null;
+
+      /*
+       * Defensive fallback:
+       *
+       * If the pending payload somehow contains no update details, re-extract
+       * them from the ORIGINAL request ("move it to 4pm"), never from the
+       * current selection reply ("1").
+       */
+      if (!savedNewTitle && !savedNewStart && !savedNewEnd) {
+        const reExtractedOriginalUpdate =
+          await extractCalendarMutationArgs(
+            this.llmService,
+            pendingUpdate.originalMessage,
+            pendingUpdatePayload.timeZone,
+          );
+
+        console.debug(
+          '[pending-calendar-update] re-extracted original request',
+          {
+            originalUpdateRequest:
+              pendingUpdate.originalMessage,
+            reExtractedOriginalUpdate,
+          },
         );
+
+        if (
+          reExtractedOriginalUpdate?.operation === 'update'
+        ) {
+          savedNewTitle =
+            reExtractedOriginalUpdate.newTitle ?? null;
+
+          savedNewStart =
+            reExtractedOriginalUpdate.newStart ?? null;
+
+          savedNewEnd =
+            reExtractedOriginalUpdate.newEnd ?? null;
+        }
       }
 
-      const updateDetailsMissing =
-        !pu.newTitle && !pu.newStart && !pu.newEnd;
+      const updateDetailsAreStillMissing =
+        !savedNewTitle &&
+        !savedNewStart &&
+        !savedNewEnd;
 
-      if (updateDetailsMissing) {
+      /*
+       * The selected event is now known, but we still do not know what should
+       * change. Move into the details phase while preserving the event target.
+       */
+      if (updateDetailsAreStillMissing) {
         this.pendingRequestService.setPending<PendingCalendarUpdatePayload>(
           sessionId,
           {
@@ -233,13 +368,15 @@ export class ToolPendingFlowService {
             originalMessage: pendingUpdate.originalMessage,
             payload: {
               phase: 'details',
-              timeZone: pu.timeZone,
-              eventId: opt.eventId,
-              calendarId: opt.calendarId,
-              title: opt.title,
-              startText: opt.startText,
-              startLocalIso: opt.startLocalIso,
-              endLocalIso: opt.endLocalIso,
+              timeZone: pendingUpdatePayload.timeZone,
+              eventId: selectedCalendarEvent.eventId,
+              calendarId: selectedCalendarEvent.calendarId,
+              title: selectedCalendarEvent.title,
+              startText: selectedCalendarEvent.startText,
+              startLocalIso:
+                selectedCalendarEvent.startLocalIso,
+              endLocalIso:
+                selectedCalendarEvent.endLocalIso,
             },
             missingSlots: ['updateDetails'],
             collectedSlots: {},
@@ -247,49 +384,95 @@ export class ToolPendingFlowService {
         );
 
         return (
-          `I found **${opt.title}** scheduled for ${opt.startText}.\n\n` +
-          `What should I change—the title, time, or both?`
+          `I found **${selectedCalendarEvent.title}** scheduled for ` +
+          `${selectedCalendarEvent.startText}.\n\n` +
+          'What should I change—the title, time, or both?'
         );
       }
 
-      let start = pu.newStart ?? undefined;
-      let end = pu.newEnd ?? undefined;
+      let resolvedUpdatedStart =
+        savedNewStart ?? undefined;
 
-      if (opt.startLocalIso && (start || end)) {
-        const merged = mergeTimeOnlyUpdateOntoEventDay({
-          userMessage: pendingUpdate.originalMessage,
-          timeZone: pu.timeZone,
-          eventStartLocalIso: opt.startLocalIso,
-          eventEndLocalIso: opt.endLocalIso,
-          newStart: pu.newStart,
-          newEnd: pu.newEnd,
-        });
+      let resolvedUpdatedEnd =
+        savedNewEnd ?? undefined;
 
-        if (merged) {
-          start = merged.start;
-          end = merged.end;
+      if (
+        selectedCalendarEvent.startLocalIso &&
+        (resolvedUpdatedStart || resolvedUpdatedEnd)
+      ) {
+        const mergedTimeOnlyUpdate =
+          mergeTimeOnlyUpdateOntoEventDay({
+            /*
+             * Use the original request here because that contains "move it to
+             * 4pm". Using the current message would pass only "1".
+             */
+            userMessage: pendingUpdate.originalMessage,
+            timeZone: pendingUpdatePayload.timeZone,
+            eventStartLocalIso:
+              selectedCalendarEvent.startLocalIso,
+            eventEndLocalIso:
+              selectedCalendarEvent.endLocalIso,
+            newStart: savedNewStart,
+            newEnd: savedNewEnd,
+          });
+
+        if (mergedTimeOnlyUpdate) {
+          resolvedUpdatedStart =
+            mergedTimeOnlyUpdate.start;
+
+          resolvedUpdatedEnd =
+            mergedTimeOnlyUpdate.end;
         }
       }
 
-      const updated = await this.calendarService.updateEvent({
-        sessionId,
-        calendarId: opt.calendarId,
-        eventId: opt.eventId,
-        timeZone: pu.timeZone,
-        title: pu.newTitle ?? undefined,
-        start,
-        end,
-      });
-
-      this.pendingRequestService.clearPending(
-        sessionId,
-        'calendar_update',
+      console.debug(
+        '[pending-calendar-update] applying selected update',
+        {
+          selectedEvent: {
+            title: selectedCalendarEvent.title,
+            eventId: selectedCalendarEvent.eventId,
+            startText: selectedCalendarEvent.startText,
+          },
+          originalUpdateRequest:
+            pendingUpdate.originalMessage,
+          newTitle: savedNewTitle,
+          newStart: resolvedUpdatedStart,
+          newEnd: resolvedUpdatedEnd,
+          timeZone: pendingUpdatePayload.timeZone,
+        },
       );
 
-      return (
-        `Done — I updated **${updated.title}** in your Google Calendar.` +
-        (updated.url ? `\n\nOpen in Calendar: ${updated.url}` : '')
-      );
+      try {
+        const updatedCalendarEvent =
+          await this.calendarService.updateEvent({
+            sessionId,
+            calendarId:
+              selectedCalendarEvent.calendarId,
+            eventId: selectedCalendarEvent.eventId,
+            timeZone: pendingUpdatePayload.timeZone,
+            title: savedNewTitle ?? undefined,
+            start: resolvedUpdatedStart,
+            end: resolvedUpdatedEnd,
+          });
+
+        this.pendingRequestService.clearPending(
+          sessionId,
+          'calendar_update',
+        );
+
+        return (
+          `Done — I updated **${updatedCalendarEvent.title}** ` +
+          'in your Google Calendar.' +
+          (updatedCalendarEvent.url
+            ? `\n\nOpen in Calendar: ${updatedCalendarEvent.url}`
+            : '')
+        );
+      } catch (error: unknown) {
+        return formatToolFailureMessage(
+          'update the calendar event',
+          error,
+        );
+      }
     }
 
     const tzCandidate = getSlotTimeZone(envelope);
@@ -331,13 +514,19 @@ export class ToolPendingFlowService {
           sessionId,
           'calendar_mutate_tz',
         );
+
       if (pendingMutTz) {
-        this.pendingRequestService.clearPending(sessionId, 'calendar_mutate_tz');
-        return this.calendarMutationHandler.runCalendarMutation(
+        this.pendingRequestService.clearPending(
           sessionId,
-          pendingMutTz.payload.message,
-          tzCandidate,
+          'calendar_mutate_tz',
         );
+
+        return this.calendarMutationHandler.runCalendarMutation({
+          sessionId,
+          userMessage: pendingMutTz.payload.message,
+          timeZone: tzCandidate,
+          envelope,
+        });
       }
 
       return `Got it — I’ll schedule events in ${tzCandidate}.`;
