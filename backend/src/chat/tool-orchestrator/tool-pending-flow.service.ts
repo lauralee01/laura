@@ -154,21 +154,6 @@ export class ToolPendingFlowService {
 
       const pendingUpdatePayload = pendingUpdate.payload;
 
-      console.debug('[pending-calendar-update] handling pending update', {
-        phase: pendingUpdatePayload.phase,
-        currentUserMessage: message,
-        originalUpdateRequest: pendingUpdate.originalMessage,
-        envelopeIntent: envelope?.intent,
-        envelopeSlots: envelope?.slots,
-      });
-
-      /*
-       * DETAILS PHASE
-       *
-       * The target event is already known, but the original request did not
-       * contain a title/time change. The current message should therefore
-       * contain the missing update details.
-       */
       if (pendingUpdatePayload.phase === 'details') {
         const extractedUpdateDetails =
           await extractCalendarMutationArgs(
