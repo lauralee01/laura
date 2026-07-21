@@ -24,7 +24,6 @@ export function resolvePendingListRange(
   pendingListRequest: PendingCalendarListPayload,
 ): CalendarRange {
   if (pendingListRequest.mode === 'week') {
-    console.log('weekOffset', pendingListRequest.weekOffset);
     return getMonToSunRangeLocal(
       nowLocal,
       pendingListRequest.weekOffset ?? 0,

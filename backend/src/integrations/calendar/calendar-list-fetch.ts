@@ -61,9 +61,6 @@ export async function fetchMergedEventsFromAllCalendars(
       });
 
       const items = data.items ?? [];
-      console.log(
-        `[Calendar] ${calendarId} returned ${items.length} event(s)`
-      );
 
       for (const event of items) {
         console.log({
