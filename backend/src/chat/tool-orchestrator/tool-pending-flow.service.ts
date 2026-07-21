@@ -162,13 +162,7 @@ export class ToolPendingFlowService {
             pendingUpdatePayload.timeZone,
           );
 
-        console.debug(
-          '[pending-calendar-update] extracted details reply',
-          {
-            currentUserMessage: message,
-            extractedUpdateDetails,
-          },
-        );
+
 
         const validUpdateDetails =
           extractedUpdateDetails?.operation === 'update' &&
@@ -259,16 +253,6 @@ export class ToolPendingFlowService {
         pendingUpdatePayload.options.length,
       );
 
-      console.debug(
-        '[pending-calendar-update] resolving selected event',
-        {
-          selectedOptionIndex,
-          numberOfOptions:
-            pendingUpdatePayload.options.length,
-          currentUserMessage: message,
-        },
-      );
-
       if (selectedOptionIndex === null) {
         return (
           `Reply with a number 1–${pendingUpdatePayload.options.length} ` +
@@ -312,15 +296,6 @@ export class ToolPendingFlowService {
             pendingUpdate.originalMessage,
             pendingUpdatePayload.timeZone,
           );
-
-        console.debug(
-          '[pending-calendar-update] re-extracted original request',
-          {
-            originalUpdateRequest:
-              pendingUpdate.originalMessage,
-            reExtractedOriginalUpdate,
-          },
-        );
 
         if (
           reExtractedOriginalUpdate?.operation === 'update'
@@ -410,22 +385,6 @@ export class ToolPendingFlowService {
         }
       }
 
-      console.debug(
-        '[pending-calendar-update] applying selected update',
-        {
-          selectedEvent: {
-            title: selectedCalendarEvent.title,
-            eventId: selectedCalendarEvent.eventId,
-            startText: selectedCalendarEvent.startText,
-          },
-          originalUpdateRequest:
-            pendingUpdate.originalMessage,
-          newTitle: savedNewTitle,
-          newStart: resolvedUpdatedStart,
-          newEnd: resolvedUpdatedEnd,
-          timeZone: pendingUpdatePayload.timeZone,
-        },
-      );
 
       try {
         const updatedCalendarEvent =
