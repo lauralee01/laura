@@ -234,6 +234,21 @@ export class ChatService {
       }
     }
 
+    const hasPendingCalendarAction =
+      Boolean(this.pendingRequestService.getPending(sessionId, 'calendar_update')) ||
+      Boolean(this.pendingRequestService.getPending(sessionId, 'calendar_delete')) ||
+      Boolean(this.pendingRequestService.getPending(sessionId, 'calendar_create')) ||
+      Boolean(this.pendingRequestService.getPending(sessionId, 'calendar_list')) ||
+      Boolean(this.pendingRequestService.getPending(sessionId, 'calendar_mutate_tz'));
+
+    if (hasPendingCalendarAction && toolReply === null) {
+      toolReply = await this.toolOrchestrator.tryHandle(
+        sessionId,
+        message,
+        envelope,
+      );
+    }
+
     if (toolReply === null) {
       switch (envelope?.intent) {
         case 'current_datetime': {

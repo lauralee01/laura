@@ -256,18 +256,10 @@ export function mergeTimeOnlyUpdateOntoEventDay(params: {
   }
 
   /*
-   * We only repair the known failure mode where a time-only extraction is
-   * attached to today. We do not overwrite other mismatched dates because
-   * they may represent a meaningful date chosen by the extractor.
+   * If the user message did NOT specify a calendar date, any date produced by the extractor
+   * is an inferred fallback (e.g. today or tomorrow). Always apply the extracted clock time
+   * onto the target event's existing calendar day.
    */
-  if (!extractedNewStartCalendarDay.equals(todayInRequestedTimeZone)) {
-    console.debug(`${DEBUG_LOG_PREFIX} merge skipped`, {
-      reason:
-        'The extracted start is not on today, so it does not match the known time-only extraction issue.',
-    });
-
-    return null;
-  }
 
   const correctedEventStartDateTime = existingEventStartDateTime.set({
     hour: extractedNewStartDateTime.hour,

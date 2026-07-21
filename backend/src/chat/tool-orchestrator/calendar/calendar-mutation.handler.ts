@@ -180,6 +180,73 @@ export class CalendarMutationHandler {
         resolvedTitleKeywords,
       );
 
+      const activePendingUpdate =
+        this.pendingRequestService.getPending<PendingCalendarUpdatePayload>(
+          sessionId,
+          'calendar_update',
+        );
+
+      const hasUpdateDetails =
+        extractedMutation.operation === 'update' &&
+        Boolean(
+          extractedMutation.newTitle ||
+            extractedMutation.newStart ||
+            extractedMutation.newEnd,
+        );
+
+      if (
+        activePendingUpdate &&
+        activePendingUpdate.payload.phase === 'details' &&
+        hasUpdateDetails
+      ) {
+        const p = activePendingUpdate.payload;
+        let resolvedUpdatedStart =
+          extractedMutation.newStart ?? undefined;
+        let resolvedUpdatedEnd =
+          extractedMutation.newEnd ?? undefined;
+
+        if (
+          p.startLocalIso &&
+          (resolvedUpdatedStart || resolvedUpdatedEnd)
+        ) {
+          const mergedTimeOnlyUpdate =
+            mergeTimeOnlyUpdateOntoEventDay({
+              userMessage,
+              timeZone,
+              eventStartLocalIso: p.startLocalIso,
+              eventEndLocalIso: p.endLocalIso,
+              newStart: extractedMutation.newStart,
+              newEnd: extractedMutation.newEnd,
+            });
+
+          if (mergedTimeOnlyUpdate) {
+            resolvedUpdatedStart = mergedTimeOnlyUpdate.start;
+            resolvedUpdatedEnd = mergedTimeOnlyUpdate.end;
+          }
+        }
+
+        const updatedCalendarEvent =
+          await this.calendarService.updateEvent({
+            sessionId,
+            calendarId: p.calendarId,
+            eventId: p.eventId,
+            timeZone,
+            title: extractedMutation.newTitle ?? undefined,
+            start: resolvedUpdatedStart,
+            end: resolvedUpdatedEnd,
+          });
+
+        this.pendingRequestService.clearPending(
+          sessionId,
+          'calendar_update',
+        );
+
+        return this.formatCalendarUpdateSuccess({
+          title: updatedCalendarEvent.title,
+          url: updatedCalendarEvent.url,
+        });
+      }
+
       if (matchingEventCandidates.length === 0) {
         return (
           "I couldn't find an event that matches what you described. " +

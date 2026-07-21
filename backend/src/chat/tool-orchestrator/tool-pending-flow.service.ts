@@ -87,12 +87,24 @@ export class ToolPendingFlowService {
       const p = pendingDelete.payload;
       if (p.phase === 'pick') {
         const idx = getSlotSelectedIndex(envelope, p.options.length);
-        if (idx === null) {
+        let opt = idx !== null && idx >= 1 && idx <= p.options.length ? p.options[idx - 1] : undefined;
+
+        if (!opt) {
+          const lowerMsg = message.toLowerCase().trim();
+          const matchedByTitle = p.options.filter((o) => {
+            const titleLower = o.title.toLowerCase();
+            return lowerMsg.includes(titleLower) || titleLower.includes(lowerMsg);
+          });
+          if (matchedByTitle.length === 1) {
+            opt = matchedByTitle[0];
+          }
+        }
+
+        if (!opt) {
           return (
             `Reply with a number 1–${p.options.length} for the event to delete, or say cancel.`
           );
         }
-        const opt = p.options[idx - 1];
         this.pendingRequestService.setPending<PendingCalendarDeletePayload>(
           sessionId,
           {
@@ -253,15 +265,24 @@ export class ToolPendingFlowService {
         pendingUpdatePayload.options.length,
       );
 
-      if (selectedOptionIndex === null) {
-        return (
-          `Reply with a number 1–${pendingUpdatePayload.options.length} ` +
-          'for the event to update, or say cancel.'
-        );
-      }
+      let selectedCalendarEvent =
+        selectedOptionIndex !== null &&
+        selectedOptionIndex >= 1 &&
+        selectedOptionIndex <= pendingUpdatePayload.options.length
+          ? pendingUpdatePayload.options[selectedOptionIndex - 1]
+          : undefined;
 
-      const selectedCalendarEvent =
-        pendingUpdatePayload.options[selectedOptionIndex - 1];
+      if (!selectedCalendarEvent) {
+        const lowerMsg = message.toLowerCase().trim();
+        const matchedByTitle = pendingUpdatePayload.options.filter((opt) => {
+          const titleLower = opt.title.toLowerCase();
+          return lowerMsg.includes(titleLower) || titleLower.includes(lowerMsg);
+        });
+
+        if (matchedByTitle.length === 1) {
+          selectedCalendarEvent = matchedByTitle[0];
+        }
+      }
 
       if (!selectedCalendarEvent) {
         return (
@@ -283,31 +304,48 @@ export class ToolPendingFlowService {
         pendingUpdatePayload.newEnd ?? null;
 
       /*
-       * Defensive fallback:
-       *
-       * If the pending payload somehow contains no update details, re-extract
-       * them from the ORIGINAL request ("move it to 4pm"), never from the
-       * current selection reply ("1").
+       * If update details are missing, try extracting them from the CURRENT
+       * selection turn first (e.g. "move option 1 to 4pm"), then fallback to original message.
        */
       if (!savedNewTitle && !savedNewStart && !savedNewEnd) {
-        const reExtractedOriginalUpdate =
+        const extractedTurnUpdate =
           await extractCalendarMutationArgs(
             this.llmService,
-            pendingUpdate.originalMessage,
+            message,
             pendingUpdatePayload.timeZone,
           );
 
         if (
-          reExtractedOriginalUpdate?.operation === 'update'
+          extractedTurnUpdate?.operation === 'update' &&
+          Boolean(
+            extractedTurnUpdate.newTitle ||
+            extractedTurnUpdate.newStart ||
+            extractedTurnUpdate.newEnd,
+          )
         ) {
-          savedNewTitle =
-            reExtractedOriginalUpdate.newTitle ?? null;
+          savedNewTitle = extractedTurnUpdate.newTitle ?? null;
+          savedNewStart = extractedTurnUpdate.newStart ?? null;
+          savedNewEnd = extractedTurnUpdate.newEnd ?? null;
+        } else {
+          const reExtractedOriginalUpdate =
+            await extractCalendarMutationArgs(
+              this.llmService,
+              pendingUpdate.originalMessage,
+              pendingUpdatePayload.timeZone,
+            );
 
-          savedNewStart =
-            reExtractedOriginalUpdate.newStart ?? null;
+          if (
+            reExtractedOriginalUpdate?.operation === 'update'
+          ) {
+            savedNewTitle =
+              reExtractedOriginalUpdate.newTitle ?? null;
 
-          savedNewEnd =
-            reExtractedOriginalUpdate.newEnd ?? null;
+            savedNewStart =
+              reExtractedOriginalUpdate.newStart ?? null;
+
+            savedNewEnd =
+              reExtractedOriginalUpdate.newEnd ?? null;
+          }
         }
       }
 
