@@ -28,12 +28,10 @@ export class ToolOrchestratorService {
 
   handleCalendarListIntent(
     sessionId: string,
-    message: string,
     envelope?: IntentEnvelope,
   ): Promise<string> {
     return this.calendarListHandler.handleCalendarListIntent(
       sessionId,
-      message,
       envelope,
     );
   }

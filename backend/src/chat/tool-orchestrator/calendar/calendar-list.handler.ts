@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { DateTime } from 'luxon';
 import { CalendarService } from '../../../integrations/calendar/calendar.service';
 import { debugCalendarLog } from '../../../integrations/calendar/calendar-debug';
-import { PendingRequestService } from '../../pending-request.service';
 import { CalendarTimezoneService } from './calendar-timezone.service';
 import { buildCalendarListUserMessage } from './calendar-list-reply';
 import { resolvePendingListRange } from './calendar-list-range';
@@ -15,13 +14,11 @@ import type { IntentEnvelope } from '../../intent/intent.types';
 export class CalendarListHandler {
   constructor(
     private readonly calendarService: CalendarService,
-    private readonly pendingRequestService: PendingRequestService,
     private readonly timezoneService: CalendarTimezoneService,
   ) { }
 
   async handleCalendarListIntent(
     sessionId: string,
-    message: string,
     envelope?: IntentEnvelope,
   ): Promise<string> {
     try {

@@ -285,7 +285,6 @@ export class ChatService {
         case 'calendar_list': {
           toolReply = await this.toolOrchestrator.handleCalendarListIntent(
             sessionId,
-            message,
             envelope,
           );
           break;
