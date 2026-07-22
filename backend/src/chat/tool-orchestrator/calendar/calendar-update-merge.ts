@@ -57,21 +57,6 @@ function userMessageSpecifiesCalendarDate(userMessage: string): boolean {
     containsSlashFormattedDate ||
     containsIsoFormattedDate;
 
-  console.debug(`${DEBUG_LOG_PREFIX} calendar date detection`, {
-    userMessage,
-    specifiesCalendarDate,
-    matches: {
-      containsRelativeDay,
-      containsWeekday,
-      containsMonthName,
-      containsRelativeCalendarPeriod,
-      containsNumericRelativeDate,
-      containsOrdinalDate,
-      containsSlashFormattedDate,
-      containsIsoFormattedDate,
-    },
-  });
-
   return specifiesCalendarDate;
 }
 
@@ -107,24 +92,8 @@ function getPositiveDurationOrDefault(params: {
     endDateTime.toMillis() - startDateTime.toMillis();
 
   if (calculatedDurationMilliseconds > 0) {
-    console.debug(`${DEBUG_LOG_PREFIX} using calculated duration`, {
-      durationSource,
-      calculatedDurationMilliseconds,
-      calculatedDurationMinutes:
-        calculatedDurationMilliseconds / (60 * 1000),
-    });
-
     return calculatedDurationMilliseconds;
   }
-
-  console.warn(`${DEBUG_LOG_PREFIX} invalid non-positive duration`, {
-    durationSource,
-    start: startDateTime.toISO(),
-    end: endDateTime.toISO(),
-    calculatedDurationMilliseconds,
-    fallbackDurationMinutes:
-      DEFAULT_EVENT_DURATION_MILLISECONDS / (60 * 1000),
-  });
 
   return DEFAULT_EVENT_DURATION_MILLISECONDS;
 }
@@ -166,33 +135,15 @@ export function mergeTimeOnlyUpdateOntoEventDay(params: {
     newEnd: extractedNewEndIso,
   } = params;
 
-  console.debug(`${DEBUG_LOG_PREFIX} evaluating calendar update`, {
-    userMessage,
-    timeZone,
-    existingEventStart: eventStartLocalIso,
-    existingEventEnd: eventEndLocalIso,
-    extractedNewStart: extractedNewStartIso,
-    extractedNewEnd: extractedNewEndIso,
-  });
-
   /*
    * This correction cannot safely operate using only a new end time because
    * it needs a new clock time to apply to the event's existing day.
    */
   if (!extractedNewStartIso) {
-    console.debug(`${DEBUG_LOG_PREFIX} merge skipped`, {
-      reason: 'The extractor did not return a new start time.',
-    });
-
     return null;
   }
 
   if (userMessageSpecifiesCalendarDate(userMessage)) {
-    console.debug(`${DEBUG_LOG_PREFIX} merge skipped`, {
-      reason:
-        'The user explicitly mentioned a calendar date, so the extracted date should be trusted.',
-    });
-
     return null;
   }
 
@@ -220,13 +171,6 @@ export function mergeTimeOnlyUpdateOntoEventDay(params: {
   );
 
   if (!extractedNewStartDateTime.isValid) {
-    console.warn(`${DEBUG_LOG_PREFIX} merge skipped`, {
-      reason: 'The extracted new start could not be parsed.',
-      extractedNewStart: extractedNewStartIso,
-      invalidReason: extractedNewStartDateTime.invalidReason,
-      invalidExplanation: extractedNewStartDateTime.invalidExplanation,
-    });
-
     return null;
   }
 
@@ -240,18 +184,7 @@ export function mergeTimeOnlyUpdateOntoEventDay(params: {
   const extractedNewStartCalendarDay =
     extractedNewStartDateTime.startOf('day');
 
-  console.debug(`${DEBUG_LOG_PREFIX} comparing calendar days`, {
-    today: todayInRequestedTimeZone.toISODate(),
-    existingEventDay: existingEventCalendarDay.toISODate(),
-    extractedNewStartDay: extractedNewStartCalendarDay.toISODate(),
-  });
-
   if (extractedNewStartCalendarDay.equals(existingEventCalendarDay)) {
-    console.debug(`${DEBUG_LOG_PREFIX} merge skipped`, {
-      reason:
-        'The extracted start is already on the existing event calendar day.',
-    });
-
     return null;
   }
 
@@ -287,29 +220,10 @@ export function mergeTimeOnlyUpdateOntoEventDay(params: {
       correctedEventEndDateTime = correctedEventStartDateTime.plus({
         milliseconds: extractedUpdateDurationMilliseconds,
       });
-
-      console.debug(
-        `${DEBUG_LOG_PREFIX} end time derived from extracted update`,
-        {
-          extractedNewStart: extractedNewStartDateTime.toISO(),
-          extractedNewEnd: extractedNewEndDateTime.toISO(),
-        },
-      );
     } else {
       correctedEventEndDateTime = correctedEventStartDateTime.plus({
         milliseconds: DEFAULT_EVENT_DURATION_MILLISECONDS,
       });
-
-      console.warn(
-        `${DEBUG_LOG_PREFIX} extracted end was invalid; using default duration`,
-        {
-          extractedNewEnd: extractedNewEndIso,
-          invalidReason: extractedNewEndDateTime.invalidReason,
-          invalidExplanation: extractedNewEndDateTime.invalidExplanation,
-          fallbackDurationMinutes:
-            DEFAULT_EVENT_DURATION_MILLISECONDS / (60 * 1000),
-        },
-      );
     }
   } else if (eventEndLocalIso) {
     const existingEventEndDateTime = DateTime.fromISO(
@@ -330,42 +244,15 @@ export function mergeTimeOnlyUpdateOntoEventDay(params: {
       correctedEventEndDateTime = correctedEventStartDateTime.plus({
         milliseconds: existingEventDurationMilliseconds,
       });
-
-      console.debug(
-        `${DEBUG_LOG_PREFIX} preserving existing event duration`,
-        {
-          existingEventStart: existingEventStartDateTime.toISO(),
-          existingEventEnd: existingEventEndDateTime.toISO(),
-        },
-      );
     } else {
       correctedEventEndDateTime = correctedEventStartDateTime.plus({
         milliseconds: DEFAULT_EVENT_DURATION_MILLISECONDS,
       });
-
-      console.warn(
-        `${DEBUG_LOG_PREFIX} existing event end was invalid; using default duration`,
-        {
-          existingEventEnd: eventEndLocalIso,
-          invalidReason: existingEventEndDateTime.invalidReason,
-          invalidExplanation: existingEventEndDateTime.invalidExplanation,
-          fallbackDurationMinutes:
-            DEFAULT_EVENT_DURATION_MILLISECONDS / (60 * 1000),
-        },
-      );
     }
   } else {
     correctedEventEndDateTime = correctedEventStartDateTime.plus({
       milliseconds: DEFAULT_EVENT_DURATION_MILLISECONDS,
     });
-
-    console.debug(
-      `${DEBUG_LOG_PREFIX} no end time available; using default duration`,
-      {
-        fallbackDurationMinutes:
-          DEFAULT_EVENT_DURATION_MILLISECONDS / (60 * 1000),
-      },
-    );
   }
 
   const correctedStartLocalIso = correctedEventStartDateTime.toFormat(
@@ -375,16 +262,6 @@ export function mergeTimeOnlyUpdateOntoEventDay(params: {
   const correctedEndLocalIso = correctedEventEndDateTime.toFormat(
     LOCAL_DATE_TIME_FORMAT,
   );
-
-  console.debug(`${DEBUG_LOG_PREFIX} time-only merge applied`, {
-    originalEventStart: eventStartLocalIso,
-    originalEventEnd: eventEndLocalIso,
-    extractedNewStart: extractedNewStartIso,
-    extractedNewEnd: extractedNewEndIso,
-    correctedStart: correctedStartLocalIso,
-    correctedEnd: correctedEndLocalIso,
-    timeZone,
-  });
 
   return {
     start: correctedStartLocalIso,
