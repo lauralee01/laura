@@ -187,7 +187,6 @@ export function useChat() {
         ]);
 
         if (shouldRefreshGoogleStatus(reply)) {
-          console.log('Dispatching google-connection-changed');
           window.dispatchEvent(new Event('google-connection-changed'));
         }
 

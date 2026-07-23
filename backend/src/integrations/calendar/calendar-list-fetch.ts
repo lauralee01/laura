@@ -62,14 +62,6 @@ export async function fetchMergedEventsFromAllCalendars(
 
       const items = data.items ?? [];
 
-      for (const event of items) {
-        console.log({
-          calendarId,
-          summary: event.summary,
-          start: event.start,
-          end: event.end,
-        });
-      }
       debugCalendarLog('[calendar.listEvents] page', {
         calendarId,
         nextPageTokenPresent: !!data.nextPageToken,
