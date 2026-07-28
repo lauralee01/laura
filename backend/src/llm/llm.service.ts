@@ -6,11 +6,19 @@ export type LlmChatTurn = {
   content: string;
 };
 
-type GenerateInput = {
+export type GenerateInput = {
   systemPrompt: string;
   userMessage: string;
   /** Prior turns only (optional). The current user turn is always `userMessage`. */
   history?: LlmChatTurn[];
+  /** Sampling temperature (0.0 to 1.0). Defaults to 0.4. Lower values produce faster, deterministic JSON. */
+  temperature?: number;
+  /** Max tokens to output. Defaults to 2000. Set smaller limits for classification/extraction. */
+  maxOutputTokens?: number;
+  /** Instruct model to output JSON directly via constrained decoding. */
+  responseMimeType?: 'application/json' | 'text/plain';
+  /** Override the default GEMINI_MODEL for fast/light tier execution. */
+  model?: string;
 };
 
 type GeminiGenerateResponse = {
@@ -119,15 +127,21 @@ export class LlmService {
       ':generateContent?key=' +
       encodeURIComponent(apiKey);
 
+    const generationConfig: Record<string, unknown> = {
+      temperature: input.temperature ?? 0.4,
+      maxOutputTokens: input.maxOutputTokens ?? 2000,
+    };
+
+    if (input.responseMimeType) {
+      generationConfig.responseMimeType = input.responseMimeType;
+    }
+
     const payload = {
       systemInstruction: {
         parts: [{ text: input.systemPrompt }],
       },
       contents: this.buildGeminiContents(input),
-      generationConfig: {
-        temperature: 0.4,
-        maxOutputTokens: 2000,
-      },
+      generationConfig,
     };
 
     let lastStatus = 0;
@@ -195,7 +209,8 @@ export class LlmService {
     apiKey: string,
     input: GenerateInput,
   ): Promise<string> {
-    const primaryModel = process.env.GEMINI_MODEL?.trim();
+    const primaryModel =
+      input.model?.trim() || process.env.GEMINI_MODEL?.trim();
 
     if (!primaryModel) {
       throw new Error('GEMINI_MODEL is missing (set backend/.env)');

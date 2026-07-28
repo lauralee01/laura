@@ -52,6 +52,9 @@ export async function extractDraftEmailArgs(
   const raw = await llm.generate({
     systemPrompt,
     userMessage: message,
+    temperature: 0.1,
+    maxOutputTokens: 350,
+    responseMimeType: 'application/json',
   });
 
   const parsed = safeParseJsonObject(raw);
@@ -115,6 +118,9 @@ export async function extractCalendarEventArgs(
   const raw = await llm.generate({
     systemPrompt,
     userMessage: message,
+    temperature: 0.1,
+    maxOutputTokens: 350,
+    responseMimeType: 'application/json',
   });
 
   const parsed = safeParseJsonObject(raw);
@@ -187,6 +193,9 @@ export async function extractCalendarMutationArgs(
   const raw = await llm.generate({
     systemPrompt,
     userMessage: message,
+    temperature: 0.1,
+    maxOutputTokens: 350,
+    responseMimeType: 'application/json',
   });
 
   const parsed = safeParseJsonObject(raw);
