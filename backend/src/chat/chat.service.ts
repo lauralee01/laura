@@ -386,12 +386,27 @@ export class ChatService {
 
     let extraContext = '';
 
-    const [storedLocation, storedTimeZone] = sessionId
-      ? await Promise.all([
+    // Kick off everything that can run in parallel
+    const preferencesPromise = sessionId
+      ? Promise.all([
         this.sessionPreferences.getLocation(sessionId),
         this.sessionPreferences.getTimeZone(sessionId),
       ])
-      : [null, null];
+      : Promise.resolve([null, null] as const);
+
+    const memoriesPromise = sessionId
+      ? this.memoryService.searchMemories({
+        userId: sessionId,
+        query: message,
+        topK: 3,
+      })
+      : Promise.resolve([]);
+
+    // Wait for both at the same time
+    const [[storedLocation, storedTimeZone], memories] = await Promise.all([
+      preferencesPromise,
+      memoriesPromise,
+    ]);
 
     if (storedTimeZone) {
       extraContext +=
@@ -406,36 +421,31 @@ export class ChatService {
         `When the user refers to their current area, for example "near me", "nearby", "around here", "in town", or similar, treat it as referring to this saved location unless the user specifies a different one.`;
     }
 
-    if (sessionId) {
-      const memories = await this.memoryService.searchMemories({
-        userId: sessionId,
-        query: message,
-        topK: 3,
-      });
+    if (memories.length > 0) {
+      const memoryContext = memories.map((m) => `- ${m.content}`).join('\n');
 
-      if (memories.length > 0) {
-        const memoryContext = memories.map((m) => `- ${m.content}`).join('\n');
-
-        extraContext +=
-          '\n\nUser session preferences / facts:\n' +
-          memoryContext +
-          '\n\nWhen generating your reply, use these facts naturally when relevant. ' +
-          'If a requested detail conflicts with a known user preference or fact, ask a clarifying question.';
-      }
+      extraContext +=
+        '\n\nUser session preferences / facts:\n' +
+        memoryContext +
+        '\n\nWhen generating your reply, use these facts naturally when relevant. ' +
+        'If a requested detail conflicts with a known user preference or fact, ask a clarifying question.';
     }
 
     const systemPrompt = systemBasePrompt + extraContext;
+
     const reply = await this.llmService.generate({
       systemPrompt,
       userMessage: message,
       history: priorTurns,
     });
+
     await this.chatHistoryService.appendMessage(
       dbConversationId ?? '',
       'assistant',
       reply,
     );
 
+    // Already correctly fire-and-forget
     void this.memoryPersistenceService
       .writeExtractedMemoriesIfAny(sessionId, message)
       .catch((e) => {
