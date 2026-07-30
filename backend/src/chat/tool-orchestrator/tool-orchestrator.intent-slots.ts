@@ -2,58 +2,112 @@ import { DateTime } from 'luxon';
 import type { IntentEnvelope } from '../intent/intent.types';
 import type { CalendarListMode } from './tool-orchestrator.types';
 
+const CALENDAR_LIST_MODES = new Set<CalendarListMode>([
+  'week',
+  'month',
+  'year',
+  'day',
+  'next_days',
+  'upcoming',
+  'past',
+]);
+
+const DEFAULT_CALENDAR_LIST_MODE: CalendarListMode = 'upcoming';
+
+function isCalendarListMode(
+  value: string,
+): value is CalendarListMode {
+  return CALENDAR_LIST_MODES.has(value as CalendarListMode);
+}
+
 /**
- * Reads Stage-1 `IntentEnvelope.slots` with simple validation.
+ * Reads a non-empty string from Stage-1 IntentEnvelope slots.
  */
 export function getSlotString(
   envelope: IntentEnvelope | undefined,
   key: string,
 ): string | null {
-  const v = envelope?.slots?.[key];
-  return typeof v === 'string' && v.trim() ? v.trim() : null;
+  const value = envelope?.slots?.[key];
+
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmedValue = value.trim();
+
+  return trimmedValue.length > 0 ? trimmedValue : null;
 }
 
+/**
+ * Reads a finite number from Stage-1 IntentEnvelope slots.
+ */
 export function getSlotNumber(
   envelope: IntentEnvelope | undefined,
   key: string,
 ): number | null {
-  const v = envelope?.slots?.[key];
-  return typeof v === 'number' && Number.isFinite(v) ? v : null;
+  const value = envelope?.slots?.[key];
+
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : null;
 }
 
+/**
+ * Returns a supported calendar-list mode.
+ *
+ * Falls back to "upcoming" when the slot is missing or invalid.
+ */
 export function getSlotListMode(
   envelope: IntentEnvelope | undefined,
 ): CalendarListMode {
   const mode = getSlotString(envelope, 'mode');
-  const valid: CalendarListMode[] = [
-    'week',
-    'month',
-    'year',
-    'day',
-    'next_days',
-    'upcoming',
-    'past',
-  ];
-  return mode && (valid as string[]).includes(mode)
-    ? (mode as CalendarListMode)
-    : 'upcoming';
+
+  return mode && isCalendarListMode(mode)
+    ? mode
+    : DEFAULT_CALENDAR_LIST_MODE;
 }
 
+/**
+ * Returns a valid IANA timezone supplied in the intent envelope.
+ */
 export function getSlotTimeZone(
   envelope: IntentEnvelope | undefined,
 ): string | null {
-  const tz = getSlotString(envelope, 'timeZone');
-  if (!tz) return null;
-  return DateTime.now().setZone(tz).isValid ? tz : null;
+  const timeZone = getSlotString(envelope, 'timeZone');
+
+  if (!timeZone) {
+    return null;
+  }
+
+  return DateTime.now().setZone(timeZone).isValid
+    ? timeZone
+    : null;
 }
 
+/**
+ * Returns a valid one-based selection index.
+ */
 export function getSlotSelectedIndex(
   envelope: IntentEnvelope | undefined,
   max: number,
 ): number | null {
-  const raw = getSlotNumber(envelope, 'selectedIndex');
-  if (raw === null) return null;
-  const idx = Math.trunc(raw);
-  if (idx < 1 || idx > max) return null;
-  return idx;
+  if (!Number.isInteger(max) || max < 1) {
+    return null;
+  }
+
+  const selectedIndex = getSlotNumber(
+    envelope,
+    'selectedIndex',
+  );
+
+  if (
+    selectedIndex === null ||
+    !Number.isInteger(selectedIndex) ||
+    selectedIndex < 1 ||
+    selectedIndex > max
+  ) {
+    return null;
+  }
+
+  return selectedIndex;
 }

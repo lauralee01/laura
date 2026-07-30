@@ -445,7 +445,6 @@ export class ChatService {
       reply,
     );
 
-    // Already correctly fire-and-forget
     void this.memoryPersistenceService
       .writeExtractedMemoriesIfAny(sessionId, message)
       .catch((e) => {
