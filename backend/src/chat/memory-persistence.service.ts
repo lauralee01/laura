@@ -9,41 +9,6 @@ export class MemoryPersistenceService {
     private readonly memoryService: MemoryService,
   ) { }
 
-  // async writeExtractedMemoriesIfAny(
-  //   sessionId: string,
-  //   message: string,
-  // ): Promise<void> {
-  //   if (!sessionId) {
-  //     return;
-  //   }
-
-  //   // We intentionally ignore extraction failures so chat remains robust.
-  //   try {
-  //     const memoriesToWrite = await this.extractMemoriesToWrite(message);
-
-  //     const uniqueCandidates = Array.from(
-  //       new Set(
-  //         memoriesToWrite.map((m) => m.trim()).filter((m) => m.length > 0),
-  //       ),
-  //     );
-
-  //     for (const m of uniqueCandidates) {
-  //       const shouldWrite = await this.shouldWriteMemoryCandidate(sessionId, m);
-  //       if (shouldWrite) {
-  //         await this.memoryService.writeMemory({
-  //           userId: sessionId,
-  //           content: m,
-  //         });
-  //       } else {
-  //         console.log('memory write skipped (too similar):', m);
-  //       }
-  //     }
-  //   } catch (e) {
-  //     // Learning project: keep logs to understand extraction behavior.
-  //     console.log('memory extraction skipped due to error:', e);
-  //   }
-  // }
-
   async writeExtractedMemoriesIfAny(
     userId: string | undefined,
     message: string,
