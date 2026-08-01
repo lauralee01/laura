@@ -32,7 +32,6 @@ export async function ensureSession(): Promise<void> {
  */
 export async function syncBrowserTimeZone(): Promise<void> {
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  console.log(`Browser timezone: ${timeZone}`);
 
   if (!timeZone) return;
 
