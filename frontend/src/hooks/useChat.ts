@@ -16,79 +16,153 @@ import {
   sendChatMessage,
   type ConversationSummary,
 } from '@/lib/chat-api';
-import { ensureSession, type StoredChatMessage, syncBrowserTimeZone } from '@/lib/session';
+import {
+  ensureSession,
+  type StoredChatMessage,
+  syncBrowserTimeZone,
+} from '@/lib/session';
 
 function shouldRefreshGoogleStatus(reply: string): boolean {
-  const lower = reply.toLowerCase();
+  const normalizedReply = reply.toLowerCase();
 
   return (
-    lower.includes('connect google again') ||
-    lower.includes('google session could not be renewed') ||
-    lower.includes('google connection expired') ||
-    lower.includes('google is not connected')
+    normalizedReply.includes('connect google again') ||
+    normalizedReply.includes(
+      'google session could not be renewed',
+    ) ||
+    normalizedReply.includes(
+      'google connection expired',
+    ) ||
+    normalizedReply.includes(
+      'google is not connected',
+    )
   );
 }
 
 export function useChat() {
   const [sessionReady, setSessionReady] = useState(false);
-  const [conversationId, setConversationId] = useState<string | undefined>();
-  const [conversations, setConversations] = useState<ConversationSummary[]>(
-    []
-  );
-  const [messages, setMessages] = useState<StoredChatMessage[]>([]);
+  const [conversationId, setConversationId] =
+    useState<string>();
+  const [conversations, setConversations] = useState<
+    ConversationSummary[]
+  >([]);
+  const [messages, setMessages] = useState<
+    StoredChatMessage[]
+  >([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
+  const [creatingConversation, setCreatingConversation] =
+    useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
   const bottomRef = useRef<HTMLDivElement | null>(null);
+
+  /*
+   * Only the newest open-thread request is allowed to update state.
+   */
+  const openThreadRequestIdRef = useRef(0);
 
   const reloadSidebar = useCallback(async () => {
     try {
-      const list = await fetchConversations();
-      setConversations(list);
-    } catch {
-      // Keep existing list if sidebar refresh fails.
+      const conversationList =
+        await fetchConversations();
+
+      setConversations(conversationList);
+    } catch (error: unknown) {
+      console.warn(
+        '[chat-sidebar] Failed to refresh conversations:',
+        error,
+      );
     }
   }, []);
-
 
   useEffect(() => {
     let cancelled = false;
 
-    setMessages([]);
-    setInitializing(true);
-    setError(null);
-    setSessionReady(false);
+    async function initializeChat(): Promise<void> {
+      setMessages([]);
+      setInitializing(true);
+      setError(null);
+      setSessionReady(false);
 
-    ensureSession()
-      .then(async () => {
-        if (cancelled) return null;
+      try {
+        await ensureSession();
 
-        await syncBrowserTimeZone().catch(() => undefined);
+        if (cancelled) {
+          return;
+        }
 
+        /*
+         * The timezone sync and initial chat-data requests can run
+         * concurrently after the session has been established.
+         */
+        const [
+          ,
+          conversationsResult,
+          historyResult,
+        ] = await Promise.allSettled([
+          syncBrowserTimeZone(),
+          fetchConversations(),
+          fetchChatHistory(),
+        ]);
+
+        if (cancelled) {
+          return;
+        }
+
+        /*
+         * The session itself is ready even if one optional data
+         * request failed.
+         */
         setSessionReady(true);
-        return Promise.all([fetchConversations(), fetchChatHistory()]);
-      })
-      .then((result) => {
-        if (cancelled || !result) return;
 
-        const [convs, hist] = result;
-        setConversations(convs);
-        setMessages(hist.messages);
-        setConversationId(hist.conversationId);
-      })
-      .catch(() => {
-        if (cancelled) return;
+        if (
+          conversationsResult.status === 'fulfilled'
+        ) {
+          setConversations(
+            conversationsResult.value,
+          );
+        }
+
+        if (historyResult.status === 'fulfilled') {
+          setMessages(historyResult.value.messages);
+          setConversationId(
+            historyResult.value.conversationId,
+          );
+        }
+
+        if (
+          conversationsResult.status === 'rejected' ||
+          historyResult.status === 'rejected'
+        ) {
+          setError(
+            'Some chat data could not be loaded.',
+          );
+        }
+      } catch (initializationError: unknown) {
+        if (cancelled) {
+          return;
+        }
+
+        console.error(
+          '[chat-initialization] Failed:',
+          initializationError,
+        );
 
         setMessages([]);
-        setError('Could not load data. Is the API running?');
-      })
-      .finally(() => {
-        if (cancelled) return;
+        setError(
+          'Could not load data. Is the API running?',
+        );
+      } finally {
+        if (!cancelled) {
+          setInitializing(false);
+        }
+      }
+    }
 
-        setInitializing(false);
-      });
+    void initializeChat();
 
     return () => {
       cancelled = true;
@@ -96,18 +170,31 @@ export function useChat() {
   }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    bottomRef.current?.scrollIntoView({
+      behavior: initializing ? 'auto' : 'smooth',
+    });
   }, [messages, loading, initializing]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+    function handleEscapeKey(
+      event: KeyboardEvent,
+    ): void {
+      if (event.key === 'Escape') {
         setSidebarOpen(false);
       }
-    };
+    }
 
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener(
+      'keydown',
+      handleEscapeKey,
+    );
+
+    return () => {
+      window.removeEventListener(
+        'keydown',
+        handleEscapeKey,
+      );
+    };
   }, []);
 
   const openThread = useCallback(
@@ -116,50 +203,107 @@ export function useChat() {
         return;
       }
 
+      const requestId =
+        ++openThreadRequestIdRef.current;
+
       setInitializing(true);
       setError(null);
       setConversationId(id);
 
       try {
-        const hist = await fetchChatHistory(id);
-        setMessages(hist.messages);
-        setConversationId(hist.conversationId ?? id);
-      } catch {
+        const history = await fetchChatHistory(id);
+
+        if (
+          requestId !==
+          openThreadRequestIdRef.current
+        ) {
+          return;
+        }
+
+        setMessages(history.messages);
+        setConversationId(
+          history.conversationId ?? id,
+        );
+      } catch (threadError: unknown) {
+        if (
+          requestId !==
+          openThreadRequestIdRef.current
+        ) {
+          return;
+        }
+
+        console.error(
+          '[chat-thread] Failed to load conversation:',
+          threadError,
+        );
+
         setError('Could not load this chat.');
       } finally {
-        setInitializing(false);
+        if (
+          requestId ===
+          openThreadRequestIdRef.current
+        ) {
+          setInitializing(false);
+        }
       }
     },
-    [sessionReady]
+    [sessionReady],
   );
 
   const handleNewChat = useCallback(async () => {
-    if (!sessionReady || loading) {
+    if (
+      !sessionReady ||
+      loading ||
+      creatingConversation
+    ) {
       return;
     }
 
+    setCreatingConversation(true);
     setError(null);
     setSidebarOpen(false);
 
     try {
-      const id = await createConversation();
-      setConversationId(id);
+      const newConversationId =
+        await createConversation();
+
+      /*
+       * Invalidate any still-running thread request so it cannot
+       * overwrite this newly created conversation.
+       */
+      openThreadRequestIdRef.current += 1;
+
+      setConversationId(newConversationId);
       setMessages([]);
+
       void reloadSidebar();
-    } catch (e) {
+    } catch (createError: unknown) {
       setError(
-        e instanceof Error ? e.message : 'Could not start a new chat.'
+        createError instanceof Error
+          ? createError.message
+          : 'Could not start a new chat.',
       );
+    } finally {
+      setCreatingConversation(false);
     }
-  }, [loading, reloadSidebar, sessionReady]);
+  }, [
+    creatingConversation,
+    loading,
+    reloadSidebar,
+    sessionReady,
+  ]);
 
   const handleSubmit = useCallback(
-    async (e: FormEvent) => {
-      e.preventDefault();
+    async (event: FormEvent) => {
+      event.preventDefault();
 
-      const text = input.trim();
+      const submittedText = input.trim();
 
-      if (!text || loading || !sessionReady) {
+      if (
+        !submittedText ||
+        loading ||
+        !sessionReady
+      ) {
         return;
       }
 
@@ -167,51 +311,83 @@ export function useChat() {
       setInput('');
       setLoading(true);
 
-      setMessages((prev) => [...prev, { role: 'user', content: text }]);
+      setMessages((previousMessages) => [
+        ...previousMessages,
+        {
+          role: 'user',
+          content: submittedText,
+        },
+      ]);
 
       try {
-        const { reply, conversationId: idFromSend } = await sendChatMessage({
+        const {
+          reply,
+          conversationId: returnedConversationId,
+        } = await sendChatMessage({
           conversationId,
-          message: text,
+          message: submittedText,
         });
 
-        const activeConversationId = idFromSend ?? conversationId;
+        const activeConversationId =
+          returnedConversationId ?? conversationId;
 
         if (activeConversationId) {
           setConversationId(activeConversationId);
         }
 
-        setMessages((prev) => [
-          ...prev,
-          { role: 'assistant', content: reply },
+        setMessages((previousMessages) => [
+          ...previousMessages,
+          {
+            role: 'assistant',
+            content: reply,
+          },
         ]);
 
         if (shouldRefreshGoogleStatus(reply)) {
-          window.dispatchEvent(new Event('google-connection-changed'));
+          window.dispatchEvent(
+            new Event(
+              'google-connection-changed',
+            ),
+          );
         }
 
         void reloadSidebar();
-      } catch (err) {
-        const msg =
-          err instanceof Error ? err.message : 'Something went wrong.';
+      } catch (sendError: unknown) {
+        const errorMessage =
+          sendError instanceof Error
+            ? sendError.message
+            : 'Something went wrong.';
 
-        setError(msg);
-        setMessages((prev) => prev.slice(0, -1));
-        setInput(text);
+        setError(errorMessage);
+
+        /*
+         * Safe with the current single-submit loading guard.
+         * A client-generated message ID would be even stronger.
+         */
+        setMessages((previousMessages) =>
+          previousMessages.slice(0, -1),
+        );
+
+        setInput(submittedText);
       } finally {
         setLoading(false);
       }
     },
-
-    [conversationId, input, loading, reloadSidebar, sessionReady]
+    [
+      conversationId,
+      input,
+      loading,
+      reloadSidebar,
+      sessionReady,
+    ],
   );
 
   const selectConversation = useCallback(
     (id: string) => {
-      void openThread(id);
       setSidebarOpen(false);
+      void openThread(id);
     },
-    [openThread]
+    [openThread],
   );
 
   const renameConversation = useCallback(
@@ -220,16 +396,33 @@ export function useChat() {
         return;
       }
 
+      const normalizedTitle = title.trim();
+
+      if (!normalizedTitle) {
+        setError(
+          'The conversation title cannot be empty.',
+        );
+        return;
+      }
+
       setError(null);
 
       try {
-        await renameConversationApi(id, title);
+        await renameConversationApi(
+          id,
+          normalizedTitle,
+        );
+
         void reloadSidebar();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Could not rename chat.');
+      } catch (renameError: unknown) {
+        setError(
+          renameError instanceof Error
+            ? renameError.message
+            : 'Could not rename chat.',
+        );
       }
     },
-    [reloadSidebar, sessionReady]
+    [reloadSidebar, sessionReady],
   );
 
   const deleteConversation = useCallback(
@@ -243,25 +436,44 @@ export function useChat() {
       try {
         await deleteConversationApi(id);
 
-        const list = await fetchConversations();
-        setConversations(list);
+        const updatedConversationList =
+          await fetchConversations();
 
-        if (conversationId === id) {
-          if (list.length === 0) {
-            setConversationId(undefined);
-            setMessages([]);
-          } else {
-            await openThread(list[0].id);
-          }
+        setConversations(
+          updatedConversationList,
+        );
+
+        if (conversationId !== id) {
+          return;
         }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Could not delete chat.');
+
+        if (
+          updatedConversationList.length === 0
+        ) {
+          openThreadRequestIdRef.current += 1;
+
+          setConversationId(undefined);
+          setMessages([]);
+          return;
+        }
+
+        await openThread(
+          updatedConversationList[0].id,
+        );
+      } catch (deleteError: unknown) {
+        setError(
+          deleteError instanceof Error
+            ? deleteError.message
+            : 'Could not delete chat.',
+        );
       }
     },
-    [conversationId, openThread, sessionReady]
+    [
+      conversationId,
+      openThread,
+      sessionReady,
+    ],
   );
-
-  const showThinking = loading;
 
   return {
     sessionReady,
@@ -276,7 +488,7 @@ export function useChat() {
     sidebarOpen,
     setSidebarOpen,
     bottomRef,
-    showThinking,
+    showThinking: loading,
     handleSubmit,
     handleNewChat,
     selectConversation,
