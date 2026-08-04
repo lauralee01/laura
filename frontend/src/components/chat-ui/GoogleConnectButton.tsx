@@ -9,9 +9,7 @@ import {
 type Variant = 'sidebar' | 'default';
 
 type Props = {
-  /** True after `ensureSession()` and the HttpOnly cookie exists for API calls. */
   sessionReady: boolean;
-  /** Dark sidebar (`#181818`) vs main chrome */
   variant?: Variant;
 };
 
