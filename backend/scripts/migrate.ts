@@ -34,7 +34,6 @@ async function main(): Promise<void> {
       await pool.query(sql);
     }
 
-    console.log('Migrations completed.');
   } finally {
     await pool.end();
   }
