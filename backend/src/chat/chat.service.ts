@@ -67,27 +67,31 @@ export class ChatService {
     history?: LlmChatTurn[],
     conversationId?: string,
   ): Promise<ChatReply> {
-    const dbConversationId = await this.chatHistoryService.ensureConversation(
-      sessionId,
-      conversationId,
-    );
-    await this.chatHistoryService.appendMessage(
-      dbConversationId ?? '',
-      'user',
-      message,
-    );
+    const [dbConversationId, pendingAction, sessionTz] = await Promise.all([
+      this.chatHistoryService.ensureConversation(sessionId, conversationId),
+      sessionId
+        ? this.sessionPreferences.getPendingAction(sessionId)
+        : Promise.resolve(null),
+      sessionId
+        ? this.sessionPreferences.getTimeZone(sessionId)
+        : Promise.resolve(null),
+    ]);
 
+    // Append user message in background so intent classification is not blocked by SQL insert
+    if (dbConversationId) {
+      void this.chatHistoryService
+        .appendMessage(dbConversationId, 'user', message)
+        .catch((e) =>
+          console.error('[chat.service] Failed to persist user message:', e),
+        );
+    }
 
     let priorTurns: LlmChatTurn[] | undefined = history;
     if (!priorTurns && dbConversationId) {
       const turns =
         await this.chatHistoryService.listTurnsForLlm(dbConversationId);
-      priorTurns = turns.slice(0, Math.max(0, turns.length - 1));
+      priorTurns = turns;
     }
-
-    const pendingAction = sessionId
-      ? await this.sessionPreferences.getPendingAction(sessionId)
-      : null;
 
     if (pendingAction?.type === 'web_search_missing_location') {
       const location = message.trim();
@@ -131,8 +135,6 @@ export class ChatService {
       sessionId,
       this.pendingRequestService,
     );
-    const sessionTz =
-      await this.sessionPreferences.getTimeZone(sessionId);
 
     let precomputedEnvelope: IntentEnvelope | undefined;
     let routingClassifyFailed = false;

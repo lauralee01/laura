@@ -33,8 +33,8 @@ function buildClassifierUserMessage(c: IntentClassificationContext): string {
 function tryFastPathClassification(
   c: IntentClassificationContext,
 ): IntentEnvelope | null {
-  // If there's a pending hint or conversation history, let the LLM handle context resolution
-  if (c.pendingHint?.trim() || (c.history && c.history.length > 0)) {
+  // If there's an active pending hint, let the LLM handle context resolution
+  if (c.pendingHint?.trim()) {
     return null;
   }
 
@@ -81,13 +81,28 @@ function tryFastPathClassification(
     };
   }
 
+  // Common identity/capabilities queries
+  if (
+    /^(who are you\??|what can you do\??|help\??|what are your features\??)$/i.test(
+      msg,
+    )
+  ) {
+    return {
+      version: 1,
+      intent: 'general_chat',
+      confidence: 0.99,
+      missingSlots: [],
+      slots: {},
+    };
+  }
+
   return null;
 }
 
 /** Stage-1: LLM → structured {@link IntentEnvelope} used by ChatService routing/fallback logic. */
 @Injectable()
 export class IntentRouterService {
-  constructor(private readonly llm: LlmService) {}
+  constructor(private readonly llm: LlmService) { }
 
   /**
    * Minimum confidence required to run tool orchestration from Stage-1 intent.
@@ -112,9 +127,14 @@ export class IntentRouterService {
       return fastPathResult;
     }
 
-    // 2. LLM PATH: Optimized JSON mode with low temperature & token caps
+    // 2. LLM PATH: Optimized JSON mode with light classifier model, low temperature & token caps
     const systemPrompt = buildIntentClassificationSystemPrompt();
     const userMessage = buildClassifierUserMessage(context);
+
+    const classifierModel =
+      process.env.GEMINI_MODEL?.trim() ||
+      process.env.GEMINI_FALLBACK_MODEL?.trim() ||
+      'gemini-2.5-flash-lite';
 
     const raw = await this.llm.generate({
       systemPrompt,
@@ -122,6 +142,7 @@ export class IntentRouterService {
       temperature: 0.1,
       maxOutputTokens: 250,
       responseMimeType: 'application/json',
+      model: classifierModel,
     });
 
     return parseIntentEnvelopeFromModelText(raw);
