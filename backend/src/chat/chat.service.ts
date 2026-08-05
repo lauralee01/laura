@@ -334,12 +334,17 @@ export class ChatService {
     }
 
     if (toolReply !== null) {
-      await this.intentShadowService.maybeLogLlmIntent(shadowLog(precomputedEnvelope));
-      await this.chatHistoryService.appendMessage(
-        dbConversationId ?? '',
-        'assistant',
-        toolReply,
-      );
+      void this.intentShadowService
+        .maybeLogLlmIntent(shadowLog(precomputedEnvelope))
+        .catch(() => undefined);
+
+      if (dbConversationId) {
+        void this.chatHistoryService
+          .appendMessage(dbConversationId, 'assistant', toolReply)
+          .catch((e) =>
+            console.error('[chat.service] Failed to persist tool reply:', e),
+          );
+      }
 
       void this.memoryPersistenceService
         .writeExtractedMemoriesIfAny(sessionId, message)
@@ -388,27 +393,32 @@ export class ChatService {
 
     let extraContext = '';
 
-    // Kick off everything that can run in parallel
-    const preferencesPromise = sessionId
-      ? Promise.all([
-        this.sessionPreferences.getLocation(sessionId),
-        this.sessionPreferences.getTimeZone(sessionId),
-      ])
-      : Promise.resolve([null, null] as const);
+    // Fast selective fetching: reuse sessionTz and skip memory search for trivial non-substantive queries
+    const locationPromise = sessionId
+      ? this.sessionPreferences.getLocation(sessionId)
+      : Promise.resolve(null);
 
-    const memoriesPromise = sessionId
-      ? this.memoryService.searchMemories({
-        userId: sessionId,
-        query: message,
-        topK: 3,
-      })
-      : Promise.resolve([]);
+    const isSubstantive =
+      message.trim().length >= 4 &&
+      !/^(hi|hello|hey|greetings|thanks|thank you|thx|ok|okay|yes|no|sure|cool|bye|goodbye|got it|sounds good)[!.]?$/i.test(
+        message.trim(),
+      );
 
-    // Wait for both at the same time
-    const [[storedLocation, storedTimeZone], memories] = await Promise.all([
-      preferencesPromise,
+    const memoriesPromise =
+      sessionId && isSubstantive
+        ? this.memoryService.searchMemories({
+          userId: sessionId,
+          query: message,
+          topK: 3,
+        })
+        : Promise.resolve([]);
+
+    const [storedLocation, memories] = await Promise.all([
+      locationPromise,
       memoriesPromise,
     ]);
+
+    const storedTimeZone = sessionTz;
 
     if (storedTimeZone) {
       extraContext +=
@@ -441,11 +451,16 @@ export class ChatService {
       history: priorTurns,
     });
 
-    await this.chatHistoryService.appendMessage(
-      dbConversationId ?? '',
-      'assistant',
-      reply,
-    );
+    if (dbConversationId) {
+      void this.chatHistoryService
+        .appendMessage(dbConversationId, 'assistant', reply)
+        .catch((e) =>
+          console.error(
+            '[chat.service] Failed to persist assistant reply:',
+            e,
+          ),
+        );
+    }
 
     void this.memoryPersistenceService
       .writeExtractedMemoriesIfAny(sessionId, message)
