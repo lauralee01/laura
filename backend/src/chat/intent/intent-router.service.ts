@@ -96,17 +96,17 @@ function tryFastPathClassification(
     };
   }
 
-  // Clear general knowledge & technical queries without tool keywords
-  const isGeneralQueryPrefix =
-    /^(explain |how does |how do |what is |what are |why is |difference between |can you write |write a |convert |format |compare |summarize )/i.test(
-      msg,
-    );
-  const containsToolKeyword =
-    /\b(calendar|meeting|event|schedule|remind|reminder|email|draft|send|mail|search|weather|time|date|timezone|location)\b/i.test(
+  const isClearlyGeneralQuery =
+    /^(explain\b|explain to me\b|can you explain\b|help me understand\b|teach me\b|how does\b|how do\b|how can\b|what is\b|what are\b|what does\b|why is\b|why does\b|difference between\b|what(?:'s| is) the difference\b|give me an example\b|show me how\b|can you write\b|write a\b|convert\b|format\b|compare\b|summarize\b)/i.test(
       msg,
     );
 
-  if (isGeneralQueryPrefix && !containsToolKeyword) {
+  const containsToolKeyword =
+    /\b(calendar|meeting|meetings|event|events|schedule|scheduled|appointment|appointments|remind|reminder|reminders|email|emails|inbox|draft|send|mail|search|look up|find online|weather|forecast|timezone|time zone)\b/i.test(
+      msg,
+    );
+
+  if (isClearlyGeneralQuery && !containsToolKeyword) {
     return {
       version: 1,
       intent: 'general_chat',

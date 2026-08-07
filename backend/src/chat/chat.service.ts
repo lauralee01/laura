@@ -63,29 +63,53 @@ export class ChatService {
 
   private shouldRetrieveMemory(message: string): boolean {
     const clean = message.trim().toLowerCase();
-    if (clean.length < 4) return false;
 
-    // Trivial greetings / smalltalk
-    if (/^(hi|hello|hey|greetings|thanks|thank you|thx|ok|okay|yes|no|sure|cool|bye|goodbye|got it|sounds good)[!.]?$/i.test(clean)) {
+    if (clean.length < 4) {
       return false;
     }
 
-    // Explicit personal / memory queries
-    const isPersonalQuery =
-      /\b(my|me|mine|favorite|favourite|remember|remembered|told you|preferences|preference|know about me|like|dislike|live|work|job|diet|allergy|hobbies)\b/i.test(
+    const isTrivialMessage =
+      /^(hi|hello|hey|greetings|thanks|thank you|thx|ok|okay|yes|no|sure|cool|bye|goodbye|got it|sounds good)[!.]?$/i.test(
         clean,
       );
 
-    // Pure general knowledge / coding questions don't need personal memory lookup
-    const isPureGeneralQuestion =
-      /^(explain|how to|how do|what is|what are|why is|difference between|write a|convert|compare|summarize)\b/i.test(
-        clean,
-      ) && !isPersonalQuery;
-
-    if (isPureGeneralQuestion) {
+    if (isTrivialMessage) {
       return false;
     }
 
+    const explicitlyReferencesMemory =
+      /\b(do you remember|remember when|remember that|what did i tell you|what have i told you|what do you know about me|based on what you know about me|you know about me)\b/i.test(
+        clean,
+      );
+
+    if (explicitlyReferencesMemory) {
+      return true;
+    }
+
+    const referencesPersonalContext =
+      /\b(my (?:job|work|career|resume|application|interview|favorite|favourite|preference|preferences|diet|allergy|allergies|hobby|hobbies|project|projects|school|university|degree|location|timezone)|where i (?:live|work)|i told you|i mentioned|you know i|you know that i)\b/i.test(
+        clean,
+      );
+
+    if (referencesPersonalContext) {
+      return true;
+    }
+
+    const isGeneralKnowledgeQuestion =
+      /^(explain|explain to me|how does|how do|how can|what is|what are|what does|why is|why does|difference between|what's the difference|can you explain|teach me|show me how|give me an example|write a|convert|format|compare|summarize)\b/i.test(
+        clean,
+      );
+
+    if (isGeneralKnowledgeQuestion) {
+      return false;
+    }
+
+    /*
+     * For ambiguous conversational messages, keep memory enabled.
+     *
+     * This preserves Laura's ability to naturally use relevant personal
+     * context without requiring the user to explicitly say "remember".
+     */
     return true;
   }
 
@@ -181,43 +205,86 @@ export class ChatService {
       this.pendingRequestService,
     );
 
-    const intentStart = performance.now();
-    const memoryStart = performance.now();
+    const intentPromise = (async () => {
+      const start = performance.now();
 
-    const intentPromise = this.intentRouter
-      .classify({
-        userMessage: message,
-        pendingHint,
-        sessionTimeZone: sessionTz ?? undefined,
-        history: priorTurns,
-      })
-      .catch(() => undefined);
+      try {
+        const result = await this.intentRouter.classify({
+          userMessage: message,
+          pendingHint,
+          sessionTimeZone: sessionTz ?? undefined,
+          history: priorTurns,
+        });
 
-    const shouldFetchMemory = sessionId && this.shouldRetrieveMemory(message);
+        return {
+          result,
+          ms: Math.round(performance.now() - start),
+          failed: false,
+        };
+      } catch {
+        return {
+          result: undefined,
+          ms: Math.round(performance.now() - start),
+          failed: true,
+        };
+      }
+    })();
 
-    const locationPromise = sessionId
-      ? this.sessionPreferences.getLocation(sessionId)
-      : Promise.resolve(null);
+    const locationPromise = (async () => {
+      const start = performance.now();
 
-    const memoriesPromise = shouldFetchMemory
-      ? this.memoryService.searchMemories({
+      const result = sessionId
+        ? await this.sessionPreferences.getLocation(sessionId)
+        : null;
+
+      return {
+        result,
+        ms: Math.round(performance.now() - start),
+      };
+    })();
+
+    const shouldFetchMemory =
+      Boolean(sessionId) && this.shouldRetrieveMemory(message);
+
+    const memoriesPromise = (async () => {
+      if (!shouldFetchMemory) {
+        return {
+          result: [],
+          ms: 0,
+          skipped: true,
+        };
+      }
+
+      const start = performance.now();
+
+      const result = await this.memoryService.searchMemories({
         userId: sessionId,
         query: message,
         topK: 3,
-      })
-      : Promise.resolve([]);
+      });
 
-    // PARALLEL EXECUTION: Run Intent Routing + Location + Vector Memory Search concurrently
-    const [envelopeResult, storedLocation, memories] = await Promise.all([
+      return {
+        result,
+        ms: Math.round(performance.now() - start),
+        skipped: false,
+      };
+    })();
+
+    const [intentResult, locationResult, memoryResult] = await Promise.all([
       intentPromise,
       locationPromise,
       memoriesPromise,
     ]);
 
-    const precomputedEnvelope = envelopeResult;
-    const routingClassifyFailed = precomputedEnvelope === undefined;
-    const intentMs = Math.round(performance.now() - intentStart);
-    const memoryMs = Math.round(performance.now() - memoryStart);
+    const precomputedEnvelope = intentResult.result;
+    const routingClassifyFailed = intentResult.failed;
+
+    const storedLocation = locationResult.result;
+    const memories = memoryResult.result;
+
+    const intentMs = intentResult.ms;
+    const locationMs = locationResult.ms;
+    const memoryMs = memoryResult.ms;
 
     const envelope = precomputedEnvelope;
     console.log('[intent-classify-local]', {
@@ -410,6 +477,7 @@ export class ChatService {
       console.log('[CHAT PERF]', {
         intentMs,
         memoryMs,
+        locationMs,
         ttftMs: firstTokenMs ?? totalMs,
         totalMs,
         type: 'tool',
