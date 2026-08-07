@@ -97,7 +97,8 @@ export class LlmService {
       throw new Error('No LLM API key found');
     }
 
-    const model = input.model?.trim() || process.env.GEMINI_MODEL?.trim();
+    const model =
+      input.model?.trim() || process.env.GEMINI_MODEL?.trim();
 
     if (!model) {
       throw new Error('GEMINI_MODEL is missing (set backend/.env)');
@@ -128,7 +129,9 @@ export class LlmService {
 
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify(payload),
     });
 
@@ -142,53 +145,82 @@ export class LlmService {
     }
 
     let fullReply = '';
+
     const reader = res.body.getReader();
     const decoder = new TextDecoder('utf-8');
+
     let buffer = '';
+
+    const processDataLine = (line: string): void => {
+      const trimmed = line.trim();
+
+      if (!trimmed.startsWith('data:')) {
+        return;
+      }
+
+      const jsonStr = trimmed.slice(5).trim();
+
+      if (!jsonStr || jsonStr === '[DONE]') {
+        return;
+      }
+
+      try {
+        const json = JSON.parse(jsonStr) as GeminiGenerateResponse;
+        const text = this.extractGeminiText(json);
+
+        if (!text) {
+          return;
+        }
+
+        fullReply += text;
+        onChunk(text);
+      } catch (error) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('[gemini-stream] Failed to parse SSE data', {
+            error,
+            chunk: jsonStr.slice(0, 300),
+          });
+        }
+      }
+    };
 
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+
+      if (done) {
+        break;
+      }
 
       buffer += decoder.decode(value, { stream: true });
+
       const lines = buffer.split('\n');
       buffer = lines.pop() ?? '';
 
       for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith('data:')) continue;
-        const jsonStr = trimmed.slice(5).trim();
-        if (!jsonStr || jsonStr === '[DONE]') continue;
-
-        try {
-          const json = JSON.parse(jsonStr) as GeminiGenerateResponse;
-          const candidate = json.candidates?.[0];
-          const text = candidate?.content?.parts?.[0]?.text;
-          if (text) {
-            fullReply += text;
-            onChunk(text);
-          }
-        } catch {
-          // ignore chunk parse errors
-        }
+        processDataLine(line);
       }
     }
 
-    if (buffer.trim().startsWith('data:')) {
-      try {
-        const jsonStr = buffer.trim().slice(5).trim();
-        const json = JSON.parse(jsonStr) as GeminiGenerateResponse;
-        const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) {
-          fullReply += text;
-          onChunk(text);
-        }
-      } catch {
-        // ignore parse error
-      }
+    /*
+     * Flush any bytes still held by TextDecoder.
+     */
+    buffer += decoder.decode();
+
+    if (buffer.trim()) {
+      processDataLine(buffer);
     }
 
     return fullReply;
+  }
+
+  private extractGeminiText(
+    response: GeminiGenerateResponse,
+  ): string {
+    return (
+      response.candidates?.[0]?.content?.parts
+        ?.map((part) => part.text ?? '')
+        .join('') ?? ''
+    );
   }
 
   private sleep(ms: number): Promise<void> {

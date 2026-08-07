@@ -61,8 +61,19 @@ export class ChatService {
     return assistantAskedQuestion && userReplyLooksShort;
   }
 
+  private normalizeMessageForRouting(message: string): string {
+    return message
+      .trim()
+      .toLowerCase()
+      .replace(
+        /^(thanks|thank you|thx|okay|ok|sure|cool|great|alright)[,!.]?\s+/i,
+        '',
+      )
+      .trim();
+  }
+
   private shouldRetrieveMemory(message: string): boolean {
-    const clean = message.trim().toLowerCase();
+    const clean = this.normalizeMessageForRouting(message);
 
     if (clean.length < 4) {
       return false;
@@ -77,6 +88,14 @@ export class ChatService {
       return false;
     }
 
+    const isClearlyToolQuery =
+      /\b(weather|forecast|calendar|meeting|meetings|appointment|appointments|email|emails|inbox|timezone|time zone)\b/i.test(
+        clean,
+      );
+
+    if (isClearlyToolQuery) {
+      return false;
+    }
     const explicitlyReferencesMemory =
       /\b(do you remember|remember when|remember that|what did i tell you|what have i told you|what do you know about me|based on what you know about me|you know about me)\b/i.test(
         clean,
