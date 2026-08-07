@@ -96,6 +96,26 @@ function tryFastPathClassification(
     };
   }
 
+  // Clear general knowledge & technical queries without tool keywords
+  const isGeneralQueryPrefix =
+    /^(explain |how does |how do |what is |what are |why is |difference between |can you write |write a |convert |format |compare |summarize )/i.test(
+      msg,
+    );
+  const containsToolKeyword =
+    /\b(calendar|meeting|event|schedule|remind|reminder|email|draft|send|mail|search|weather|time|date|timezone|location)\b/i.test(
+      msg,
+    );
+
+  if (isGeneralQueryPrefix && !containsToolKeyword) {
+    return {
+      version: 1,
+      intent: 'general_chat',
+      confidence: 0.98,
+      missingSlots: [],
+      slots: {},
+    };
+  }
+
   return null;
 }
 

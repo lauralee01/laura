@@ -61,6 +61,34 @@ export class ChatService {
     return assistantAskedQuestion && userReplyLooksShort;
   }
 
+  private shouldRetrieveMemory(message: string): boolean {
+    const clean = message.trim().toLowerCase();
+    if (clean.length < 4) return false;
+
+    // Trivial greetings / smalltalk
+    if (/^(hi|hello|hey|greetings|thanks|thank you|thx|ok|okay|yes|no|sure|cool|bye|goodbye|got it|sounds good)[!.]?$/i.test(clean)) {
+      return false;
+    }
+
+    // Explicit personal / memory queries
+    const isPersonalQuery =
+      /\b(my|me|mine|favorite|favourite|remember|remembered|told you|preferences|preference|know about me|like|dislike|live|work|job|diet|allergy|hobbies)\b/i.test(
+        clean,
+      );
+
+    // Pure general knowledge / coding questions don't need personal memory lookup
+    const isPureGeneralQuestion =
+      /^(explain|how to|how do|what is|what are|why is|difference between|write a|convert|compare|summarize)\b/i.test(
+        clean,
+      ) && !isPersonalQuery;
+
+    if (isPureGeneralQuestion) {
+      return false;
+    }
+
+    return true;
+  }
+
   async replyTo(
     sessionId: string,
     message: string,
@@ -68,6 +96,18 @@ export class ChatService {
     conversationId?: string,
     onChunk?: (chunk: string) => void,
   ): Promise<ChatReply> {
+    const requestStart = performance.now();
+    let firstTokenMs: number | undefined;
+
+    const trackedOnChunk = onChunk
+      ? (chunk: string) => {
+        if (firstTokenMs === undefined) {
+          firstTokenMs = Math.round(performance.now() - requestStart);
+        }
+        onChunk(chunk);
+      }
+      : undefined;
+
     const [dbConversationId, pendingAction, sessionTz] = await Promise.all([
       this.chatHistoryService.ensureConversation(sessionId, conversationId),
       sessionId
@@ -126,6 +166,10 @@ export class ChatService {
         );
       }
 
+      if (trackedOnChunk) {
+        trackedOnChunk(reply);
+      }
+
       return {
         reply,
         conversationId: dbConversationId ?? undefined,
@@ -137,20 +181,43 @@ export class ChatService {
       this.pendingRequestService,
     );
 
-    let precomputedEnvelope: IntentEnvelope | undefined;
-    let routingClassifyFailed = false;
+    const intentStart = performance.now();
+    const memoryStart = performance.now();
 
-    try {
-      precomputedEnvelope = await this.intentRouter.classify({
+    const intentPromise = this.intentRouter
+      .classify({
         userMessage: message,
         pendingHint,
         sessionTimeZone: sessionTz ?? undefined,
         history: priorTurns,
-      });
-    } catch {
-      routingClassifyFailed = true;
-      precomputedEnvelope = undefined;
-    }
+      })
+      .catch(() => undefined);
+
+    const shouldFetchMemory = sessionId && this.shouldRetrieveMemory(message);
+
+    const locationPromise = sessionId
+      ? this.sessionPreferences.getLocation(sessionId)
+      : Promise.resolve(null);
+
+    const memoriesPromise = shouldFetchMemory
+      ? this.memoryService.searchMemories({
+        userId: sessionId,
+        query: message,
+        topK: 3,
+      })
+      : Promise.resolve([]);
+
+    // PARALLEL EXECUTION: Run Intent Routing + Location + Vector Memory Search concurrently
+    const [envelopeResult, storedLocation, memories] = await Promise.all([
+      intentPromise,
+      locationPromise,
+      memoriesPromise,
+    ]);
+
+    const precomputedEnvelope = envelopeResult;
+    const routingClassifyFailed = precomputedEnvelope === undefined;
+    const intentMs = Math.round(performance.now() - intentStart);
+    const memoryMs = Math.round(performance.now() - memoryStart);
 
     const envelope = precomputedEnvelope;
     console.log('[intent-classify-local]', {
@@ -335,9 +402,19 @@ export class ChatService {
     }
 
     if (toolReply !== null) {
-      if (onChunk) {
-        onChunk(toolReply);
+      if (trackedOnChunk) {
+        trackedOnChunk(toolReply);
       }
+
+      const totalMs = Math.round(performance.now() - requestStart);
+      console.log('[CHAT PERF]', {
+        intentMs,
+        memoryMs,
+        ttftMs: firstTokenMs ?? totalMs,
+        totalMs,
+        type: 'tool',
+        intent: envelope?.intent ?? 'unknown',
+      });
 
       void this.intentShadowService
         .maybeLogLlmIntent(shadowLog(precomputedEnvelope))
@@ -397,32 +474,6 @@ export class ChatService {
       'Above all, your goal is to make users feel organized, supported, understood, and confident that they have a capable personal assistant helping them.';
 
     let extraContext = '';
-
-    // Fast selective fetching: reuse sessionTz and skip memory search for trivial non-substantive queries
-    const locationPromise = sessionId
-      ? this.sessionPreferences.getLocation(sessionId)
-      : Promise.resolve(null);
-
-    const isSubstantive =
-      message.trim().length >= 4 &&
-      !/^(hi|hello|hey|greetings|thanks|thank you|thx|ok|okay|yes|no|sure|cool|bye|goodbye|got it|sounds good)[!.]?$/i.test(
-        message.trim(),
-      );
-
-    const memoriesPromise =
-      sessionId && isSubstantive
-        ? this.memoryService.searchMemories({
-          userId: sessionId,
-          query: message,
-          topK: 3,
-        })
-        : Promise.resolve([]);
-
-    const [storedLocation, memories] = await Promise.all([
-      locationPromise,
-      memoriesPromise,
-    ]);
-
     const storedTimeZone = sessionTz;
 
     if (storedTimeZone) {
@@ -450,20 +501,33 @@ export class ChatService {
 
     const systemPrompt = systemBasePrompt + extraContext;
 
-    const reply = onChunk
+    const llmStart = performance.now();
+    const reply = trackedOnChunk
       ? await this.llmService.generateStream(
         {
           systemPrompt,
           userMessage: message,
           history: priorTurns,
         },
-        onChunk,
+        trackedOnChunk,
       )
       : await this.llmService.generate({
         systemPrompt,
         userMessage: message,
         history: priorTurns,
       });
+
+    const llmMs = Math.round(performance.now() - llmStart);
+    const totalMs = Math.round(performance.now() - requestStart);
+
+    console.log('[CHAT PERF]', {
+      intentMs,
+      memoryMs,
+      llmMs,
+      ttftMs: firstTokenMs ?? totalMs,
+      totalMs,
+      type: 'llm_generation',
+    });
 
     if (dbConversationId) {
       void this.chatHistoryService
