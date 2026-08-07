@@ -9,11 +9,8 @@ export type LlmChatTurn = {
 export type GenerateInput = {
   systemPrompt: string;
   userMessage: string;
-  /** Prior turns only (optional). The current user turn is always `userMessage`. */
   history?: LlmChatTurn[];
-  /** Sampling temperature (0.0 to 1.0). Defaults to 0.4. Lower values produce faster, deterministic JSON. */
   temperature?: number;
-  /** Max tokens to output. Defaults to 2000. Set smaller limits for classification/extraction. */
   maxOutputTokens?: number;
   /** Instruct model to output JSON directly via constrained decoding. */
   responseMimeType?: 'application/json' | 'text/plain';
