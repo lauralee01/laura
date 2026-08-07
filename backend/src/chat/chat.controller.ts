@@ -10,8 +10,9 @@ import {
   Post,
   Query,
   Req,
+  Res,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { getSessionId } from '../common/session/session.util';
 import { ChatService } from './chat.service';
 import { ChatHistoryService } from './chat-history.service';
@@ -173,6 +174,53 @@ export class ChatController {
       throw new NotFoundException('Conversation not found');
     }
     return { ok: true };
+  }
+
+  @Post('stream')
+  async chatStream(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Body() body: ChatRequest,
+  ): Promise<void> {
+    const message = (body?.message ?? '').trim();
+    if (!message) {
+      res.status(400).json({ error: 'Please send a message.' });
+      return;
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    const sessionId = getSessionId(req);
+    const conversationId = (body?.conversationId ?? '').trim();
+    const history = normalizeHistory(body?.history);
+
+    try {
+      const result = await this.chatService.replyTo(
+        sessionId,
+        message,
+        history,
+        conversationId,
+        (chunk: string) => {
+          res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
+        },
+      );
+
+      res.write(
+        `data: ${JSON.stringify({
+          done: true,
+          conversationId: result.conversationId,
+        })}\n\n`,
+      );
+      res.end();
+    } catch (err: unknown) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'An error occurred';
+      res.write(`data: ${JSON.stringify({ error: errorMessage })}\n\n`);
+      res.end();
+    }
   }
 
   @Post()

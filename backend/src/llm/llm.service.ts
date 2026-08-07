@@ -87,6 +87,110 @@ export class LlmService {
     return this.generateWithGemini(geminiKey, input);
   }
 
+  async generateStream(
+    input: GenerateInput,
+    onChunk: (chunk: string) => void,
+  ): Promise<string> {
+    const geminiKey = process.env.GEMINI_API_KEY?.trim();
+
+    if (!geminiKey) {
+      throw new Error('No LLM API key found');
+    }
+
+    const model = input.model?.trim() || process.env.GEMINI_MODEL?.trim();
+
+    if (!model) {
+      throw new Error('GEMINI_MODEL is missing (set backend/.env)');
+    }
+
+    const url =
+      'https://generativelanguage.googleapis.com/v1beta/models/' +
+      encodeURIComponent(model) +
+      ':streamGenerateContent?alt=sse&key=' +
+      encodeURIComponent(geminiKey);
+
+    const generationConfig: Record<string, unknown> = {
+      temperature: input.temperature ?? 0.4,
+      maxOutputTokens: input.maxOutputTokens ?? 2000,
+    };
+
+    if (input.responseMimeType) {
+      generationConfig.responseMimeType = input.responseMimeType;
+    }
+
+    const payload = {
+      systemInstruction: {
+        parts: [{ text: input.systemPrompt }],
+      },
+      contents: this.buildGeminiContents(input),
+      generationConfig,
+    };
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new GeminiApiError(res.status, errText, model);
+    }
+
+    if (!res.body) {
+      throw new Error('No response body from Gemini stream');
+    }
+
+    let fullReply = '';
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data:')) continue;
+        const jsonStr = trimmed.slice(5).trim();
+        if (!jsonStr || jsonStr === '[DONE]') continue;
+
+        try {
+          const json = JSON.parse(jsonStr) as GeminiGenerateResponse;
+          const candidate = json.candidates?.[0];
+          const text = candidate?.content?.parts?.[0]?.text;
+          if (text) {
+            fullReply += text;
+            onChunk(text);
+          }
+        } catch {
+          // ignore chunk parse errors
+        }
+      }
+    }
+
+    if (buffer.trim().startsWith('data:')) {
+      try {
+        const jsonStr = buffer.trim().slice(5).trim();
+        const json = JSON.parse(jsonStr) as GeminiGenerateResponse;
+        const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) {
+          fullReply += text;
+          onChunk(text);
+        }
+      } catch {
+        // ignore parse error
+      }
+    }
+
+    return fullReply;
+  }
+
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }

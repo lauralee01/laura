@@ -81,6 +81,86 @@ export async function sendChatMessage(input: {
   return { reply, conversationId };
 }
 
+export async function sendChatMessageStream(
+  input: {
+    message: string;
+    conversationId?: string;
+    history?: StoredChatMessage[];
+  },
+  onChunk: (chunk: string) => void,
+): Promise<{ conversationId?: string }> {
+  const url = `${getApiBaseUrl()}/chat/stream`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    ...cred,
+    body: JSON.stringify({
+      conversationId: input.conversationId,
+      message: input.message,
+      history: input.history,
+    }),
+  });
+
+  if (!res.ok) {
+    const rawText = await res.text().catch(() => '');
+    throw new Error(
+      `Chat stream request failed (${res.status}). ${rawText ? rawText.slice(0, 200) : ''}`,
+    );
+  }
+
+  if (!res.body) {
+    throw new Error('Chat response stream missing body.');
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let buffer = '';
+  let finalConversationId: string | undefined;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('data:')) continue;
+      const jsonStr = trimmed.slice(5).trim();
+      if (!jsonStr) continue;
+
+      try {
+        const parsed = JSON.parse(jsonStr) as {
+          chunk?: string;
+          done?: boolean;
+          conversationId?: string;
+          error?: string;
+        };
+
+        if (parsed.error) {
+          throw new Error(parsed.error);
+        }
+
+        if (parsed.chunk) {
+          onChunk(parsed.chunk);
+        }
+
+        if (parsed.done && parsed.conversationId) {
+          finalConversationId = parsed.conversationId;
+        }
+      } catch (err: unknown) {
+        if (err instanceof Error && !err.message.includes('JSON')) {
+          throw err;
+        }
+      }
+    }
+  }
+
+  return { conversationId: finalConversationId };
+}
+
 export async function fetchChatHistory(
   conversationId?: string
 ): Promise<ChatHistoryResponse> {

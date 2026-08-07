@@ -66,6 +66,7 @@ export class ChatService {
     message: string,
     history?: LlmChatTurn[],
     conversationId?: string,
+    onChunk?: (chunk: string) => void,
   ): Promise<ChatReply> {
     const [dbConversationId, pendingAction, sessionTz] = await Promise.all([
       this.chatHistoryService.ensureConversation(sessionId, conversationId),
@@ -334,6 +335,10 @@ export class ChatService {
     }
 
     if (toolReply !== null) {
+      if (onChunk) {
+        onChunk(toolReply);
+      }
+
       void this.intentShadowService
         .maybeLogLlmIntent(shadowLog(precomputedEnvelope))
         .catch(() => undefined);
@@ -445,11 +450,20 @@ export class ChatService {
 
     const systemPrompt = systemBasePrompt + extraContext;
 
-    const reply = await this.llmService.generate({
-      systemPrompt,
-      userMessage: message,
-      history: priorTurns,
-    });
+    const reply = onChunk
+      ? await this.llmService.generateStream(
+        {
+          systemPrompt,
+          userMessage: message,
+          history: priorTurns,
+        },
+        onChunk,
+      )
+      : await this.llmService.generate({
+        systemPrompt,
+        userMessage: message,
+        history: priorTurns,
+      });
 
     if (dbConversationId) {
       void this.chatHistoryService

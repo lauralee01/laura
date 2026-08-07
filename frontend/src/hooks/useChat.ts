@@ -14,6 +14,7 @@ import {
   fetchConversations,
   renameConversation as renameConversationApi,
   sendChatMessage,
+  sendChatMessageStream,
   type ConversationSummary,
 } from '@/lib/chat-api';
 import {
@@ -317,16 +318,38 @@ export function useChat() {
           role: 'user',
           content: submittedText,
         },
+        {
+          role: 'assistant',
+          content: '',
+        },
       ]);
 
+      let accumulatedReply = '';
+
       try {
-        const {
-          reply,
-          conversationId: returnedConversationId,
-        } = await sendChatMessage({
-          conversationId,
-          message: submittedText,
-        });
+        const { conversationId: returnedConversationId } =
+          await sendChatMessageStream(
+            {
+              conversationId,
+              message: submittedText,
+            },
+            (chunk: string) => {
+              setLoading(false);
+              accumulatedReply += chunk;
+              setMessages((prev) => {
+                if (prev.length === 0) return prev;
+                const next = [...prev];
+                const lastIndex = next.length - 1;
+                if (next[lastIndex]?.role === 'assistant') {
+                  next[lastIndex] = {
+                    ...next[lastIndex],
+                    content: accumulatedReply,
+                  };
+                }
+                return next;
+              });
+            },
+          );
 
         const activeConversationId =
           returnedConversationId ?? conversationId;
@@ -335,15 +358,7 @@ export function useChat() {
           setConversationId(activeConversationId);
         }
 
-        setMessages((previousMessages) => [
-          ...previousMessages,
-          {
-            role: 'assistant',
-            content: reply,
-          },
-        ]);
-
-        if (shouldRefreshGoogleStatus(reply)) {
+        if (shouldRefreshGoogleStatus(accumulatedReply)) {
           window.dispatchEvent(
             new Event(
               'google-connection-changed',
@@ -360,12 +375,8 @@ export function useChat() {
 
         setError(errorMessage);
 
-        /*
-         * Safe with the current single-submit loading guard.
-         * A client-generated message ID would be even stronger.
-         */
         setMessages((previousMessages) =>
-          previousMessages.slice(0, -1),
+          previousMessages.slice(0, -2),
         );
 
         setInput(submittedText);
