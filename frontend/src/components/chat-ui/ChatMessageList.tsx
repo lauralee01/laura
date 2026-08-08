@@ -6,6 +6,7 @@ import type { StoredChatMessage } from '@/lib/session';
 type Props = {
   messages: StoredChatMessage[];
   showThinking: boolean;
+  streaming: boolean;
   initializing: boolean;
   bottomRef: RefObject<HTMLDivElement | null>;
 };
@@ -48,6 +49,7 @@ function MessageMarkdown({ content }: { content: string }) {
 export function ChatMessageList({
   messages,
   showThinking,
+  streaming,
   bottomRef,
   initializing,
 }: Props) {
@@ -70,18 +72,29 @@ export function ChatMessageList({
       <ul className="mx-auto flex w-full max-w-2xl flex-col gap-3 overflow-x-hidden">
         {messages.map((m, i) => (
           <li
-            key={`${i}-${m.role}-${m.content.slice(0, 12)}`}
+            key={`${i}-${m.role}`}
             className={`flex min-w-0 ${m.role === 'user' ? 'justify-end' : 'justify-start'
               }`}
           >
             <div
               className={`min-w-0 max-w-[85%] overflow-hidden rounded-2xl px-4 py-2.5 text-sm leading-relaxed break-words ${m.role === 'user'
-                  ? 'bg-zinc-200/90 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
-                  : 'text-zinc-800 shadow-sm dark:text-zinc-100'
+                ? 'bg-zinc-200/90 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
+                : 'text-zinc-800 shadow-sm dark:text-zinc-100'
                 }`}
             >
               {m.role === 'assistant' ? (
-                <MessageMarkdown content={m.content} />
+                <div>
+                  <MessageMarkdown content={m.content} />
+
+                  {streaming && i === messages.length - 1 && (
+                    <span
+                      className="ml-0.5 inline-block animate-pulse"
+                      aria-hidden="true"
+                    >
+                      ▋
+                    </span>
+                  )}
+                </div>
               ) : (
                 <span className="whitespace-pre-wrap break-words">
                   {m.content}

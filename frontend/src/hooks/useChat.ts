@@ -173,9 +173,9 @@ export function useChat() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({
-      behavior: initializing ? 'auto' : 'smooth',
+      behavior: initializing || streaming ? 'auto' : 'smooth',
     });
-  }, [messages, loading, initializing]);
+  }, [messages, loading, initializing, streaming]);
 
   useEffect(() => {
     function handleEscapeKey(

@@ -19,6 +19,7 @@ export function Chat() {
     input,
     setInput,
     loading,
+    streaming,
     error,
     sidebarOpen,
     setSidebarOpen,
@@ -71,6 +72,7 @@ export function Chat() {
         <ChatMessageList
           messages={messages}
           showThinking={showThinking}
+          streaming={streaming}
           bottomRef={bottomRef}
           initializing={initializing}
         />
