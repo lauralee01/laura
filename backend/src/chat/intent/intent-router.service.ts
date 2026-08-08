@@ -7,178 +7,120 @@ import type {
   IntentEnvelope,
 } from './intent.types';
 
-function buildClassifierUserMessage(c: IntentClassificationContext): string {
-  const lines = ['Classify the following.', ''];
-  if (c.history && c.history.length > 0) {
+function buildClassifierUserMessage(
+  context: IntentClassificationContext,
+): string {
+  const lines: string[] = [
+    'Classify the user request using the available conversation context.',
+    '',
+  ];
+
+  /*
+   * Include enough recent conversation for short follow-ups such as:
+   *
+   * "yes"
+   * "do that"
+   * "check again"
+   * "what about tomorrow?"
+   * "send it"
+   *
+   * Six turns gives the classifier roughly three recent
+   * user/assistant exchanges without making the prompt unnecessarily large.
+   */
+  if (context.history?.length) {
     lines.push('Recent conversation:');
-    for (const turn of c.history.slice(-3)) {
-      // Only include the last 3 turns to keep it focused
-      lines.push(
-        `${turn.role === 'user' ? 'User' : 'Assistant'}: ${turn.content}`,
-      );
+
+    for (const turn of context.history.slice(-6)) {
+      const speaker =
+        turn.role === 'user' ? 'User' : 'Assistant';
+
+      lines.push(`${speaker}: ${turn.content}`);
     }
+
     lines.push('');
   }
-  lines.push(`userMessage: ${c.userMessage}`);
-  if (c.pendingHint?.trim()) {
-    lines.push(`pendingHint: ${c.pendingHint.trim()}`);
+
+  lines.push('Current user message:');
+  lines.push(context.userMessage);
+
+  if (context.pendingHint?.trim()) {
+    lines.push('');
+    lines.push('Active pending context:');
+    lines.push(context.pendingHint.trim());
   }
-  if (c.sessionTimeZone?.trim()) {
-    lines.push(`sessionTimeZone: ${c.sessionTimeZone.trim()}`);
+
+  if (context.sessionTimeZone?.trim()) {
+    lines.push('');
+    lines.push(
+      `User session timezone: ${context.sessionTimeZone.trim()}`,
+    );
   }
+
   return lines.join('\n');
 }
 
-/** Fast-path rule classifier to bypass expensive LLM latency for obvious inputs */
-function tryFastPathClassification(
-  c: IntentClassificationContext,
-): IntentEnvelope | null {
-  // If there's an active pending hint, let the LLM handle context resolution
-  if (c.pendingHint?.trim()) {
-    return null;
-  }
-
-  const msg = c.userMessage.trim().toLowerCase();
-
-  // Simple greetings
-  if (
-    /^(hi|hello|hey|greetings|good morning|good afternoon|good evening|howdy)[!.]?$/i.test(
-      msg,
-    )
-  ) {
-    return {
-      version: 1,
-      intent: 'general_chat',
-      confidence: 0.99,
-      missingSlots: [],
-      slots: {},
-    };
-  }
-
-  // Simple thanks
-  if (/^(thanks|thank you|thanks!|thank you!|thx)$/i.test(msg)) {
-    return {
-      version: 1,
-      intent: 'general_chat',
-      confidence: 0.99,
-      missingSlots: [],
-      slots: {},
-    };
-  }
-
-  // Current time & date queries
-  if (
-    /^(what time is it\??|what's the time\??|what is today's date\??|what date is today\??|what day is it\??)$/i.test(
-      msg,
-    )
-  ) {
-    return {
-      version: 1,
-      intent: 'current_datetime',
-      confidence: 0.99,
-      missingSlots: [],
-      slots: {},
-    };
-  }
-
-  // Common identity/capabilities queries
-  if (
-    /^(who are you\??|what can you do\??|help\??|what are your features\??)$/i.test(
-      msg,
-    )
-  ) {
-    return {
-      version: 1,
-      intent: 'general_chat',
-      confidence: 0.99,
-      missingSlots: [],
-      slots: {},
-    };
-  }
-
-  const isClearlyGeneralQuery =
-    /^(explain\b|explain to me\b|can you explain\b|help me understand\b|teach me\b|how does\b|how do\b|how can\b|what is\b|what are\b|what does\b|why is\b|why does\b|difference between\b|what(?:'s| is) the difference\b|give me an example\b|show me how\b|can you write\b|write a\b|convert\b|format\b|compare\b|summarize\b)/i.test(
-      msg,
-    );
-
-  const containsToolKeyword =
-    /\b(calendar|meeting|meetings|event|events|schedule|scheduled|appointment|appointments|remind|reminder|reminders|email|emails|inbox|draft|send|mail|search|look up|find online|weather|forecast|timezone|time zone)\b/i.test(
-      msg,
-    );
-
-  if (isClearlyGeneralQuery && !containsToolKeyword) {
-    return {
-      version: 1,
-      intent: 'general_chat',
-      confidence: 0.98,
-      missingSlots: [],
-      slots: {},
-    };
-  }
-
-  // Short conversational replies without tool keywords
-  const wordCount = msg.split(/\s+/).filter(Boolean).length;
-  if (
-    msg.length <= 160 &&
-    wordCount <= 30 &&
-    !containsToolKeyword &&
-    !/\?/.test(msg)
-  ) {
-    return {
-      version: 1,
-      intent: 'general_chat',
-      confidence: 0.95,
-      missingSlots: [],
-      slots: {},
-    };
-  }
-
-  return null;
-}
-
-/** Stage-1: LLM → structured {@link IntentEnvelope} used by ChatService routing/fallback logic. */
+/**
+ * Stage 1 intent classification.
+ *
+ * Natural-language intent inference belongs to the LLM classifier.
+ * This service supplies conversation/session context and validates
+ * the structured result before ChatService performs any tool action.
+ */
 @Injectable()
 export class IntentRouterService {
   constructor(private readonly llm: LlmService) { }
 
   /**
-   * Minimum confidence required to run tool orchestration from Stage-1 intent.
-   * Invalid or missing env values fall back to 0.6.
+   * Minimum confidence required before ChatService performs
+   * tool orchestration from the classifier result.
    */
   getToolRoutingMinConfidence(): number {
-    const raw = process.env.INTENT_TOOL_MIN_CONFIDENCE;
-    if (!raw) return 0.6;
+    const raw =
+      process.env.INTENT_TOOL_MIN_CONFIDENCE?.trim();
+
+    if (!raw) {
+      return 0.6;
+    }
+
     const parsed = Number(raw);
-    if (Number.isNaN(parsed)) return 0.6;
-    if (parsed < 0) return 0;
-    if (parsed > 1) return 1;
-    return parsed;
+
+    if (!Number.isFinite(parsed)) {
+      return 0.6;
+    }
+
+    return Math.min(1, Math.max(0, parsed));
   }
 
   async classify(
     context: IntentClassificationContext,
   ): Promise<IntentEnvelope> {
-    // 1. FAST PATH: Check deterministic rules to bypass LLM latency
-    const fastPathResult = tryFastPathClassification(context);
-    if (fastPathResult) {
-      return fastPathResult;
-    }
+    const systemPrompt =
+      buildIntentClassificationSystemPrompt();
 
-    // 2. LLM PATH: Optimized JSON mode with light classifier model, low temperature & token caps
-    const systemPrompt = buildIntentClassificationSystemPrompt();
-    const userMessage = buildClassifierUserMessage(context);
+    const userMessage =
+      buildClassifierUserMessage(context);
 
     const classifierModel =
-      process.env.GEMINI_CLASSIFIER_MODEL?.trim() ||
+      process.env.GEMINI_MODEL?.trim() ||
       'gemini-2.5-flash-lite';
 
     const raw = await this.llm.generate({
+      model: classifierModel,
       systemPrompt,
       userMessage,
-      temperature: 0.1,
+
+      /*
+       * Classification should be deterministic rather than creative.
+       */
+      temperature: 0,
+
+      /*
+       * IntentEnvelope is tiny. Keeping this low reduces unnecessary
+       * generation while leaving enough room for structured slots.
+       */
       maxOutputTokens: 250,
+
       responseMimeType: 'application/json',
-      model: classifierModel,
     });
 
     return parseIntentEnvelopeFromModelText(raw);
