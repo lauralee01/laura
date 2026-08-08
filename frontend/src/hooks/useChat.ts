@@ -52,6 +52,7 @@ export function useChat() {
   >([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [streaming, setStreaming] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [creatingConversation, setCreatingConversation] =
     useState(false);
@@ -311,6 +312,7 @@ export function useChat() {
       setError(null);
       setInput('');
       setLoading(true);
+      setStreaming(false);
 
       setMessages((previousMessages) => [
         ...previousMessages,
@@ -335,21 +337,31 @@ export function useChat() {
             },
             (chunk: string) => {
               setLoading(false);
+              setStreaming(true);
+
               accumulatedReply += chunk;
+
               setMessages((prev) => {
-                if (prev.length === 0) return prev;
+                if (prev.length === 0) {
+                  return prev;
+                }
+
                 const next = [...prev];
                 const lastIndex = next.length - 1;
-                if (next[lastIndex]?.role === 'assistant') {
+                const lastMessage = next[lastIndex];
+
+                if (lastMessage?.role === 'assistant') {
                   next[lastIndex] = {
-                    ...next[lastIndex],
+                    ...lastMessage,
                     content: accumulatedReply,
                   };
                 }
+
                 return next;
               });
             },
           );
+        setStreaming(false);
 
         const activeConversationId =
           returnedConversationId ?? conversationId;
@@ -382,6 +394,7 @@ export function useChat() {
         setInput(submittedText);
       } finally {
         setLoading(false);
+        setStreaming(false);
       }
     },
     [
@@ -494,6 +507,7 @@ export function useChat() {
     input,
     setInput,
     loading,
+    streaming,
     initializing,
     error,
     sidebarOpen,
