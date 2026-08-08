@@ -116,6 +116,23 @@ function tryFastPathClassification(
     };
   }
 
+  // Short conversational replies without tool keywords
+  const wordCount = msg.split(/\s+/).filter(Boolean).length;
+  if (
+    msg.length <= 160 &&
+    wordCount <= 30 &&
+    !containsToolKeyword &&
+    !/\?/.test(msg)
+  ) {
+    return {
+      version: 1,
+      intent: 'general_chat',
+      confidence: 0.95,
+      missingSlots: [],
+      slots: {},
+    };
+  }
+
   return null;
 }
 
@@ -152,8 +169,7 @@ export class IntentRouterService {
     const userMessage = buildClassifierUserMessage(context);
 
     const classifierModel =
-      process.env.GEMINI_MODEL?.trim() ||
-      process.env.GEMINI_FALLBACK_MODEL?.trim() ||
+      process.env.GEMINI_CLASSIFIER_MODEL?.trim() ||
       'gemini-2.5-flash-lite';
 
     const raw = await this.llm.generate({

@@ -135,12 +135,17 @@ export async function sendChatMessageStream(
         const parsed = JSON.parse(jsonStr) as {
           chunk?: string;
           done?: boolean;
+          started?: boolean;
           conversationId?: string;
           error?: string;
         };
 
         if (parsed.error) {
           throw new Error(parsed.error);
+        }
+
+        if (parsed.started) {
+          continue;
         }
 
         if (parsed.chunk) {

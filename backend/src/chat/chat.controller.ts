@@ -192,6 +192,8 @@ export class ChatController {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+    res.write(`data: ${JSON.stringify({ started: true })}\n\n`);
 
     const sessionId = getSessionId(req);
     const conversationId = (body?.conversationId ?? '').trim();

@@ -124,12 +124,10 @@ export class ChatService {
     }
 
     /*
-     * For ambiguous conversational messages, keep memory enabled.
-     *
-     * This preserves Laura's ability to naturally use relevant personal
-     * context without requiring the user to explicitly say "remember".
+     * Default off for speed. Memory is opt-in via explicit references or
+     * personal-context phrases above so most chat turns skip embedding search.
      */
-    return true;
+    return false;
   }
 
   async replyTo(
@@ -151,15 +149,30 @@ export class ChatService {
       }
       : undefined;
 
-    const [dbConversationId, pendingAction, sessionTz] = await Promise.all([
-      this.chatHistoryService.ensureConversation(sessionId, conversationId),
-      sessionId
-        ? this.sessionPreferences.getPendingAction(sessionId)
-        : Promise.resolve(null),
-      sessionId
-        ? this.sessionPreferences.getTimeZone(sessionId)
-        : Promise.resolve(null),
-    ]);
+    const dbConversationId = await this.chatHistoryService.ensureConversation(
+      sessionId,
+      conversationId,
+    );
+
+    const [pendingAction, sessionTz, storedLocation, priorTurnsFromDb] =
+      await Promise.all([
+        sessionId
+          ? this.sessionPreferences.getPendingAction(sessionId)
+          : Promise.resolve(null),
+        sessionId
+          ? this.sessionPreferences.getTimeZone(sessionId)
+          : Promise.resolve(null),
+        sessionId
+          ? this.sessionPreferences.getLocation(sessionId)
+          : Promise.resolve(null),
+        history
+          ? Promise.resolve(undefined)
+          : dbConversationId
+            ? this.chatHistoryService.listTurnsForLlm(dbConversationId)
+            : Promise.resolve(undefined),
+      ]);
+
+    const priorTurns: LlmChatTurn[] | undefined = history ?? priorTurnsFromDb;
 
     // Append user message in background so intent classification is not blocked by SQL insert
     if (dbConversationId) {
@@ -168,13 +181,6 @@ export class ChatService {
         .catch((e) =>
           console.error('[chat.service] Failed to persist user message:', e),
         );
-    }
-
-    let priorTurns: LlmChatTurn[] | undefined = history;
-    if (!priorTurns && dbConversationId) {
-      const turns =
-        await this.chatHistoryService.listTurnsForLlm(dbConversationId);
-      priorTurns = turns;
     }
 
     if (pendingAction?.type === 'web_search_missing_location') {
@@ -249,19 +255,6 @@ export class ChatService {
       }
     })();
 
-    const locationPromise = (async () => {
-      const start = performance.now();
-
-      const result = sessionId
-        ? await this.sessionPreferences.getLocation(sessionId)
-        : null;
-
-      return {
-        result,
-        ms: Math.round(performance.now() - start),
-      };
-    })();
-
     const shouldFetchMemory =
       Boolean(sessionId) && this.shouldRetrieveMemory(message);
 
@@ -289,20 +282,17 @@ export class ChatService {
       };
     })();
 
-    const [intentResult, locationResult, memoryResult] = await Promise.all([
+    const [intentResult, memoryResult] = await Promise.all([
       intentPromise,
-      locationPromise,
       memoriesPromise,
     ]);
 
     const precomputedEnvelope = intentResult.result;
     const routingClassifyFailed = intentResult.failed;
 
-    const storedLocation = locationResult.result;
     const memories = memoryResult.result;
 
     const intentMs = intentResult.ms;
-    const locationMs = locationResult.ms;
     const memoryMs = memoryResult.ms;
 
     const envelope = precomputedEnvelope;
@@ -496,7 +486,6 @@ export class ChatService {
       console.log('[CHAT PERF]', {
         intentMs,
         memoryMs,
-        locationMs,
         ttftMs: firstTokenMs ?? totalMs,
         totalMs,
         type: 'tool',

@@ -328,12 +328,15 @@ export function useChat() {
 
       let accumulatedReply = '';
 
+      const priorHistory = messages.slice(-40);
+
       try {
         const { conversationId: returnedConversationId } =
           await sendChatMessageStream(
             {
               conversationId,
               message: submittedText,
+              history: priorHistory,
             },
             (chunk: string) => {
               setLoading(false);
@@ -401,6 +404,7 @@ export function useChat() {
       conversationId,
       input,
       loading,
+      messages,
       reloadSidebar,
       sessionReady,
     ],
