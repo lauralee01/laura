@@ -8,16 +8,19 @@ Rather than simply generating text, Laura plans actions, remembers meaninful con
 
 ## ✨ Features
 
-- 🧠 Natural language understanding
-- 🤖 Autonomous tool selection and orchestration
+- 🧠 Context-aware natural language understanding
+- 🤖 LLM-based intent classification using recent conversation context
+- 🔀 Autonomous tool selection and orchestration
+- ⚡ Real-time token streaming from Gemini to the frontend
 - 📧 Gmail integration (read, draft, send and search emails)
 - 📅 Google Calendar integration
 - 🌍 Live web search for up-to-date information
 - 📍 Location-aware search for nearby places and businesses
-- 💾 Long-term memory using semantic retrieval
+- 💾 Long-term memory with semantic retrieval
+- 🧠 Selective memory retrieval to reduce unnecessary latency
 - 💬 Persistent conversations and session management
 - 🔐 Secure Google OAuth authentication
-- ⚡ Structured LLM outputs for reliable tool execution
+- 🧩 Structured LLM outputs for reliable tool execution
 
 ---
 
@@ -38,31 +41,38 @@ Laura automatically determines which tools are required and executes them before
 
 ## ⚙️ How Laura Works
 
-Each message follows an AI reasoning pipeline before a response is generated.
+Each message passes through a contextual intent-routing pipeline that decides whether Laura should respond directly or invoke one of her tools
 
 ```text
 User Message
       │
       ▼
-Conversation Context
+Recent Conversation + Session Context
       │
       ▼
-Intent Detection
+LLM Intent Classification
       │
       ▼
-Planning
+Structured Intent Envelope
       │
-      ▼
-Tool Selection
-      │
-      ▼
-Tool Execution
-      │
-      ▼
-Memory Retrieval / Update
-      │
-      ▼
-Final Response
+      ├───────────────┬────────────────┐
+      │               │                │
+      ▼               ▼                ▼
+ General Chat     Tool Execution   Memory Retrieval
+                      │             when relevant
+                      ▼                │
+                Gmail / Calendar      │
+                Web Search / etc.     │
+                      │                │
+                      └───────┬────────┘
+                              ▼
+                       Gemini Generation
+                              │
+                              ▼
+                     Real-Time Streaming
+                              │
+                              ▼
+                         Next.js UI
 ```
 
 ---
@@ -70,23 +80,34 @@ Final Response
 ## 🏗️ Architecture
 
 ```text
-             Next.js Frontend
-                    │
-                    ▼
-             NestJS Backend
-                    │
-                    ▼
-              Agent Runtime
-                    │
-      ┌─────────────┼─────────────┐
-      │             │             │
-      ▼             ▼             ▼
- Intent Engine   Memory Engine  Tool Orchestrator
-      │             │             │
-      ▼             ▼             ▼
-    Gemini      PostgreSQL    Gmail
-                              Calendar
-                              Web Search
+                  Next.js Frontend
+                        │
+                  SSE Streaming
+                        │
+                        ▼
+                 NestJS Backend
+                        │
+                        ▼
+               Context + Intent Layer
+                        │
+             Gemini Intent Classifier
+                        │
+                        ▼
+                 Intent Envelope
+                        │
+       ┌────────────────┼────────────────┐
+       │                │                │
+       ▼                ▼                ▼
+ Memory Engine    Tool Orchestrator   LLM Response
+       │                │                │
+       ▼          ┌─────┼─────┐          │
+ PostgreSQL       │     │     │          │
+ Embeddings     Gmail Calendar Web       │
+                    Search               │
+       │                │                │
+       └────────────────┴────────┬───────┘
+                                ▼
+                        Streaming Response
 ```
 
 ---
@@ -109,10 +130,12 @@ Final Response
 ### AI
 
 - Gemini
+- Contextual intent classification
+- Structured JSON outputs
 - Embeddings
-- Semantic Memory
-- Tool Calling
-- Structured Output
+- Semantic long-term memory
+- Tool orchestration
+- Streaming generation
 
 ### Infrastructure
 
