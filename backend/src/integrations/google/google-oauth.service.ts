@@ -50,7 +50,7 @@ export class GoogleOAuthService {
     return this.flow.handleCallback(code, state, oauthError);
   }
 
-  /** Stable fingerprint of session id for logs (never log raw session id). */
+  /** Stable fingerprint of session id for logs */
   sessionFingerprint(sessionId: string): string {
     return fingerprintSession(sessionId);
   }
