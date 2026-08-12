@@ -59,7 +59,7 @@ export function ChatMessageList({
     <div className="min-h-0 w-full max-w-full flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 md:px-6">
       {empty && (
         <p className="mx-auto max-w-2xl py-12 text-center text-base text-zinc-500 dark:text-zinc-400">
-          Hi, I&apos;m laura. How can I help you today?
+          Hi, I&apos;m laura. What can I take care of today?
         </p>
       )}
 
