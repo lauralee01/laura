@@ -46,7 +46,7 @@ export function ChatComposer({ input, onChange, onSubmit, disabled }: Props) {
           ref={textareaRef}
           rows={1}
           className="max-h-48 min-h-[2.75rem] min-w-0 flex-1 resize-none rounded-xl bg-transparent py-2 pl-1 text-base leading-relaxed text-zinc-900 outline-none ring-0 placeholder:text-zinc-400 dark:text-zinc-100 dark:placeholder:text-zinc-500"
-          placeholder="Message laura…"
+          placeholder="Talk to laura…"
           value={input}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => {
