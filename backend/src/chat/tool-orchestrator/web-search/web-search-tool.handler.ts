@@ -7,68 +7,109 @@ import { SessionPreferencesService } from '../../session-preferences.service';
 import type { IntentEnvelope } from '../../intent/intent.types';
 
 const USER_CURRENT_LOCATION = 'USER_CURRENT_LOCATION';
+const DEFAULT_TIME_ZONE = 'America/Chicago';
 
-function getSearchQuery(message: string, envelope?: IntentEnvelope): string {
-    const slots = envelope?.slots ?? {};
-    const q = slots.query;
+type SearchFreshness = 'live' | 'recent' | 'general';
+type SearchDepth = 'basic' | 'advanced';
 
-    if (typeof q === 'string' && q.trim()) {
-        return q.trim();
+function getSearchQuery(
+    message: string,
+    envelope?: IntentEnvelope,
+): string {
+    const query = envelope?.slots?.query;
+
+    if (typeof query === 'string' && query.trim()) {
+        return query.trim();
     }
 
     return message.trim();
 }
 
-function getFreshness(envelope?: IntentEnvelope): string {
+function getFreshness(
+    envelope?: IntentEnvelope,
+): SearchFreshness {
     const freshness = envelope?.slots?.freshness;
 
-    if (typeof freshness === 'string' && freshness.trim()) {
-        return freshness.trim().toLowerCase();
+    if (
+        freshness === 'live' ||
+        freshness === 'recent' ||
+        freshness === 'general'
+    ) {
+        return freshness;
     }
 
     return 'general';
 }
 
-function buildLiveAwareQuery(input: {
-    message: string;
-    query: string;
-    freshness: string;
-    timeZone: string;
-}): string {
-    const now = DateTime.now().setZone(input.timeZone);
-    const todayLong = now.toFormat('LLLL d, yyyy');
-    const weekday = now.toFormat('cccc');
+function getSearchDepth(
+    envelope?: IntentEnvelope,
+): SearchDepth {
+    return envelope?.slots?.searchDepth === 'advanced'
+        ? 'advanced'
+        : 'basic';
+}
 
-    const isLive =
-        input.freshness === 'live' ||
-        input.freshness === 'recent' ||
-        /\b(today|tonight|tomorrow|latest|current|now|this week|this weekend|schedule|games|matches|weather|news|open now)\b/i.test(
-            input.message,
-        );
+function getLocationHint(
+    envelope?: IntentEnvelope,
+): string {
+    const locationHint = envelope?.slots?.locationHint;
 
-    if (!isLive) {
-        return input.query;
+    if (typeof locationHint !== 'string') {
+        return '';
     }
 
+    return locationHint.trim();
+}
+
+function buildSearchQuery(
+    query: string,
+    locationHint: string,
+): string {
+    if (!locationHint) {
+        return query;
+    }
+
+    return `${query} in ${locationHint}`;
+}
+
+function buildCurrentContext(input: {
+    freshness: SearchFreshness;
+    timeZone: string;
+}): string | null {
+    if (
+        input.freshness !== 'live' &&
+        input.freshness !== 'recent'
+    ) {
+        return null;
+    }
+
+    const now = DateTime.now().setZone(input.timeZone);
+
     return [
-        input.query,
-        `Today is ${weekday}, ${todayLong}.`,
-        `Return current information for this exact date when the question is date-sensitive.`,
-        `Prefer official or highly reliable sources.`,
-        `If the query is about sports, include the league/tournament name, match date, teams, and start times if available.`,
-        `If the query is about places, include current availability details only if the source supports them.`,
-        `If a location is provided, only return results in that location and ignore other cities or states.`,
+        `Today is ${now.toFormat('cccc, LLLL d, yyyy')}.`,
+        `Current timezone: ${input.timeZone}.`,
+        'Use current information for this date when the request is date-sensitive.',
+        'Prefer official or highly reliable sources.',
     ].join('\n');
 }
 
 function formatSourcesForPrompt(
-    results: Array<{ title: string; url: string; content: string }>,
+    results: Array<{
+        title: string;
+        url: string;
+        content: string;
+    }>,
 ): string {
     return results
         .slice(0, 5)
         .map(
-            (r, i) =>
-                `Source ${i + 1}\nTitle: ${r.title}\nURL: ${r.url}\nSnippet: ${r.content}`,
+            (result, index) =>
+                [
+                    `Source ${index + 1}`,
+                    `Title: ${result.title}`,
+                    `URL: ${result.url}`,
+                    `Snippet: ${result.content}`,
+                ].join('\n'),
         )
         .join('\n\n');
 }
@@ -88,98 +129,133 @@ export class WebSearchToolHandler {
     ): Promise<string> {
         try {
             const rawQuery = getSearchQuery(message, envelope);
+            const rawLocationHint = getLocationHint(envelope);
 
-            const rawLocationHint =
-                typeof envelope?.slots?.locationHint === 'string'
-                    ? envelope.slots.locationHint.trim()
-                    : '';
+            const [storedLocation, storedTimeZone] =
+                await Promise.all([
+                    this.sessionPreferences.getLocation(sessionId),
+                    this.sessionPreferences.getTimeZone(sessionId),
+                ]);
 
-            const storedLocation = await this.sessionPreferences.getLocation?.(sessionId);
-
-            if (rawLocationHint === USER_CURRENT_LOCATION && !storedLocation) {
+            if (
+                rawLocationHint === USER_CURRENT_LOCATION &&
+                !storedLocation
+            ) {
                 return '__WEB_SEARCH_NEEDS_LOCATION__';
             }
 
             const locationHint =
                 rawLocationHint === USER_CURRENT_LOCATION
                     ? storedLocation ?? ''
-                    : rawLocationHint || '';
-
-            const rawQueryWithLocation = locationHint
-                ? `${rawQuery} in ${locationHint}`
-                : rawQuery;
+                    : rawLocationHint;
 
             const freshness = getFreshness(envelope);
-            const timeZone = 'America/Chicago';
+            const searchDepth = getSearchDepth(envelope);
 
-            const searchQuery = rawQueryWithLocation;
+            const timeZone =
+                storedTimeZone?.trim() || DEFAULT_TIME_ZONE;
 
-            const contextForAnswer = buildLiveAwareQuery({
-                message,
-                query: rawQueryWithLocation,
+            const searchQuery = buildSearchQuery(
+                rawQuery,
+                locationHint,
+            );
+
+            const currentContext = buildCurrentContext({
                 freshness,
                 timeZone,
             });
 
-            const isCurrentInformation =
-                freshness === 'live' || freshness === 'recent';
-
-            const search = await this.webSearch.search(searchQuery, {
-                searchDepth: isCurrentInformation ? 'advanced' : 'basic',
-                maxResults: 5,
-            });
+            const search = await this.webSearch.search(
+                searchQuery,
+                {
+                    searchDepth,
+                    maxResults: 5,
+                },
+            );
 
             if (!search.results.length && !search.answer) {
                 return (
-                    `I couldn't find reliable live results for that yet. ` +
+                    `I couldn't find reliable results for that yet. ` +
                     `Try asking with a city, date, team, or more specific detail.`
                 );
             }
 
-            const sources = formatSourcesForPrompt(search.results);
+            const sources = formatSourcesForPrompt(
+                search.results,
+            );
 
-            const systemPrompt =
-                'You are Laura, a calm, practical personal assistant. ' +
-                'Answer the user using only the provided web search answer and sources. ' +
-                'Do not invent facts, schedules, scores, dates, times, prices, ratings, or availability that are not supported by the sources. ' +
-                'Preserve dates, times, names, locations, and event details exactly as they appear in the provided sources. Do not abbreviate, truncate, or reformat them unless the source already does so. ' +
-                'If the sources do not clearly answer the question, say that clearly and explain what you could verify. ' +
-                'For date-sensitive questions, be very careful: only say something is happening today if the sources clearly support today’s date. ' +
-                'If the user provided a location, only include results for that location. ' +
-                'Do not include businesses, events, restaurants, salons, or places from other cities or states. ' +
-                'If the search results are mostly from the wrong location, say you could not verify good local results instead of giving irrelevant results. ' +
-                'Keep the answer concise and useful. ' +
-                'Use Markdown for formatting where appropriate (lists, bold text, emphasis). ' +
-                'Do not use markdown headings like ### or ##. ' +
-                'Do not use raw markdown tables. ' +
-                'Do not expose URLs anywhere in the main body of the answer. ' +
-                'After the answer, include a Markdown **Sources** section exactly like this:\n\n' +
-                '**Sources**\n' +
-                '- [Source Title 1](https://example.com)\n' +
-                '- [Source Title 2](https://example.com)\n\n' +
-                'Only use URLs that appear in the provided search results. ' +
-                'Never invent, modify, or shorten URLs. ' +
-                'Include no more than three sources. ' +
-                'Do not place source URLs anywhere except inside the Sources section. ' +
-                'For live sports questions, prioritize official tournament, federation, league, or major sports-news sources over generic summaries, Wikipedia pages, previews, or older articles. ' +
-                'Check the publication date and event date carefully. ' +
-                'If the sources conflict about whether a team remains in a tournament, do not choose one silently. State that the results conflict and explain what the most recent authoritative source supports. ' +
-                'Do not infer current tournament status from qualification, group-stage advancement, or host-nation status alone. ';
+            const systemPrompt = [
+                'You are Laura, a calm, practical personal assistant.',
 
-            const userMessage =
-                `User asked: ${message}\n\n` +
-                `Search query used:\n${searchQuery}\n\n` +
-                `Answering instructions:\n${contextForAnswer}\n\n` +
-                (locationHint ? `Location constraint: ${locationHint}\n\n` : '') +
-                (search.answer ? `Search answer:\n${search.answer}\n\n` : '') +
-                `Search sources:\n${sources}`;
+                'Answer the user using only the provided web search answer and sources.',
+
+                'Do not invent facts, schedules, scores, dates, times, prices, ratings, or availability that are not supported by the sources.',
+
+                'Preserve dates, times, names, locations, and event details exactly as supported by the sources.',
+
+                'If the sources do not clearly answer the question, say that clearly and explain what you could verify.',
+
+                'For date-sensitive questions, only describe information as current or happening today when the sources support it.',
+
+                'If a location constraint is provided, only include results relevant to that location.',
+
+                'If the results are mostly for the wrong location, say you could not verify good local results instead of presenting irrelevant results.',
+
+                'For sports questions, prioritize official tournament, federation, league, or major sports-news sources.',
+
+                'Check publication dates and event dates carefully.',
+
+                'If reliable sources conflict, do not silently choose one. Explain the conflict and what the most recent authoritative source supports.',
+
+                'Do not infer current status from older qualification, advancement, preview, or historical information.',
+
+                'Keep the answer concise and useful.',
+
+                'Use Markdown where appropriate, but do not use markdown headings or raw markdown tables.',
+
+                'Do not expose URLs in the main body of the answer.',
+
+                'After the answer, include a **Sources** section containing no more than three provided source URLs.',
+
+                'Never invent, modify, or shorten source URLs.',
+            ].join(' ');
+
+            const userMessageParts = [
+                `User asked:\n${message}`,
+                `Search query used:\n${searchQuery}`,
+            ];
+
+            if (currentContext) {
+                userMessageParts.push(
+                    `Current context:\n${currentContext}`,
+                );
+            }
+
+            if (locationHint) {
+                userMessageParts.push(
+                    `Location constraint:\n${locationHint}`,
+                );
+            }
+
+            if (search.answer) {
+                userMessageParts.push(
+                    `Search answer:\n${search.answer}`,
+                );
+            }
+
+            userMessageParts.push(
+                `Search sources:\n${sources}`,
+            );
 
             return this.llm.generate({
                 systemPrompt,
-                userMessage,
+                userMessage: userMessageParts.join('\n\n'),
             });
-        } catch (e: unknown) {
-            return formatToolFailureMessage('search the web', e);
+        } catch (error: unknown) {
+            return formatToolFailureMessage(
+                'search the web',
+                error,
+            );
         }
     }
 }
