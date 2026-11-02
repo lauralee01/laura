@@ -126,13 +126,17 @@ export function filterEventsForMutation(
     return true;
   });
 
-  if (filtered.length === 0 && events.length > 0 && words.length > 0) {
-    const fallback = events.filter((event) => {
+  /*
+   * If title+time together matched nothing, relax the time constraint and
+   * keep title-word matches. Never fall back to "all events" — that caused
+   * wrong-event deletes/updates when keywords missed.
+   */
+  if (filtered.length === 0 && words.length > 0 && targetHour12 !== undefined) {
+    return events.filter((event) => {
       const normalizedTitle = normalizeTitle(event.title);
       return words.some((word) => normalizedTitle.includes(word));
     });
-    if (fallback.length > 0) return fallback;
   }
 
-  return filtered.length > 0 ? filtered : events;
+  return filtered;
 }

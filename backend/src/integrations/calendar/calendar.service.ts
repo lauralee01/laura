@@ -3,7 +3,10 @@ import { google } from 'googleapis';
 import type { calendar_v3 } from 'googleapis';
 import { GoogleOAuthService } from '../google/google-oauth.service';
 import { fetchMergedEventsFromAllCalendars } from './calendar-list-fetch';
-import { parseLocalDateTimeRange } from './calendar-local-datetime';
+import {
+  parseLocalDateTimeRange,
+  resolveUpdateLocalRange,
+} from './calendar-local-datetime';
 import { requireCalendarSessionId } from './calendar-session';
 import type {
   CreateCalendarEventInput,
@@ -204,11 +207,20 @@ export class CalendarService {
       requestBody.description = input.description.trim() || undefined;
     }
 
-    if (input.start && input.end) {
+    if (input.start || input.end) {
+      const { start: resolvedStart, end: resolvedEnd } =
+        resolveUpdateLocalRange({
+          timeZone: input.timeZone,
+          inputStart: input.start,
+          inputEnd: input.end,
+          existingStartDateTime: existing.start?.dateTime,
+          existingEndDateTime: existing.end?.dateTime,
+        });
+
       const { startUtcIso, endUtcIso } = parseLocalDateTimeRange({
         timeZone: input.timeZone,
-        start: input.start,
-        end: input.end,
+        start: resolvedStart,
+        end: resolvedEnd,
       });
       requestBody.start = { dateTime: startUtcIso };
       requestBody.end = { dateTime: endUtcIso };

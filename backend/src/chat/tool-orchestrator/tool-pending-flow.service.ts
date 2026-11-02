@@ -22,6 +22,7 @@ import type {
 } from './tool-orchestrator.types';
 import type { IntentEnvelope } from '../intent/intent.types';
 import { extractCalendarMutationArgs } from './tool-orchestrator-llm-extractors';
+import { pickUniqueTitleMatch } from './calendar/calendar-event-pick';
 
 /**
  * Multi-turn “pending” routes: email draft is handled first, then calendar delete/update
@@ -90,14 +91,7 @@ export class ToolPendingFlowService {
         let opt = idx !== null && idx >= 1 && idx <= p.options.length ? p.options[idx - 1] : undefined;
 
         if (!opt) {
-          const lowerMsg = message.toLowerCase().trim();
-          const matchedByTitle = p.options.filter((o) => {
-            const titleLower = o.title.toLowerCase();
-            return lowerMsg.includes(titleLower) || titleLower.includes(lowerMsg);
-          });
-          if (matchedByTitle.length === 1) {
-            opt = matchedByTitle[0];
-          }
+          opt = pickUniqueTitleMatch(message, p.options) ?? undefined;
         }
 
         if (!opt) {
@@ -273,15 +267,9 @@ export class ToolPendingFlowService {
           : undefined;
 
       if (!selectedCalendarEvent) {
-        const lowerMsg = message.toLowerCase().trim();
-        const matchedByTitle = pendingUpdatePayload.options.filter((opt) => {
-          const titleLower = opt.title.toLowerCase();
-          return lowerMsg.includes(titleLower) || titleLower.includes(lowerMsg);
-        });
-
-        if (matchedByTitle.length === 1) {
-          selectedCalendarEvent = matchedByTitle[0];
-        }
+        selectedCalendarEvent =
+          pickUniqueTitleMatch(message, pendingUpdatePayload.options) ??
+          undefined;
       }
 
       if (!selectedCalendarEvent) {

@@ -1,6 +1,8 @@
 import { mergeTimeOnlyUpdateOntoEventDay } from './calendar-update-merge';
 import { filterEventsForMutation } from './calendar-mutation-replies';
+import { pickUniqueTitleMatch, scoreTitleMatch } from './calendar-event-pick';
 import type { ListCalendarEventSummary } from '../../../integrations/calendar/calendar.types';
+import { resolveUpdateLocalRange } from '../../../integrations/calendar/calendar-local-datetime';
 
 describe('Calendar Update & Filtering Logic', () => {
   describe('mergeTimeOnlyUpdateOntoEventDay', () => {
@@ -81,6 +83,73 @@ describe('Calendar Update & Filtering Logic', () => {
       const result = filterEventsForMutation(sampleEvents, 'bob at 2pm');
       expect(result).toHaveLength(1);
       expect(result[0].title).toBe('1:1 with Bob');
+    });
+
+    it('returns empty when keywords miss instead of all events', () => {
+      const result = filterEventsForMutation(sampleEvents, 'yoga retreat');
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('pickUniqueTitleMatch', () => {
+    const options = [
+      { title: 'Gym', eventId: 'g' },
+      { title: '1:1 with Bob', eventId: 'b' },
+      { title: 'Team Sync', eventId: 't' },
+    ];
+
+    it('picks a unique title mention', () => {
+      expect(pickUniqueTitleMatch('delete the gym one', options)?.eventId).toBe(
+        'g',
+      );
+    });
+
+    it('returns null for bare numbers (index pick handles those)', () => {
+      expect(pickUniqueTitleMatch('2', options)).toBeNull();
+    });
+
+    it('returns null when two titles score similarly', () => {
+      const ambiguous = [
+        { title: 'Planning Sync', eventId: 'a' },
+        { title: 'Planning Review', eventId: 'b' },
+      ];
+      expect(pickUniqueTitleMatch('planning', ambiguous)).toBeNull();
+    });
+
+    it('scores exact title higher than partial', () => {
+      expect(scoreTitleMatch('Gym', 'Gym')).toBeGreaterThan(
+        scoreTitleMatch('Gym', 'Gymnastics class'),
+      );
+    });
+  });
+
+  describe('resolveUpdateLocalRange', () => {
+    const timeZone = 'America/Chicago';
+    const existingStart = '2026-07-24T19:00:00.000Z'; // 2pm Chicago CDT
+    const existingEnd = '2026-07-24T20:00:00.000Z'; // 3pm Chicago CDT
+
+    it('preserves duration when only start is provided', () => {
+      const range = resolveUpdateLocalRange({
+        timeZone,
+        inputStart: '2026-07-24T16:00:00',
+        existingStartDateTime: existingStart,
+        existingEndDateTime: existingEnd,
+      });
+
+      expect(range.start).toBe('2026-07-24T16:00:00');
+      expect(range.end).toBe('2026-07-24T17:00:00'); // kept 1h duration
+    });
+
+    it('preserves duration when only end is provided', () => {
+      const range = resolveUpdateLocalRange({
+        timeZone,
+        inputEnd: '2026-07-24T17:00:00',
+        existingStartDateTime: existingStart,
+        existingEndDateTime: existingEnd,
+      });
+
+      expect(range.start).toBe('2026-07-24T16:00:00'); // kept 1h duration
+      expect(range.end).toBe('2026-07-24T17:00:00');
     });
   });
 });

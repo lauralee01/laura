@@ -45,7 +45,11 @@ export type UpdateCalendarEventInput = {
   eventId: string;
   timeZone: string;
   title?: string;
-  /** Local ISO datetimes (same format as create). Omit both to leave times unchanged. */
+  /**
+   * Local ISO datetimes (same format as create).
+   * Either side may be omitted; the other is filled from the existing event.
+   * Omit both to leave times unchanged.
+   */
   start?: string;
   end?: string;
   description?: string;
