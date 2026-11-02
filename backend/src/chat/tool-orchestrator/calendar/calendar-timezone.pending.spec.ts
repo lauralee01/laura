@@ -10,6 +10,7 @@ import {
   CalendarTimezoneService,
 } from './calendar-timezone.service';
 import { LlmService } from '../../../llm/llm.service';
+import type { ToolPendingMap } from '../../session-pending.types';
 
 describe('calendar missing-timezone pending', () => {
   let pending: PendingRequestService;
@@ -18,9 +19,11 @@ describe('calendar missing-timezone pending', () => {
   let createHandler: CalendarCreateHandler;
   let mutationHandler: CalendarMutationHandler;
   let getTimeZone: jest.Mock;
+  let toolMap: ToolPendingMap;
 
   beforeEach(async () => {
     getTimeZone = jest.fn().mockResolvedValue(null);
+    toolMap = {};
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -34,6 +37,10 @@ describe('calendar missing-timezone pending', () => {
           useValue: {
             getTimeZone,
             setTimeZone: jest.fn(),
+            getToolPendingMap: jest.fn(async () => ({ ...toolMap })),
+            saveToolPendingMap: jest.fn(async (_sid: string, tools: ToolPendingMap) => {
+              toolMap = { ...tools };
+            }),
           },
         },
         {
@@ -76,7 +83,7 @@ describe('calendar missing-timezone pending', () => {
     });
 
     expect(reply).toBe(CALENDAR_TIMEZONE_PROMPT);
-    const stored = pending.getPending('sess-1', 'calendar_list');
+    const stored = await pending.getPending('sess-1', 'calendar_list');
     expect(stored).not.toBeNull();
     expect(stored?.missingSlots).toContain('timeZone');
     expect(stored?.payload).toMatchObject({
@@ -92,10 +99,12 @@ describe('calendar missing-timezone pending', () => {
     );
 
     expect(reply).toBe(CALENDAR_TIMEZONE_PROMPT);
-    const stored = pending.getPending('sess-1', 'calendar_create');
+    const stored = await pending.getPending('sess-1', 'calendar_create');
     expect(stored).not.toBeNull();
     expect(stored?.missingSlots).toEqual(['timeZone']);
-    expect(stored?.payload.message).toContain('lunch with Sam');
+    expect(
+      (stored?.payload as { message?: string } | undefined)?.message,
+    ).toContain('lunch with Sam');
   });
 
   it('mutation sets calendar_mutate_tz pending and asks for timezone', async () => {
@@ -113,8 +122,10 @@ describe('calendar missing-timezone pending', () => {
     );
 
     expect(reply).toBe(CALENDAR_TIMEZONE_PROMPT);
-    const stored = pending.getPending('sess-1', 'calendar_mutate_tz');
+    const stored = await pending.getPending('sess-1', 'calendar_mutate_tz');
     expect(stored).not.toBeNull();
-    expect(stored?.payload.message).toContain('dentist');
+    expect(
+      (stored?.payload as { message?: string } | undefined)?.message,
+    ).toContain('dentist');
   });
 });

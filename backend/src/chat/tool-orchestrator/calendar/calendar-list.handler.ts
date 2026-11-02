@@ -10,7 +10,11 @@ import {
 import { buildCalendarListUserMessage } from './calendar-list-reply';
 import { resolvePendingListRange } from './calendar-list-range';
 import { formatToolFailureMessage } from '../tool-orchestrator.utils';
-import { getSlotListMode, getSlotNumber } from '../tool-orchestrator.intent-slots';
+import {
+  getListDayOffset,
+  getSlotListMode,
+  getSlotNumber,
+} from '../tool-orchestrator.intent-slots';
 import type { PendingCalendarListPayload } from '../tool-orchestrator.types';
 import type { IntentEnvelope } from '../../intent/intent.types';
 
@@ -21,7 +25,7 @@ function buildListRequestFromEnvelope(
   const weekOffset = getSlotNumber(envelope, 'weekOffset') ?? 0;
   const monthOffset = getSlotNumber(envelope, 'monthOffset') ?? 0;
   const yearOffset = getSlotNumber(envelope, 'yearOffset') ?? 0;
-  const dayOffset = getSlotNumber(envelope, 'dayOffset') ?? 0;
+  const dayOffset = getListDayOffset(envelope);
   const maxEvents = getSlotNumber(envelope, 'maxEvents') ?? 10;
   const spanDays = getSlotNumber(envelope, 'spanDays') ?? 2;
 
@@ -71,7 +75,7 @@ export class CalendarListHandler {
       );
 
       if (!timeZone) {
-        this.pendingRequestService.setPending<PendingCalendarListPayload>(
+        await this.pendingRequestService.setPending<PendingCalendarListPayload>(
           sessionId,
           {
             actionType: 'calendar_list',

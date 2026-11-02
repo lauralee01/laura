@@ -55,16 +55,81 @@ export function getSlotNumber(
 /**
  * Returns a supported calendar-list mode.
  *
- * Falls back to "upcoming" when the slot is missing or invalid.
+ * Accepts flat slots (`mode` + offsets) and also nested shapes the classifier
+ * sometimes emits from prompt examples (`slots.day = { mode, dayOffset }`).
+ * Infers mode from offset fields when `mode` is missing so "today" does not
+ * silently fall through to upcoming.
  */
 export function getSlotListMode(
   envelope: IntentEnvelope | undefined,
 ): CalendarListMode {
-  const mode = getSlotString(envelope, 'mode');
+  const slots = envelope?.slots ?? {};
 
-  return mode && isCalendarListMode(mode)
-    ? mode
-    : DEFAULT_CALENDAR_LIST_MODE;
+  const directMode = getSlotString(envelope, 'mode');
+  if (directMode && isCalendarListMode(directMode)) {
+    return directMode;
+  }
+
+  for (const key of [
+    'day',
+    'week',
+    'month',
+    'year',
+    'next_days',
+    'upcoming',
+    'past',
+  ] as const) {
+    const nested = slots[key];
+    if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+      const nestedMode = (nested as Record<string, unknown>)['mode'];
+      if (typeof nestedMode === 'string' && isCalendarListMode(nestedMode)) {
+        return nestedMode;
+      }
+      if (key !== 'upcoming' && key !== 'past' && isCalendarListMode(key)) {
+        return key;
+      }
+    }
+  }
+
+  if (getSlotNumber(envelope, 'dayOffset') !== null) {
+    return 'day';
+  }
+  if (getSlotNumber(envelope, 'weekOffset') !== null) {
+    return 'week';
+  }
+  if (getSlotNumber(envelope, 'monthOffset') !== null) {
+    return 'month';
+  }
+  if (getSlotNumber(envelope, 'yearOffset') !== null) {
+    return 'year';
+  }
+  if (getSlotNumber(envelope, 'spanDays') !== null) {
+    return 'next_days';
+  }
+
+  return DEFAULT_CALENDAR_LIST_MODE;
+}
+
+/**
+ * Reads dayOffset from flat slots or nested `slots.day.dayOffset`.
+ */
+export function getListDayOffset(
+  envelope: IntentEnvelope | undefined,
+): number {
+  const flat = getSlotNumber(envelope, 'dayOffset');
+  if (flat !== null) {
+    return flat;
+  }
+
+  const nested = envelope?.slots?.day;
+  if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+    const value = (nested as Record<string, unknown>)['dayOffset'];
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+  }
+
+  return 0;
 }
 
 /**

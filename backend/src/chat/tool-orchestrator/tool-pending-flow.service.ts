@@ -55,14 +55,14 @@ export class ToolPendingFlowService {
     if (pendingEmail !== null) return pendingEmail;
 
     const pendingCreate =
-      this.pendingRequestService.getPending<PendingCalendarCreatePayload>(
+      await this.pendingRequestService.getPending<PendingCalendarCreatePayload>(
         sessionId,
         'calendar_create',
       );
 
     if (pendingCreate && envelope?.intent !== 'set_timezone') {
       if (envelope?.intent === 'pending_cancel') {
-        this.pendingRequestService.clearPending(sessionId, 'calendar_create');
+        await this.pendingRequestService.clearPending(sessionId, 'calendar_create');
         return 'No problem — I won’t add that to your calendar.';
       }
 
@@ -74,13 +74,13 @@ export class ToolPendingFlowService {
     }
 
     const pendingDelete =
-      this.pendingRequestService.getPending<PendingCalendarDeletePayload>(
+      await this.pendingRequestService.getPending<PendingCalendarDeletePayload>(
         sessionId,
         'calendar_delete',
       );
     if (pendingDelete) {
       if (envelope?.intent === 'pending_cancel') {
-        this.pendingRequestService.clearPending(sessionId, 'calendar_delete');
+        await this.pendingRequestService.clearPending(sessionId, 'calendar_delete');
         return (
           'Okay — I won’t delete anything. Ask again when you want to remove an event.'
         );
@@ -99,7 +99,7 @@ export class ToolPendingFlowService {
             `Reply with a number 1–${p.options.length} for the event to delete, or say cancel.`
           );
         }
-        this.pendingRequestService.setPending<PendingCalendarDeletePayload>(
+        await this.pendingRequestService.setPending<PendingCalendarDeletePayload>(
           sessionId,
           {
             actionType: 'calendar_delete',
@@ -128,7 +128,7 @@ export class ToolPendingFlowService {
             p.calendarId,
             p.eventId,
           );
-          this.pendingRequestService.clearPending(sessionId, 'calendar_delete');
+          await this.pendingRequestService.clearPending(sessionId, 'calendar_delete');
           return (
             `Deleted from Google Calendar: “${p.title}” (${p.startText}).`
           );
@@ -143,14 +143,14 @@ export class ToolPendingFlowService {
     }
 
     const pendingUpdate =
-      this.pendingRequestService.getPending<PendingCalendarUpdatePayload>(
+      await this.pendingRequestService.getPending<PendingCalendarUpdatePayload>(
         sessionId,
         'calendar_update',
       );
 
     if (pendingUpdate) {
       if (envelope?.intent === 'pending_cancel') {
-        this.pendingRequestService.clearPending(
+        await this.pendingRequestService.clearPending(
           sessionId,
           'calendar_update',
         );
@@ -227,7 +227,7 @@ export class ToolPendingFlowService {
               end: resolvedUpdatedEnd,
             });
 
-          this.pendingRequestService.clearPending(
+          await this.pendingRequestService.clearPending(
             sessionId,
             'calendar_update',
           );
@@ -347,7 +347,7 @@ export class ToolPendingFlowService {
        * change. Move into the details phase while preserving the event target.
        */
       if (updateDetailsAreStillMissing) {
-        this.pendingRequestService.setPending<PendingCalendarUpdatePayload>(
+        await this.pendingRequestService.setPending<PendingCalendarUpdatePayload>(
           sessionId,
           {
             actionType: 'calendar_update',
@@ -425,7 +425,7 @@ export class ToolPendingFlowService {
             end: resolvedUpdatedEnd,
           });
 
-        this.pendingRequestService.clearPending(
+        await this.pendingRequestService.clearPending(
           sessionId,
           'calendar_update',
         );
@@ -453,12 +453,12 @@ export class ToolPendingFlowService {
         return formatToolFailureMessage('set timezone', e);
       }
 
-      const pending = this.pendingRequestService.getPending<PendingCalendarCreatePayload>(
+      const pending = await this.pendingRequestService.getPending<PendingCalendarCreatePayload>(
         sessionId,
         'calendar_create',
       );
       if (pending) {
-        this.pendingRequestService.clearPending(sessionId, 'calendar_create');
+        await this.pendingRequestService.clearPending(sessionId, 'calendar_create');
         return this.calendarCreateHandler.completeCreateAfterTimezone(
           sessionId,
           tzCandidate,
@@ -466,12 +466,12 @@ export class ToolPendingFlowService {
         );
       }
 
-      const pendingList = this.pendingRequestService.getPending<PendingCalendarListPayload>(
+      const pendingList = await this.pendingRequestService.getPending<PendingCalendarListPayload>(
         sessionId,
         'calendar_list',
       );
       if (pendingList) {
-        this.pendingRequestService.clearPending(sessionId, 'calendar_list');
+        await this.pendingRequestService.clearPending(sessionId, 'calendar_list');
         return this.calendarListHandler.completeListAfterTimezone(
           sessionId,
           tzCandidate,
@@ -480,13 +480,13 @@ export class ToolPendingFlowService {
       }
 
       const pendingMutTz =
-        this.pendingRequestService.getPending<PendingCalendarMutateTzPayload>(
+        await this.pendingRequestService.getPending<PendingCalendarMutateTzPayload>(
           sessionId,
           'calendar_mutate_tz',
         );
 
       if (pendingMutTz) {
-        this.pendingRequestService.clearPending(
+        await this.pendingRequestService.clearPending(
           sessionId,
           'calendar_mutate_tz',
         );

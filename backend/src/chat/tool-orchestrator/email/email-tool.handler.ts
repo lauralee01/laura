@@ -30,7 +30,7 @@ export class EmailToolHandler {
     envelope?: IntentEnvelope,
   ): Promise<string> {
     const pendingDraft =
-      this.pendingRequestService.getPending<PendingEmailDraftPayload>(
+      await this.pendingRequestService.getPending<PendingEmailDraftPayload>(
         sessionId,
         'email_draft',
       );
@@ -63,7 +63,7 @@ export class EmailToolHandler {
     const tone = args?.tone;
 
     if (!recipients.length || !context?.trim()) {
-      this.pendingRequestService.setPending<PendingEmailDraftPayload>(
+      await this.pendingRequestService.setPending<PendingEmailDraftPayload>(
         sessionId,
         {
           actionType: 'email_draft',
@@ -127,7 +127,7 @@ export class EmailToolHandler {
     const tone = pendingDraft.payload.tone;
 
     if (!recipients.length) {
-      this.pendingRequestService.setPending<PendingEmailDraftPayload>(
+      await this.pendingRequestService.setPending<PendingEmailDraftPayload>(
         sessionId,
         {
           actionType: 'email_draft',
@@ -145,7 +145,7 @@ export class EmailToolHandler {
     }
 
     if (!context?.trim()) {
-      this.pendingRequestService.setPending<PendingEmailDraftPayload>(
+      await this.pendingRequestService.setPending<PendingEmailDraftPayload>(
         sessionId,
         {
           actionType: 'email_draft',
@@ -162,7 +162,7 @@ export class EmailToolHandler {
       return 'Got it. What should the email say?';
     }
 
-    this.pendingRequestService.clearPending(sessionId, 'email_draft');
+    await this.pendingRequestService.clearPending(sessionId, 'email_draft');
 
     return this.createGmailDraft(sessionId, pendingDraft.originalMessage, {
       recipients,
@@ -191,7 +191,7 @@ export class EmailToolHandler {
         context: args.context,
       });
 
-      this.pendingRequestService.setPending<PendingEmailSendPayload>(
+      await this.pendingRequestService.setPending<PendingEmailSendPayload>(
         sessionId,
         {
           actionType: 'email_send',
@@ -226,7 +226,7 @@ export class EmailToolHandler {
     envelope?: IntentEnvelope,
   ): Promise<string | null> {
     const pendingSend =
-      this.pendingRequestService.getPending<PendingEmailSendPayload>(
+      await this.pendingRequestService.getPending<PendingEmailSendPayload>(
         sessionId,
         'email_send',
       );
@@ -234,7 +234,7 @@ export class EmailToolHandler {
     if (!pendingSend) return null;
 
     if (envelope?.intent === 'pending_cancel') {
-      this.pendingRequestService.clearPending(sessionId, 'email_send');
+      await this.pendingRequestService.clearPending(sessionId, 'email_send');
       return (
         'Okay — I won’t send that draft from here. ' +
         'It’s still in your Gmail drafts if you want to send or edit it there.'
@@ -264,7 +264,7 @@ export class EmailToolHandler {
     envelope: IntentEnvelope,
   ): Promise<string | null> {
     const pendingDraft =
-      this.pendingRequestService.getPending<PendingEmailDraftPayload>(
+      await this.pendingRequestService.getPending<PendingEmailDraftPayload>(
         sessionId,
         'email_draft',
       );
@@ -274,14 +274,14 @@ export class EmailToolHandler {
     }
 
     const pendingSend =
-      this.pendingRequestService.getPending<PendingEmailSendPayload>(
+      await this.pendingRequestService.getPending<PendingEmailSendPayload>(
         sessionId,
         'email_send',
       );
 
     if (pendingSend) {
       if (envelope.intent === 'pending_cancel') {
-        this.pendingRequestService.clearPending(sessionId, 'email_send');
+        await this.pendingRequestService.clearPending(sessionId, 'email_send');
         return (
           'No problem — I won’t send it. The draft is still saved in Gmail if you want to review it later.'
         );
@@ -296,7 +296,7 @@ export class EmailToolHandler {
       }
 
       if (envelope.intent === 'email_draft') {
-        this.pendingRequestService.clearPending(sessionId, 'email_send');
+        await this.pendingRequestService.clearPending(sessionId, 'email_send');
         return this.handleEmailDraftIntent(sessionId, message, envelope);
       }
 
@@ -320,7 +320,7 @@ export class EmailToolHandler {
         pendingSend.payload.draftId,
       );
 
-      this.pendingRequestService.clearPending(sessionId, 'email_send');
+      await this.pendingRequestService.clearPending(sessionId, 'email_send');
 
       return (
         `Done — your email has been sent.\n\n` +
@@ -347,7 +347,7 @@ export class EmailToolHandler {
         revisionInstruction: message,
       });
 
-      this.pendingRequestService.setPending<PendingEmailSendPayload>(
+      await this.pendingRequestService.setPending<PendingEmailSendPayload>(
         sessionId,
         {
           actionType: 'email_send',

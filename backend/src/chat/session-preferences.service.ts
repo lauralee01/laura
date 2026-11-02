@@ -1,6 +1,13 @@
 import { BadRequestException, Injectable, OnModuleDestroy } from '@nestjs/common';
 import { Pool } from 'pg';
 import { IANAZone } from 'luxon';
+import {
+  emptyPendingDocument,
+  parsePendingDocument,
+  type SessionPendingDocument,
+  type ToolPendingMap,
+  type WebSearchMissingLocationPending,
+} from './session-pending.types';
 
 @Injectable()
 export class SessionPreferencesService implements OnModuleDestroy {
@@ -13,6 +20,49 @@ export class SessionPreferencesService implements OnModuleDestroy {
     }
 
     this.pool = new Pool({ connectionString: databaseUrl });
+  }
+
+  private async readPendingDocument(
+    sessionId: string,
+  ): Promise<SessionPendingDocument> {
+    const sid = sessionId.trim();
+    if (!sid) return emptyPendingDocument();
+
+    const res = await this.pool.query<{ pending_action: unknown }>(
+      `
+      SELECT pending_action
+      FROM session_preferences
+      WHERE session_id = $1
+      LIMIT 1;
+      `,
+      [sid],
+    );
+
+    return parsePendingDocument(res.rows[0]?.pending_action ?? null);
+  }
+
+  private async writePendingDocument(
+    sessionId: string,
+    doc: SessionPendingDocument,
+  ): Promise<void> {
+    const sid = sessionId.trim();
+    if (!sid) return;
+
+    const hasWebSearch = Boolean(doc.webSearch);
+    const hasTools = Boolean(doc.tools && Object.keys(doc.tools).length > 0);
+    const value = hasWebSearch || hasTools ? doc : null;
+
+    await this.pool.query(
+      `
+      INSERT INTO session_preferences (session_id, pending_action, updated_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (session_id)
+      DO UPDATE SET
+        pending_action = EXCLUDED.pending_action,
+        updated_at = NOW();
+      `,
+      [sid, value ? JSON.stringify(value) : null],
+    );
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -100,44 +150,40 @@ export class SessionPreferencesService implements OnModuleDestroy {
     );
   }
 
-  async setPendingAction(sessionId: string, pendingAction: unknown): Promise<void> {
-    await this.pool.query(
-      `
-    INSERT INTO session_preferences (session_id, pending_action, updated_at)
-    VALUES ($1, $2, NOW())
-    ON CONFLICT (session_id)
-    DO UPDATE SET
-        pending_action = EXCLUDED.pending_action,
-        updated_at = NOW();
-    `,
-      [sessionId, JSON.stringify(pendingAction)],
-    );
+  async setPendingAction(
+    sessionId: string,
+    pendingAction: WebSearchMissingLocationPending,
+  ): Promise<void> {
+    const doc = await this.readPendingDocument(sessionId);
+    doc.webSearch = pendingAction;
+    await this.writePendingDocument(sessionId, doc);
   }
 
-  async getPendingAction(sessionId: string): Promise<any | null> {
-    const res = await this.pool.query<{ pending_action: any | null }>(
-      `
-    SELECT pending_action
-    FROM session_preferences
-    WHERE session_id = $1
-    LIMIT 1;
-    `,
-      [sessionId],
-    );
-
-    return res.rows[0]?.pending_action ?? null;
+  async getPendingAction(
+    sessionId: string,
+  ): Promise<WebSearchMissingLocationPending | null> {
+    const doc = await this.readPendingDocument(sessionId);
+    return doc.webSearch ?? null;
   }
 
   async clearPendingAction(sessionId: string): Promise<void> {
-    await this.pool.query(
-      `
-    UPDATE session_preferences
-    SET pending_action = NULL,
-        updated_at = NOW()
-    WHERE session_id = $1;
-    `,
-      [sessionId],
-    );
+    const doc = await this.readPendingDocument(sessionId);
+    doc.webSearch = null;
+    await this.writePendingDocument(sessionId, doc);
+  }
+
+  async getToolPendingMap(sessionId: string): Promise<ToolPendingMap> {
+    const doc = await this.readPendingDocument(sessionId);
+    return { ...(doc.tools ?? {}) };
+  }
+
+  async saveToolPendingMap(
+    sessionId: string,
+    tools: ToolPendingMap,
+  ): Promise<void> {
+    const doc = await this.readPendingDocument(sessionId);
+    doc.tools = tools;
+    await this.writePendingDocument(sessionId, doc);
   }
 }
 

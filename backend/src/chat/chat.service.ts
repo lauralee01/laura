@@ -198,14 +198,15 @@ export class ChatService {
       // This pending action has now been handled
       await this.sessionPreferences.clearPendingAction(sessionId);
 
+      const priorEnvelope = pendingAction.envelope ?? {};
       const resumedEnvelope = {
-        ...pendingAction.envelope,
+        ...priorEnvelope,
         slots: {
-          ...(pendingAction.envelope?.slots ?? {}),
+          ...(priorEnvelope.slots ?? {}),
           locationHint: location,
           userLocationHint: location,
         },
-      };
+      } as unknown as IntentEnvelope;
 
       const searchResult = await this.toolOrchestrator.handleWebSearchIntent(
         sessionId,
@@ -244,7 +245,7 @@ export class ChatService {
       };
     }
 
-    const pendingHint = buildPendingHintForClassifier(
+    const pendingHint = await buildPendingHintForClassifier(
       sessionId,
       this.pendingRequestService,
     );
@@ -366,12 +367,12 @@ export class ChatService {
       envelope?.intent === 'calendar_update' ||
       envelope?.intent === 'calendar_delete' ||
       envelope?.intent === 'email_draft';
-    if (this.pendingRequestService.getPending(sessionId, 'email_send') && shouldClearPendingEmailFromEnvelope) {
-      this.pendingRequestService.clearPending(sessionId, 'email_send');
+    if (await this.pendingRequestService.getPending(sessionId, 'email_send') && shouldClearPendingEmailFromEnvelope) {
+      await this.pendingRequestService.clearPending(sessionId, 'email_send');
     }
 
     let toolReply: string | null = null;
-    const isEmailSendPending = this.pendingRequestService.getPending(sessionId, 'email_send');
+    const isEmailSendPending = await this.pendingRequestService.getPending(sessionId, 'email_send');
 
     const isGoogleIntent =
       envelope?.intent === 'calendar_list' ||
@@ -387,7 +388,7 @@ export class ChatService {
         toolReply = `I couldn't ${action}. Google is not connected for this session. Use 'Connect Google' in the app, then try again.`;
 
         if (envelope?.intent === 'email_draft') {
-          this.pendingRequestService.clearPending(sessionId, 'email_draft');
+          await this.pendingRequestService.clearPending(sessionId, 'email_draft');
         }
       }
     }
@@ -409,12 +410,46 @@ export class ChatService {
       }
     }
 
-    const hasPendingCalendarAction =
-      Boolean(this.pendingRequestService.getPending(sessionId, 'calendar_update')) ||
-      Boolean(this.pendingRequestService.getPending(sessionId, 'calendar_delete')) ||
-      Boolean(this.pendingRequestService.getPending(sessionId, 'calendar_create')) ||
-      Boolean(this.pendingRequestService.getPending(sessionId, 'calendar_list')) ||
-      Boolean(this.pendingRequestService.getPending(sessionId, 'calendar_mutate_tz'));
+    /*
+     * Resume email_draft without requiring the classifier to emit email_draft
+     * again (e.g. user just replies with "jane@x.com").
+     */
+    const isEmailDraftPending = await this.pendingRequestService.getPending(
+      sessionId,
+      'email_draft',
+    );
+    const emailDraftInterruptedBy =
+      envelope?.intent === 'calendar_list' ||
+      envelope?.intent === 'calendar_create' ||
+      envelope?.intent === 'calendar_update' ||
+      envelope?.intent === 'calendar_delete' ||
+      envelope?.intent === 'web_search' ||
+      envelope?.intent === 'current_datetime' ||
+      envelope?.intent === 'pending_cancel';
+
+    if (
+      isEmailDraftPending &&
+      toolReply === null &&
+      !isEmailSendPending &&
+      !emailDraftInterruptedBy
+    ) {
+      toolReply = await this.toolOrchestrator.handleEmailDraftIntent(
+        sessionId,
+        message,
+        envelope,
+      );
+    }
+
+    const hasPendingCalendarAction = await this.pendingRequestService.hasAny(
+      sessionId,
+      [
+        'calendar_update',
+        'calendar_delete',
+        'calendar_create',
+        'calendar_list',
+        'calendar_mutate_tz',
+      ],
+    );
 
     if (hasPendingCalendarAction && toolReply === null) {
       toolReply = await this.toolOrchestrator.tryHandle(

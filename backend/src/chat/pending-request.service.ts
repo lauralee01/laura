@@ -1,54 +1,34 @@
 import { Injectable } from '@nestjs/common';
+import { SessionPreferencesService } from './session-preferences.service';
+import type {
+  PendingActionType,
+  PendingRequest,
+  ToolPendingMap,
+} from './session-pending.types';
 
-export type PendingActionType =
-  | 'calendar_create'
-  | 'calendar_list'
-  | 'calendar_delete'
-  | 'calendar_update'
-  | 'calendar_mutate_tz'
-  | 'email_draft'
-  | 'email_send';
-
-export type PendingSlotName =
-  | 'timeZone'
-  | 'title'
-  | 'timeRange'
-  | 'confirmation'
-  | 'calendarId'
-  | 'recipient'
-  | 'recipientEmail'
-  | 'subject'
-  | 'body'
-  | 'targetEvent'
-  | 'updateDetails';
-
-export type PendingRequest<TPayload> = {
-  actionType: PendingActionType;
-  originalMessage: string;
-  payload: TPayload;
-  missingSlots: PendingSlotName[];
-  collectedSlots: Partial<Record<PendingSlotName, string>>;
-  createdAt: number;
-  expiresAt: number;
-};
+export type {
+  PendingActionType,
+  PendingRequest,
+  PendingSlotName,
+} from './session-pending.types';
 
 /**
- * In-memory pending-intent store keyed by session.
- * Multiple pending actions can coexist per session (one per action type).
+ * Durable pending-intent store keyed by session + action type.
+ * Persisted in `session_preferences.pending_action.tools` so multi-turn
+ * calendar/email flows survive process restarts.
  */
 @Injectable()
 export class PendingRequestService {
-  private readonly bySession = new Map<
-    string,
-    Map<PendingActionType, PendingRequest<unknown>>
-  >();
+  constructor(
+    private readonly sessionPreferences: SessionPreferencesService,
+  ) { }
 
-  setPending<TPayload>(
+  async setPending<TPayload>(
     sessionId: string,
     pending: Omit<PendingRequest<TPayload>, 'createdAt' | 'expiresAt'> & {
       ttlMs?: number;
     },
-  ): void {
+  ): Promise<void> {
     const sid = sessionId.trim();
     if (!sid) return;
 
@@ -64,47 +44,62 @@ export class PendingRequestService {
       expiresAt: now + ttlMs,
     };
 
-    const existing = this.bySession.get(sid) ?? new Map();
-    existing.set(next.actionType, next as PendingRequest<unknown>);
-    this.bySession.set(sid, existing);
+    const tools = await this.loadActiveTools(sid);
+    tools[next.actionType] = next as PendingRequest<unknown>;
+    await this.sessionPreferences.saveToolPendingMap(sid, tools);
   }
 
-  getPending<TPayload>(
+  async getPending<TPayload>(
     sessionId: string,
     actionType: PendingActionType,
-  ): PendingRequest<TPayload> | null {
+  ): Promise<PendingRequest<TPayload> | null> {
     const sid = sessionId.trim();
     if (!sid) return null;
-    this.gcExpiredForSession(sid);
 
-    const byAction = this.bySession.get(sid);
-    const value = byAction?.get(actionType);
+    const tools = await this.loadActiveTools(sid);
+    const value = tools[actionType];
     if (!value) return null;
     return value as PendingRequest<TPayload>;
   }
 
-  clearPending(sessionId: string, actionType: PendingActionType): void {
+  async clearPending(
+    sessionId: string,
+    actionType: PendingActionType,
+  ): Promise<void> {
     const sid = sessionId.trim();
     if (!sid) return;
-    const byAction = this.bySession.get(sid);
-    if (!byAction) return;
-    byAction.delete(actionType);
-    if (byAction.size === 0) {
-      this.bySession.delete(sid);
-    }
+
+    const tools = await this.loadActiveTools(sid);
+    if (!(actionType in tools)) return;
+    delete tools[actionType];
+    await this.sessionPreferences.saveToolPendingMap(sid, tools);
   }
 
-  private gcExpiredForSession(sessionId: string): void {
-    const byAction = this.bySession.get(sessionId);
-    if (!byAction) return;
+  async hasAny(
+    sessionId: string,
+    actionTypes: PendingActionType[],
+  ): Promise<boolean> {
+    const tools = await this.loadActiveTools(sessionId);
+    return actionTypes.some((actionType) => Boolean(tools[actionType]));
+  }
+
+  private async loadActiveTools(sessionId: string): Promise<ToolPendingMap> {
+    const tools = await this.sessionPreferences.getToolPendingMap(sessionId);
     const now = Date.now();
-    for (const [actionType, pending] of byAction.entries()) {
-      if (pending.expiresAt <= now) {
-        byAction.delete(actionType);
+    let changed = false;
+
+    for (const actionType of Object.keys(tools) as PendingActionType[]) {
+      const pending = tools[actionType];
+      if (!pending || pending.expiresAt <= now) {
+        delete tools[actionType];
+        changed = true;
       }
     }
-    if (byAction.size === 0) {
-      this.bySession.delete(sessionId);
+
+    if (changed) {
+      await this.sessionPreferences.saveToolPendingMap(sessionId, tools);
     }
+
+    return tools;
   }
 }

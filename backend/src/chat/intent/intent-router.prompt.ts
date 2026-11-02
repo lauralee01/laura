@@ -112,17 +112,21 @@ schedule, agenda, availability, meetings, appointments, or events.
 Examples:
 "How's my week looking?"
 "Do I have anything tomorrow?"
+"What's on my calendar today?"
 
 Do not use calendar_list for generic planning such as
 "Help me plan my week."
 
-Slots:
-- day: { "mode": "day", "dayOffset": number }
-- week: { "mode": "week", "weekOffset": number }
-- month: { "mode": "month", "monthOffset": number }
-- year: { "mode": "year", "yearOffset": number }
-- upcoming: { "mode": "upcoming", "maxEvents": 10 }
-- multiple days: { "mode": "next_days", "spanDays": number }
+Slots must be FLAT on the envelope (always include mode):
+- today: { "mode": "day", "dayOffset": 0 }
+- tomorrow: { "mode": "day", "dayOffset": 1 }
+- this week: { "mode": "week", "weekOffset": 0 }
+- this month: { "mode": "month", "monthOffset": 0 }
+- this year: { "mode": "year", "yearOffset": 0 }
+- next N events: { "mode": "upcoming", "maxEvents": 10 }
+- today and tomorrow: { "mode": "next_days", "spanDays": 2 }
+
+Never use mode "upcoming" for "today" / "tomorrow" / a specific day.
 
 calendar_create:
 Use when the user wants an actual event added, scheduled, booked,

@@ -52,7 +52,7 @@ export class CalendarCreateHandler {
   ): Promise<string> {
     try {
       const pending =
-        this.pendingRequestService.getPending<PendingCalendarCreatePayload>(
+        await this.pendingRequestService.getPending<PendingCalendarCreatePayload>(
           sessionId,
           'calendar_create',
         );
@@ -67,7 +67,7 @@ export class CalendarCreateHandler {
       );
 
       if (!timeZone) {
-        this.pendingRequestService.setPending<PendingCalendarCreatePayload>(
+        await this.pendingRequestService.setPending<PendingCalendarCreatePayload>(
           sessionId,
           {
             actionType: 'calendar_create',
@@ -103,7 +103,7 @@ export class CalendarCreateHandler {
           missingSlots.push('timeRange');
         }
 
-        this.pendingRequestService.setPending<PendingCalendarCreatePayload>(
+        await this.pendingRequestService.setPending<PendingCalendarCreatePayload>(
           sessionId,
           {
             actionType: 'calendar_create',
@@ -134,7 +134,7 @@ export class CalendarCreateHandler {
         timeZone,
       });
 
-      this.pendingRequestService.clearPending(sessionId, 'calendar_create');
+      await this.pendingRequestService.clearPending(sessionId, 'calendar_create');
 
       return this.formatCalendarCreateSuccess({
         title: event.title,
@@ -160,7 +160,7 @@ export class CalendarCreateHandler {
         timeZone,
       );
       if (!args || !args.title?.trim() || !args.start?.trim() || !args.end?.trim()) {
-        this.pendingRequestService.setPending<PendingCalendarCreatePayload>(
+        await this.pendingRequestService.setPending<PendingCalendarCreatePayload>(
           sessionId,
           {
             actionType: 'calendar_create',
@@ -194,7 +194,7 @@ export class CalendarCreateHandler {
         reminderMinutesBefore: args.reminderMinutesBefore,
         timeZone,
       });
-      this.pendingRequestService.clearPending(sessionId, 'calendar_create');
+      await this.pendingRequestService.clearPending(sessionId, 'calendar_create');
       return this.formatCalendarCreateSuccess({
         title: event.title,
         start: args.start,

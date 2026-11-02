@@ -82,7 +82,7 @@ export class CalendarMutationHandler {
       );
 
       if (!timeZone) {
-        this.pendingRequestService.setPending<PendingCalendarMutateTzPayload>(
+        await this.pendingRequestService.setPending<PendingCalendarMutateTzPayload>(
           sessionId,
           {
             actionType: 'calendar_mutate_tz',
@@ -206,7 +206,7 @@ export class CalendarMutationHandler {
       );
 
       const activePendingUpdate =
-        this.pendingRequestService.getPending<PendingCalendarUpdatePayload>(
+        await this.pendingRequestService.getPending<PendingCalendarUpdatePayload>(
           sessionId,
           'calendar_update',
         );
@@ -261,7 +261,7 @@ export class CalendarMutationHandler {
             end: resolvedUpdatedEnd,
           });
 
-        this.pendingRequestService.clearPending(
+        await this.pendingRequestService.clearPending(
           sessionId,
           'calendar_update',
         );
@@ -285,7 +285,7 @@ export class CalendarMutationHandler {
           matchingEventCandidates[0];
 
         if (extractedMutation.operation === 'delete') {
-          this.pendingRequestService.setPending<PendingCalendarDeletePayload>(
+          await this.pendingRequestService.setPending<PendingCalendarDeletePayload>(
             sessionId,
             {
               actionType: 'calendar_delete',
@@ -317,7 +317,7 @@ export class CalendarMutationHandler {
          * another calendar search.
          */
         if (updateDetailsAreMissing) {
-          this.pendingRequestService.setPending<PendingCalendarUpdatePayload>(
+          await this.pendingRequestService.setPending<PendingCalendarUpdatePayload>(
             sessionId,
             {
               actionType: 'calendar_update',
@@ -420,7 +420,7 @@ export class CalendarMutationHandler {
         }));
 
       if (extractedMutation.operation === 'delete') {
-        this.pendingRequestService.setPending<PendingCalendarDeletePayload>(
+        await this.pendingRequestService.setPending<PendingCalendarDeletePayload>(
           sessionId,
           {
             actionType: 'calendar_delete',
@@ -435,7 +435,7 @@ export class CalendarMutationHandler {
           },
         );
       } else {
-        this.pendingRequestService.setPending<PendingCalendarUpdatePayload>(
+        await this.pendingRequestService.setPending<PendingCalendarUpdatePayload>(
           sessionId,
           {
             actionType: 'calendar_update',
