@@ -14,7 +14,7 @@
 export const INTENT_CLASSIFICATION_SCHEMA_VERSION = 1 as const;
 
 /** Prompt / parser version for logs and regression tests (increment when JSON shape changes). */
-export const INTENT_CLASSIFICATION_PROMPT_VERSION = 'batch-g-v4';
+export const INTENT_CLASSIFICATION_PROMPT_VERSION = 'batch-g-v5';
 
 export const INTENT_IDS = [
   'general_chat',
@@ -38,13 +38,39 @@ export type IntentId = (typeof INTENT_IDS)[number];
 export type IntentEnvelope = {
   version: typeof INTENT_CLASSIFICATION_SCHEMA_VERSION;
   intent: IntentId;
-  /** 0–1; use for future gating (Batch B+). */
+  /** 0–1 when the model provided a score; ignored for gating when confidenceKnown is false. */
   confidence: number;
+  /**
+   * False when the model omitted confidence. Missing confidence must not be
+   * treated the same as a real low score (parser used to default to 0.5).
+   */
+  confidenceKnown: boolean;
   /** Slot names still required before execution (e.g. timeZone). */
   missingSlots: string[];
   /** Intent-specific payload; validated per intent in later batches. */
   slots: Record<string, unknown>;
 };
+
+/** Tool intents that must not run when confidence is known-low. */
+export const CONFIDENCE_GATED_INTENTS = [
+  'calendar_create',
+  'calendar_update',
+  'calendar_delete',
+  'email_draft',
+  'email_send_confirm',
+  'email_draft_revise',
+] as const satisfies readonly IntentId[];
+
+export type ConfidenceGatedIntent =
+  (typeof CONFIDENCE_GATED_INTENTS)[number];
+
+export function isConfidenceGatedIntent(
+  intent: IntentId,
+): intent is ConfidenceGatedIntent {
+  return (CONFIDENCE_GATED_INTENTS as readonly string[]).includes(
+    intent,
+  );
+}
 
 /** Input to Stage-1 classify (expand when pending state is serialized for the model). */
 export type IntentClassificationContext = {

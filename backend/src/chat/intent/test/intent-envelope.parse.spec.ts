@@ -21,7 +21,16 @@ describe('parseIntentEnvelopeFromModelText', () => {
     const raw = '{"version":1,"intent":"clarify","slots":{}}';
     const e = parseIntentEnvelopeFromModelText(raw);
     expect(e.confidence).toBe(0.5);
+    expect(e.confidenceKnown).toBe(false);
     expect(e.missingSlots).toEqual([]);
+  });
+
+  it('marks confidenceKnown when the model provides a score', () => {
+    const raw =
+      '{"version":1,"intent":"general_chat","confidence":0.91,"slots":{}}';
+    const e = parseIntentEnvelopeFromModelText(raw);
+    expect(e.confidence).toBe(0.91);
+    expect(e.confidenceKnown).toBe(true);
   });
 
   it('extracts JSON from surrounding text', () => {

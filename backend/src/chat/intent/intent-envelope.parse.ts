@@ -50,6 +50,7 @@ export function parseIntentEnvelopeFromModelText(raw: string): IntentEnvelope {
   }
 
   let confidence = 0.5;
+  let confidenceKnown = false;
   const c = obj['confidence'];
   if (c !== undefined) {
     if (typeof c !== 'number' || Number.isNaN(c) || c < 0 || c > 1) {
@@ -58,6 +59,7 @@ export function parseIntentEnvelopeFromModelText(raw: string): IntentEnvelope {
       );
     }
     confidence = c;
+    confidenceKnown = true;
   }
 
   let missingSlots: string[] = [];
@@ -84,6 +86,7 @@ export function parseIntentEnvelopeFromModelText(raw: string): IntentEnvelope {
     version: INTENT_CLASSIFICATION_SCHEMA_VERSION,
     intent: intentUnknown,
     confidence,
+    confidenceKnown,
     missingSlots,
     slots,
   };

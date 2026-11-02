@@ -48,16 +48,30 @@ ROUTING PRINCIPLES
 GENERAL CHAT
 
 Use general_chat for conversation, reasoning, explanations, coding,
-writing, brainstorming, advice, routines, planning, and timeless
-knowledge when no specialized Laura capability is needed.
+writing, brainstorming, advice, routines, planning, date arithmetic,
+countdowns, and timeless knowledge when no specialized Laura
+capability is needed.
 
-Do not use general_chat when accurate fulfillment requires current
-information, calendar, email, current date/time, or another tool.
+Do not use general_chat when accurate fulfillment requires live
+external information, calendar, email, or a pure clock/date lookup.
 
 CURRENT DATE/TIME
 
-Use current_datetime when the user asks for the current date, day,
-or time.
+Use current_datetime ONLY when the user is asking what the current
+clock time or calendar date is right now — for example:
+"What time is it?"
+"What's today's date?"
+"What day is it today?"
+
+Do NOT use current_datetime for date math, remaining days, durations,
+countdowns, ages, or "until / left in" questions. Those are
+general_chat (Laura already has the current date in context).
+
+Examples that must be general_chat, not current_datetime:
+"How many days left in the year?"
+"How many days until New Year?"
+"How many weeks until my birthday?"
+"What day will it be in 40 days?"
 
 WEB SEARCH
 

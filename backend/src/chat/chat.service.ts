@@ -10,9 +10,15 @@ import {
   buildPendingHintForClassifier,
   IntentShadowService,
   IntentRouterService,
+  isConfidenceGatedIntent,
   type IntentEnvelope,
 } from './intent';
 import { GoogleOAuthService } from '../integrations/google/google-oauth.service';
+import {
+  buildGroundedDateTimeContext,
+  formatCurrentDateTime,
+  resolveSessionTimeZone,
+} from './datetime-context';
 
 type ChatReply = {
   reply: string;
@@ -304,12 +310,22 @@ export class ChatService {
     });
     const minToolConfidence =
       this.intentRouter.getToolRoutingMinConfidence();
-    const isLowConfidenceIntent =
-      !!envelope && envelope.confidence < minToolConfidence;
+    /*
+     * Only a known-low score gates tools. Omitted confidence used to default
+     * to 0.5 and incorrectly blocked general_chat with a canned rephrase.
+     */
+    const isKnownLowConfidence =
+      !!envelope &&
+      envelope.confidenceKnown &&
+      envelope.confidence < minToolConfidence;
+    const isGatedToolBlocked =
+      !!envelope &&
+      isConfidenceGatedIntent(envelope.intent) &&
+      isKnownLowConfidence;
     const isChatLikeIntent =
       envelope?.intent === 'general_chat' ||
       envelope?.intent === 'clarify' ||
-      isLowConfidenceIntent;
+      isGatedToolBlocked;
 
     const shadowLog = (e?: IntentEnvelope) => ({
       sessionId,
@@ -395,20 +411,11 @@ export class ChatService {
       );
     }
 
-    if (toolReply === null) {
+    if (toolReply === null && !isGatedToolBlocked) {
       switch (envelope?.intent) {
         case 'current_datetime': {
-          const timeZone = sessionTz ?? 'America/Chicago';
-          const formatted = new Intl.DateTimeFormat('en-US', {
-            timeZone,
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            timeZoneName: 'short',
-          }).format(new Date());
+          const timeZone = resolveSessionTimeZone(sessionTz);
+          const formatted = formatCurrentDateTime(timeZone);
           toolReply = `The current date and time in ${timeZone} is ${formatted}.`;
           break;
         }
@@ -469,8 +476,18 @@ export class ChatService {
       envelope?.intent === 'clarify' &&
       this.isLikelyFollowUpAnswer(message, priorTurns);
 
-    if (toolReply === null && envelope && (envelope.intent === 'clarify' || isLowConfidenceIntent) && !shouldTreatAsFollowUpAnswer) {
-      toolReply = 'I did not fully catch that. Could you rephrase what you want me to do? ';
+    /*
+     * Canned rephrase only for explicit clarify or blocked gated tools.
+     * Never block general_chat (including omitted/low confidence) from the LLM.
+     */
+    if (
+      toolReply === null &&
+      envelope &&
+      (envelope.intent === 'clarify' || isGatedToolBlocked) &&
+      !shouldTreatAsFollowUpAnswer
+    ) {
+      toolReply =
+        'I did not fully catch that. Could you rephrase what you want me to do? ';
     }
 
     if (toolReply === null && !isChatLikeIntent) {
@@ -551,6 +568,8 @@ export class ChatService {
 
     let extraContext = '';
     const storedTimeZone = sessionTz;
+
+    extraContext += buildGroundedDateTimeContext(storedTimeZone);
 
     if (storedTimeZone) {
       extraContext +=

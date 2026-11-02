@@ -19,6 +19,7 @@ describe('IntentShadowService', () => {
       version: 1,
       intent: 'general_chat',
       confidence: 0.9,
+      confidenceKnown: true,
       missingSlots: [],
       slots: {},
     });
@@ -83,6 +84,7 @@ describe('IntentShadowService', () => {
         version: 1,
         intent: 'calendar_list',
         confidence: 0.9,
+        confidenceKnown: true,
         missingSlots: [],
         slots: {},
       },
