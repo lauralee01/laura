@@ -13,7 +13,6 @@ import {
   fetchChatHistory,
   fetchConversations,
   renameConversation as renameConversationApi,
-  sendChatMessage,
   sendChatMessageStream,
   type ConversationSummary,
 } from '@/lib/chat-api';
@@ -37,6 +36,13 @@ function shouldRefreshGoogleStatus(reply: string): boolean {
     normalizedReply.includes(
       'google is not connected',
     )
+  );
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    (error instanceof DOMException && error.name === 'AbortError') ||
+    (error instanceof Error && error.name === 'AbortError')
   );
 }
 
@@ -65,6 +71,31 @@ export function useChat() {
    * Only the newest open-thread request is allowed to update state.
    */
   const openThreadRequestIdRef = useRef(0);
+
+  /*
+   * Stream generation guard: ignore chunks / completion from a stale send,
+   * and abort the in-flight fetch when switching chats or starting a new one.
+   */
+  const streamGenerationRef = useRef(0);
+  const streamAbortRef = useRef<AbortController | null>(null);
+  const conversationIdRef = useRef<string | undefined>(undefined);
+  const messagesRef = useRef<StoredChatMessage[]>([]);
+
+  useEffect(() => {
+    conversationIdRef.current = conversationId;
+  }, [conversationId]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  const abortActiveStream = useCallback(() => {
+    streamGenerationRef.current += 1;
+    streamAbortRef.current?.abort();
+    streamAbortRef.current = null;
+    setLoading(false);
+    setStreaming(false);
+  }, []);
 
   const reloadSidebar = useCallback(async () => {
     try {
@@ -168,6 +199,7 @@ export function useChat() {
 
     return () => {
       cancelled = true;
+      streamAbortRef.current?.abort();
     };
   }, []);
 
@@ -201,16 +233,17 @@ export function useChat() {
 
   const openThread = useCallback(
     async (id: string) => {
-      if (!sessionReady) {
+      if (!sessionReady || loading || streaming) {
         return;
       }
 
+      const previousConversationId = conversationIdRef.current;
+      const previousMessages = messagesRef.current;
       const requestId =
         ++openThreadRequestIdRef.current;
 
       setInitializing(true);
       setError(null);
-      setConversationId(id);
 
       try {
         const history = await fetchChatHistory(id);
@@ -239,6 +272,12 @@ export function useChat() {
           threadError,
         );
 
+        /*
+         * Keep the prior transcript selected — never leave "B highlighted
+         * with A's messages" after a failed load.
+         */
+        setConversationId(previousConversationId);
+        setMessages(previousMessages);
         setError('Could not load this chat.');
       } finally {
         if (
@@ -249,18 +288,20 @@ export function useChat() {
         }
       }
     },
-    [sessionReady],
+    [loading, sessionReady, streaming],
   );
 
   const handleNewChat = useCallback(async () => {
     if (
       !sessionReady ||
       loading ||
+      streaming ||
       creatingConversation
     ) {
       return;
     }
 
+    abortActiveStream();
     setCreatingConversation(true);
     setError(null);
     setSidebarOpen(false);
@@ -289,10 +330,12 @@ export function useChat() {
       setCreatingConversation(false);
     }
   }, [
+    abortActiveStream,
     creatingConversation,
     loading,
     reloadSidebar,
     sessionReady,
+    streaming,
   ]);
 
   const handleSubmit = useCallback(
@@ -304,43 +347,67 @@ export function useChat() {
       if (
         !submittedText ||
         loading ||
+        streaming ||
         !sessionReady
       ) {
         return;
       }
+
+      const generationId = ++streamGenerationRef.current;
+      const abortController = new AbortController();
+      streamAbortRef.current?.abort();
+      streamAbortRef.current = abortController;
+
+      const submitConversationId = conversationId;
+      const priorHistory = messages.slice(-40);
 
       setError(null);
       setInput('');
       setLoading(true);
       setStreaming(false);
 
+      /*
+       * Optimistic user turn only. The empty assistant bubble used to
+       * appear beside "laura is thinking…" — append assistant on first chunk.
+       */
       setMessages((previousMessages) => [
         ...previousMessages,
         {
           role: 'user',
           content: submittedText,
         },
-        {
-          role: 'assistant',
-          content: '',
-        },
       ]);
 
       let accumulatedReply = '';
-
-      const priorHistory = messages.slice(-40);
+      let assistantStarted = false;
 
       try {
         const { conversationId: returnedConversationId } =
           await sendChatMessageStream(
             {
-              conversationId,
+              conversationId: submitConversationId,
               message: submittedText,
               history: priorHistory,
             },
             (chunk: string) => {
-              setLoading(false);
-              setStreaming(true);
+              if (generationId !== streamGenerationRef.current) {
+                return;
+              }
+
+              if (!assistantStarted) {
+                assistantStarted = true;
+                setLoading(false);
+                setStreaming(true);
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    role: 'assistant',
+                    content: chunk,
+                  },
+                ]);
+                accumulatedReply = chunk;
+                return;
+              }
 
               accumulatedReply += chunk;
 
@@ -363,11 +430,17 @@ export function useChat() {
                 return next;
               });
             },
+            abortController.signal,
           );
+
+        if (generationId !== streamGenerationRef.current) {
+          return;
+        }
+
         setStreaming(false);
 
         const activeConversationId =
-          returnedConversationId ?? conversationId;
+          returnedConversationId ?? submitConversationId;
 
         if (activeConversationId) {
           setConversationId(activeConversationId);
@@ -383,6 +456,13 @@ export function useChat() {
 
         void reloadSidebar();
       } catch (sendError: unknown) {
+        if (
+          generationId !== streamGenerationRef.current ||
+          isAbortError(sendError)
+        ) {
+          return;
+        }
+
         const errorMessage =
           sendError instanceof Error
             ? sendError.message
@@ -390,14 +470,28 @@ export function useChat() {
 
         setError(errorMessage);
 
-        setMessages((previousMessages) =>
-          previousMessages.slice(0, -2),
-        );
-
-        setInput(submittedText);
+        /*
+         * Only roll back if we are still on the conversation that sent
+         * this message — otherwise a mid-stream switch would delete turns
+         * from the newly opened thread.
+         */
+        if (conversationIdRef.current === submitConversationId) {
+          setMessages((previousMessages) => {
+            if (assistantStarted) {
+              return previousMessages.slice(0, -2);
+            }
+            return previousMessages.slice(0, -1);
+          });
+          setInput(submittedText);
+        }
       } finally {
-        setLoading(false);
-        setStreaming(false);
+        if (generationId === streamGenerationRef.current) {
+          setLoading(false);
+          setStreaming(false);
+          if (streamAbortRef.current === abortController) {
+            streamAbortRef.current = null;
+          }
+        }
       }
     },
     [
@@ -407,15 +501,19 @@ export function useChat() {
       messages,
       reloadSidebar,
       sessionReady,
+      streaming,
     ],
   );
 
   const selectConversation = useCallback(
     (id: string) => {
+      if (loading || streaming) {
+        return;
+      }
       setSidebarOpen(false);
       void openThread(id);
     },
-    [openThread],
+    [loading, openThread, streaming],
   );
 
   const renameConversation = useCallback(
@@ -455,13 +553,17 @@ export function useChat() {
 
   const deleteConversation = useCallback(
     async (id: string) => {
-      if (!sessionReady) {
+      if (!sessionReady || loading || streaming) {
         return;
       }
 
       setError(null);
 
       try {
+        if (conversationId === id) {
+          abortActiveStream();
+        }
+
         await deleteConversationApi(id);
 
         const updatedConversationList =
@@ -497,11 +599,17 @@ export function useChat() {
       }
     },
     [
+      abortActiveStream,
       conversationId,
+      loading,
       openThread,
       sessionReady,
+      streaming,
     ],
   );
+
+  const isBusy =
+    loading || streaming || creatingConversation || initializing;
 
   return {
     sessionReady,
@@ -513,11 +621,13 @@ export function useChat() {
     loading,
     streaming,
     initializing,
+    creatingConversation,
+    isBusy,
     error,
     sidebarOpen,
     setSidebarOpen,
     bottomRef,
-    showThinking: loading,
+    showThinking: loading && !streaming,
     handleSubmit,
     handleNewChat,
     selectConversation,

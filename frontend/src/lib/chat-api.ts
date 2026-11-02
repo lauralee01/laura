@@ -81,6 +81,43 @@ export async function sendChatMessage(input: {
   return { reply, conversationId };
 }
 
+function consumeSseDataLine(
+  jsonStr: string,
+  onChunk: (chunk: string) => void,
+): string | undefined {
+  let parsed: {
+    chunk?: string;
+    done?: boolean;
+    started?: boolean;
+    conversationId?: string;
+    error?: string;
+  };
+
+  try {
+    parsed = JSON.parse(jsonStr) as typeof parsed;
+  } catch {
+    throw new Error('Chat stream returned a malformed event.');
+  }
+
+  if (parsed.error) {
+    throw new Error(parsed.error);
+  }
+
+  if (parsed.started) {
+    return undefined;
+  }
+
+  if (parsed.chunk) {
+    onChunk(parsed.chunk);
+  }
+
+  if (parsed.done && parsed.conversationId) {
+    return parsed.conversationId;
+  }
+
+  return undefined;
+}
+
 export async function sendChatMessageStream(
   input: {
     message: string;
@@ -88,12 +125,14 @@ export async function sendChatMessageStream(
     history?: StoredChatMessage[];
   },
   onChunk: (chunk: string) => void,
+  signal?: AbortSignal,
 ): Promise<{ conversationId?: string }> {
   const url = `${getApiBaseUrl()}/chat/stream`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     ...cred,
+    signal,
     body: JSON.stringify({
       conversationId: input.conversationId,
       message: input.message,
@@ -117,13 +156,13 @@ export async function sendChatMessageStream(
   let buffer = '';
   let finalConversationId: string | undefined;
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
+  const processBuffer = (flushAll: boolean) => {
     const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
+    if (!flushAll) {
+      buffer = lines.pop() ?? '';
+    } else {
+      buffer = '';
+    }
 
     for (const line of lines) {
       const trimmed = line.trim();
@@ -131,36 +170,37 @@ export async function sendChatMessageStream(
       const jsonStr = trimmed.slice(5).trim();
       if (!jsonStr) continue;
 
-      try {
-        const parsed = JSON.parse(jsonStr) as {
-          chunk?: string;
-          done?: boolean;
-          started?: boolean;
-          conversationId?: string;
-          error?: string;
-        };
-
-        if (parsed.error) {
-          throw new Error(parsed.error);
-        }
-
-        if (parsed.started) {
-          continue;
-        }
-
-        if (parsed.chunk) {
-          onChunk(parsed.chunk);
-        }
-
-        if (parsed.done && parsed.conversationId) {
-          finalConversationId = parsed.conversationId;
-        }
-      } catch (err: unknown) {
-        if (err instanceof Error && !err.message.includes('JSON')) {
-          throw err;
-        }
+      const conversationIdFromEvent = consumeSseDataLine(
+        jsonStr,
+        onChunk,
+      );
+      if (conversationIdFromEvent) {
+        finalConversationId = conversationIdFromEvent;
       }
     }
+  };
+
+  try {
+    while (true) {
+      if (signal?.aborted) {
+        await reader.cancel().catch(() => undefined);
+        throw new DOMException('The operation was aborted.', 'AbortError');
+      }
+
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      processBuffer(false);
+    }
+
+    buffer += decoder.decode();
+    if (buffer.trim()) {
+      processBuffer(true);
+    }
+  } catch (err: unknown) {
+    await reader.cancel().catch(() => undefined);
+    throw err;
   }
 
   return { conversationId: finalConversationId };

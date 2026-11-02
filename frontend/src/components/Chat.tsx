@@ -18,7 +18,6 @@ export function Chat() {
     messages,
     input,
     setInput,
-    loading,
     streaming,
     error,
     sidebarOpen,
@@ -31,10 +30,15 @@ export function Chat() {
     renameConversation,
     deleteConversation,
     initializing,
+    isBusy,
   } = useChat();
 
-  const sidebarDisabled = loading || !sessionReady;
-  const composerDisabled = loading || !sessionReady;
+  /*
+   * Keep composer + sidebar locked for the full stream lifecycle, not just
+   * until the first token (loading used to flip false on first chunk).
+   */
+  const sidebarDisabled = isBusy || !sessionReady;
+  const composerDisabled = isBusy || !sessionReady;
 
   const sidebarProps = {
     conversations,
