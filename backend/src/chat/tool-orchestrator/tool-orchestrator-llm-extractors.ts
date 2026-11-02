@@ -55,6 +55,7 @@ export async function extractDraftEmailArgs(
     temperature: 0.1,
     maxOutputTokens: 350,
     responseMimeType: 'application/json',
+    errorMode: 'throw',
   });
 
   const parsed = safeParseJsonObject(raw);
@@ -84,20 +85,52 @@ export async function extractDraftEmailArgs(
   };
 }
 
-export async function extractCalendarEventArgs(
-  llm: LlmService,
-  message: string,
-  timeZone: string,
-): Promise<{
+export type CalendarEventArgs = {
   title: string;
   start: string;
   end: string;
   description?: string;
   reminderMinutesBefore?: number;
-} | null> {
+};
+
+/** Partial create args already known from Stage-1 intent slots. */
+export type CalendarEventSlotHints = {
+  title?: string;
+  start?: string;
+  end?: string;
+  description?: string;
+};
+
+export async function extractCalendarEventArgs(
+  llm: LlmService,
+  message: string,
+  timeZone: string,
+  slotHints?: CalendarEventSlotHints,
+): Promise<CalendarEventArgs | null> {
   if (!message?.trim()) return null;
 
+  const hintTitle = slotHints?.title?.trim();
+  const hintStart = slotHints?.start?.trim();
+  const hintEnd = slotHints?.end?.trim();
+
+  /*
+   * Slot-first: when Stage-1 already filled title + times, skip the second LLM.
+   */
+  if (hintTitle && hintStart && hintEnd) {
+    return {
+      title: hintTitle,
+      start: hintStart,
+      end: hintEnd,
+      description: slotHints?.description?.trim() || undefined,
+    };
+  }
+
   const todayInZone = DateTime.now().setZone(timeZone).toISODate();
+
+  const knownBits: string[] = [];
+  if (hintTitle) knownBits.push(`Known title: ${hintTitle}`);
+  if (hintStart) knownBits.push(`Known start: ${hintStart}`);
+  if (hintEnd) knownBits.push(`Known end: ${hintEnd}`);
 
   const systemPrompt =
     `Extract calendar event arguments. Return JSON only:\n` +
@@ -113,7 +146,10 @@ export async function extractCalendarEventArgs(
     `- Month+day without year: pick NEXT occurrence on/after ${todayInZone}.\n` +
     `- start/end: ISO datetime strings in LOCAL time for ${timeZone} (format: YYYY-MM-DDTHH:mm:ss, NO 'Z' or offset).\n` +
     `- If no end time given, end = start + 1 hour.\n` +
-    `- If start undetermined, set start & end to null.`;
+    `- If start undetermined, set start & end to null.` +
+    (knownBits.length
+      ? `\n- Prefer these Stage-1 hints when filling gaps:\n  ${knownBits.join('\n  ')}`
+      : '');
 
   const raw = await llm.generate({
     systemPrompt,
@@ -121,20 +157,22 @@ export async function extractCalendarEventArgs(
     temperature: 0.1,
     maxOutputTokens: 350,
     responseMimeType: 'application/json',
+    errorMode: 'throw',
   });
 
   const parsed = safeParseJsonObject(raw);
   if (!parsed) return null;
 
-  const title = cleanString(parsed['title']);
-  const start = cleanString(parsed['start']);
-  const end = cleanString(parsed['end']);
+  const title = hintTitle || cleanString(parsed['title']);
+  const start = hintStart || cleanString(parsed['start']);
+  const end = hintEnd || cleanString(parsed['end']);
 
   if (!title || !start || !end) {
     return null;
   }
 
-  const description = cleanString(parsed['description']);
+  const description =
+    slotHints?.description?.trim() || cleanString(parsed['description']);
   const reminder = cleanNumber(parsed['reminderMinutesBefore']);
 
   return {
@@ -162,10 +200,15 @@ export async function extractCalendarMutationArgs(
   llm: LlmService,
   message: string,
   timeZone: string,
+  preferredOperation?: 'delete' | 'update',
 ): Promise<CalendarMutationExtraction | null> {
   if (!message?.trim()) return null;
 
   const todayInZone = DateTime.now().setZone(timeZone).toISODate();
+
+  const lockedOperationNote = preferredOperation
+    ? `\n- The Stage-1 intent already chose operation="${preferredOperation}". Still return that operation; do not flip delete↔update.`
+    : '';
 
   const systemPrompt =
     `Extract calendar DELETE or UPDATE intent. Return JSON only:\n` +
@@ -188,7 +231,8 @@ export async function extractCalendarMutationArgs(
     `- searchWholeWeek: true for "this week" / "the week" without a specific day.\n` +
     `- searchNextDays: days ahead to search when vague (default 14).\n` +
     `- delete: set newTitle, newStart, newEnd to null.\n` +
-    `- update: set newTitle/newStart/newEnd as LOCAL ISO (YYYY-MM-DDTHH:mm:ss, no Z).`;
+    `- update: set newTitle/newStart/newEnd as LOCAL ISO (YYYY-MM-DDTHH:mm:ss, no Z).` +
+    lockedOperationNote;
 
   const raw = await llm.generate({
     systemPrompt,
@@ -196,15 +240,21 @@ export async function extractCalendarMutationArgs(
     temperature: 0.1,
     maxOutputTokens: 350,
     responseMimeType: 'application/json',
+    errorMode: 'throw',
   });
 
   const parsed = safeParseJsonObject(raw);
   if (!parsed) return null;
 
-  const operation = parsed['operation'];
+  const parsedOperation = parsed['operation'];
+  const operation =
+    preferredOperation ??
+    (parsedOperation === 'delete' || parsedOperation === 'update'
+      ? parsedOperation
+      : null);
   const titleKeywords = cleanString(parsed['titleKeywords']);
 
-  if ((operation !== 'delete' && operation !== 'update') || !titleKeywords) {
+  if (!operation || !titleKeywords) {
     return null;
   }
 
@@ -220,8 +270,17 @@ export async function extractCalendarMutationArgs(
     weekOffset,
     searchWholeWeek,
     searchNextDays,
-    newTitle: cleanNullableString(parsed['newTitle']),
-    newStart: cleanNullableString(parsed['newStart']),
-    newEnd: cleanNullableString(parsed['newEnd']),
+    newTitle:
+      operation === 'delete'
+        ? null
+        : cleanNullableString(parsed['newTitle']),
+    newStart:
+      operation === 'delete'
+        ? null
+        : cleanNullableString(parsed['newStart']),
+    newEnd:
+      operation === 'delete'
+        ? null
+        : cleanNullableString(parsed['newEnd']),
   };
 }

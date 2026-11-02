@@ -5,9 +5,12 @@ import { WebSearchService } from 'src/integrations/web-search/web-search.service
 import { formatToolFailureMessage } from '../tool-orchestrator.utils';
 import { SessionPreferencesService } from '../../session-preferences.service';
 import type { IntentEnvelope } from '../../intent/intent.types';
+import type { WebSearchToolResult } from './web-search-tool.types';
 
 const USER_CURRENT_LOCATION = 'USER_CURRENT_LOCATION';
 const DEFAULT_TIME_ZONE = 'America/Chicago';
+
+export type { WebSearchToolResult } from './web-search-tool.types';
 
 type SearchFreshness = 'live' | 'recent' | 'general';
 type SearchDepth = 'basic' | 'advanced';
@@ -126,7 +129,7 @@ export class WebSearchToolHandler {
         sessionId: string,
         message: string,
         envelope?: IntentEnvelope,
-    ): Promise<string> {
+    ): Promise<WebSearchToolResult> {
         try {
             const rawQuery = getSearchQuery(message, envelope);
             const rawLocationHint = getLocationHint(envelope);
@@ -141,7 +144,7 @@ export class WebSearchToolHandler {
                 rawLocationHint === USER_CURRENT_LOCATION &&
                 !storedLocation
             ) {
-                return '__WEB_SEARCH_NEEDS_LOCATION__';
+                return { kind: 'needs_location' };
             }
 
             const locationHint =
@@ -174,10 +177,12 @@ export class WebSearchToolHandler {
             );
 
             if (!search.results.length && !search.answer) {
-                return (
-                    `I couldn't find reliable results for that yet. ` +
-                    `Try asking with a city, date, team, or more specific detail.`
-                );
+                return {
+                    kind: 'reply',
+                    text:
+                        `I couldn't find reliable results for that yet. ` +
+                        `Try asking with a city, date, team, or more specific detail.`,
+                };
             }
 
             const sources = formatSourcesForPrompt(
@@ -231,15 +236,21 @@ export class WebSearchToolHandler {
                 `Search sources:\n${sources}`,
             );
 
-            return this.llm.generate({
+            const text = await this.llm.generate({
                 systemPrompt,
                 userMessage: userMessageParts.join('\n\n'),
+                errorMode: 'throw',
             });
+
+            return { kind: 'reply', text };
         } catch (error: unknown) {
-            return formatToolFailureMessage(
-                'search the web',
-                error,
-            );
+            return {
+                kind: 'reply',
+                text: formatToolFailureMessage(
+                    'search the web',
+                    error,
+                ),
+            };
         }
     }
 }

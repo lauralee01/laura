@@ -123,11 +123,18 @@ export class CalendarMutationHandler {
     } = params;
 
     const intentTitleHint = getIntentTitleHint(envelope);
+    const preferredOperation =
+      envelope?.intent === 'calendar_delete'
+        ? ('delete' as const)
+        : envelope?.intent === 'calendar_update'
+          ? ('update' as const)
+          : undefined;
 
     const extractedMutation = await extractCalendarMutationArgs(
       this.llmService,
       userMessage,
       timeZone,
+      preferredOperation,
     );
 
     if (!extractedMutation) {

@@ -16,7 +16,25 @@ export type GenerateInput = {
   responseMimeType?: 'application/json' | 'text/plain';
   /** Override the default GEMINI_MODEL for fast/light tier execution. */
   model?: string;
+  /**
+   * `friendly` (default): chat UX gets soft English on 429/5xx.
+   * `throw`: tool/extractor callers get a real error so they don't parse
+   * soft strings as JSON and invent "couldn't tell which event" replies.
+   */
+  errorMode?: 'friendly' | 'throw';
 };
+
+export class LlmToolError extends Error {
+  readonly code = 'LLM_TOOL_ERROR';
+
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message);
+    this.name = 'LlmToolError';
+  }
+}
 
 type GeminiGenerateResponse = {
   promptFeedback?: { blockReason?: string };
@@ -338,6 +356,20 @@ export class LlmService {
     throw new GeminiApiError(lastStatus, lastErrorText, model);
   }
 
+  private failOrFriendly(
+    input: GenerateInput,
+    status: number | undefined,
+    detail: string,
+  ): never | string {
+    if (input.errorMode === 'throw') {
+      throw new LlmToolError(detail, status);
+    }
+
+    return status != null
+      ? this.getFriendlyGeminiError(status)
+      : detail;
+  }
+
   private async generateWithGemini(
     apiKey: string,
     input: GenerateInput,
@@ -369,7 +401,11 @@ export class LlmService {
           }`,
         );
 
-        return this.getFriendlyGeminiError(err.status);
+        return this.failOrFriendly(
+          input,
+          err.status,
+          this.getFriendlyGeminiError(err.status),
+        );
       }
 
       console.warn(
@@ -385,7 +421,11 @@ export class LlmService {
             }`,
           );
 
-          return this.getFriendlyGeminiError(fallbackErr.status);
+          return this.failOrFriendly(
+            input,
+            fallbackErr.status,
+            this.getFriendlyGeminiError(fallbackErr.status),
+          );
         }
 
         throw fallbackErr;

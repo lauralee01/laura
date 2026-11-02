@@ -207,11 +207,24 @@ export class ChatService {
         },
       };
 
-      const reply = await this.toolOrchestrator.handleWebSearchIntent(
+      const searchResult = await this.toolOrchestrator.handleWebSearchIntent(
         sessionId,
         pendingAction.message,
         resumedEnvelope,
       );
+
+      const reply =
+        searchResult.kind === 'needs_location'
+          ? 'Which town or city should I use for this search?'
+          : searchResult.text;
+
+      if (searchResult.kind === 'needs_location') {
+        await this.sessionPreferences.setPendingAction(sessionId, {
+          type: 'web_search_missing_location',
+          message: pendingAction.message,
+          envelope: resumedEnvelope,
+        });
+      }
 
       if (dbConversationId) {
         await this.chatHistoryService.appendMessage(
@@ -420,18 +433,21 @@ export class ChatService {
           break;
         }
         case 'web_search': {
-          toolReply = await this.toolOrchestrator.handleWebSearchIntent(
-            sessionId,
-            message,
-            envelope,
-          );
-          if (toolReply === '__WEB_SEARCH_NEEDS_LOCATION__') {
+          const searchResult =
+            await this.toolOrchestrator.handleWebSearchIntent(
+              sessionId,
+              message,
+              envelope,
+            );
+          if (searchResult.kind === 'needs_location') {
             await this.sessionPreferences.setPendingAction(sessionId, {
               type: 'web_search_missing_location',
               message,
               envelope,
             });
             toolReply = 'Which town or city should I use for this search?';
+          } else {
+            toolReply = searchResult.text;
           }
           break;
         }

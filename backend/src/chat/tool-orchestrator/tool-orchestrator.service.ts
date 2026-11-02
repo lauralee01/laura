@@ -4,6 +4,7 @@ import { CalendarCreateHandler } from './calendar/calendar-create.handler';
 import { CalendarMutationHandler } from './calendar/calendar-mutation.handler';
 import { EmailToolHandler } from './email/email-tool.handler';
 import { WebSearchToolHandler } from './web-search/web-search-tool.handler';
+import type { WebSearchToolResult } from './web-search/web-search-tool.types';
 import { ToolPendingFlowService } from './tool-pending-flow.service';
 import type { IntentEnvelope } from '../intent/intent.types';
 
@@ -84,7 +85,7 @@ export class ToolOrchestratorService {
     sessionId: string,
     message: string,
     envelope?: IntentEnvelope,
-  ): Promise<string> {
+  ): Promise<WebSearchToolResult> {
     return this.webSearchTools.handleWebSearchIntent(sessionId, message, envelope);
   }
 

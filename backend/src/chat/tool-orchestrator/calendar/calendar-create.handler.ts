@@ -7,9 +7,18 @@ import {
   CalendarTimezoneService,
 } from './calendar-timezone.service';
 import { extractCalendarEventArgs } from '../tool-orchestrator-llm-extractors';
+import { getSlotString } from '../tool-orchestrator.intent-slots';
 import { formatToolFailureMessage } from '../tool-orchestrator.utils';
 import type { PendingCalendarCreatePayload } from '../tool-orchestrator.types';
 import type { IntentEnvelope } from '../../intent/intent.types';
+
+function slotHintsFromEnvelope(envelope?: IntentEnvelope) {
+  return {
+    title: getSlotString(envelope, 'titleHint') ?? undefined,
+    start: getSlotString(envelope, 'startTime') ?? undefined,
+    end: getSlotString(envelope, 'endTime') ?? undefined,
+  };
+}
 
 @Injectable()
 export class CalendarCreateHandler {
@@ -75,6 +84,7 @@ export class CalendarCreateHandler {
         this.llmService,
         baseMessage,
         timeZone,
+        slotHintsFromEnvelope(envelope),
       );
 
       if (

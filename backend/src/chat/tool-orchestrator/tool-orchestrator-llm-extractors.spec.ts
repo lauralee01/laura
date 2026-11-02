@@ -110,6 +110,47 @@ describe('ToolOrchestratorLlmExtractors', () => {
 
       expect(result).toBeNull();
     });
+
+    it('uses complete Stage-1 slots and skips the LLM', async () => {
+      const result = await extractCalendarEventArgs(
+        mockLlmService,
+        'Schedule lunch with Sam tomorrow at noon',
+        'America/Chicago',
+        {
+          title: 'Lunch with Sam',
+          start: '2026-11-03T12:00:00',
+          end: '2026-11-03T13:00:00',
+        },
+      );
+
+      expect(mockLlmService.generate).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        title: 'Lunch with Sam',
+        start: '2026-11-03T12:00:00',
+        end: '2026-11-03T13:00:00',
+        description: undefined,
+      });
+    });
+
+    it('calls generate with errorMode throw for tool extraction', async () => {
+      mockLlmService.generate.mockResolvedValue(
+        JSON.stringify({
+          title: 'Standup',
+          start: '2026-11-03T09:00:00',
+          end: '2026-11-03T09:30:00',
+        }),
+      );
+
+      await extractCalendarEventArgs(
+        mockLlmService,
+        'Standup at 9',
+        'America/Chicago',
+      );
+
+      expect(mockLlmService.generate).toHaveBeenCalledWith(
+        expect.objectContaining({ errorMode: 'throw' }),
+      );
+    });
   });
 
   describe('extractCalendarMutationArgs', () => {
@@ -145,6 +186,32 @@ describe('ToolOrchestratorLlmExtractors', () => {
         newStart: null,
         newEnd: null,
       });
+    });
+
+    it('forces preferred Stage-1 operation over a conflicting LLM operation', async () => {
+      mockLlmService.generate.mockResolvedValue(
+        JSON.stringify({
+          operation: 'update',
+          titleKeywords: 'dentist',
+          dayOffset: 1,
+          weekOffset: null,
+          searchWholeWeek: false,
+          searchNextDays: null,
+          newTitle: 'New title',
+          newStart: null,
+          newEnd: null,
+        }),
+      );
+
+      const result = await extractCalendarMutationArgs(
+        mockLlmService,
+        'Cancel dentist tomorrow',
+        'America/New_York',
+        'delete',
+      );
+
+      expect(result?.operation).toBe('delete');
+      expect(result?.newTitle).toBeNull();
     });
 
     it('returns null if operation is unknown', async () => {
