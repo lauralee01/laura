@@ -3,7 +3,10 @@ import { DateTime } from 'luxon';
 import { CalendarService } from '../../../integrations/calendar/calendar.service';
 import { LlmService } from '../../../llm/llm.service';
 import { PendingRequestService } from '../../pending-request.service';
-import { CalendarTimezoneService } from './calendar-timezone.service';
+import {
+  CALENDAR_TIMEZONE_PROMPT,
+  CalendarTimezoneService,
+} from './calendar-timezone.service';
 import { extractCalendarMutationArgs } from '../tool-orchestrator-llm-extractors';
 import { filterEventsForMutation } from './calendar-mutation-replies';
 import {
@@ -15,6 +18,7 @@ import { mergeTimeOnlyUpdateOntoEventDay } from './calendar-update-merge';
 import { formatToolFailureMessage } from '../tool-orchestrator.utils';
 import type {
   PendingCalendarDeletePayload,
+  PendingCalendarMutateTzPayload,
   PendingCalendarUpdatePayload,
 } from '../tool-orchestrator.types';
 import type { IntentEnvelope } from '../../intent/intent.types';
@@ -76,6 +80,20 @@ export class CalendarMutationHandler {
         sessionId,
         envelope,
       );
+
+      if (!timeZone) {
+        this.pendingRequestService.setPending<PendingCalendarMutateTzPayload>(
+          sessionId,
+          {
+            actionType: 'calendar_mutate_tz',
+            originalMessage: message,
+            payload: { message },
+            missingSlots: ['timeZone'],
+            collectedSlots: {},
+          },
+        );
+        return CALENDAR_TIMEZONE_PROMPT;
+      }
 
       return await this.runCalendarMutation({
         sessionId,

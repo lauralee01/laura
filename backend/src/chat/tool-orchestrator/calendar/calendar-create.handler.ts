@@ -2,7 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { CalendarService } from '../../../integrations/calendar/calendar.service';
 import { LlmService } from '../../../llm/llm.service';
 import { PendingRequestService } from '../../pending-request.service';
-import { CalendarTimezoneService } from './calendar-timezone.service';
+import {
+  CALENDAR_TIMEZONE_PROMPT,
+  CalendarTimezoneService,
+} from './calendar-timezone.service';
 import { extractCalendarEventArgs } from '../tool-orchestrator-llm-extractors';
 import { formatToolFailureMessage } from '../tool-orchestrator.utils';
 import type { PendingCalendarCreatePayload } from '../tool-orchestrator.types';
@@ -39,11 +42,6 @@ export class CalendarCreateHandler {
     envelope?: IntentEnvelope,
   ): Promise<string> {
     try {
-      const timeZone = await this.timezoneService.resolveTimeZone(
-        sessionId,
-        envelope,
-      );
-
       const pending =
         this.pendingRequestService.getPending<PendingCalendarCreatePayload>(
           sessionId,
@@ -53,6 +51,25 @@ export class CalendarCreateHandler {
       const baseMessage = pending
         ? `${pending.payload.message}\n\nAdditional user detail: ${message}`
         : message;
+
+      const timeZone = await this.timezoneService.resolveTimeZone(
+        sessionId,
+        envelope,
+      );
+
+      if (!timeZone) {
+        this.pendingRequestService.setPending<PendingCalendarCreatePayload>(
+          sessionId,
+          {
+            actionType: 'calendar_create',
+            originalMessage: baseMessage,
+            payload: { message: baseMessage },
+            missingSlots: ['timeZone'],
+            collectedSlots: {},
+          },
+        );
+        return CALENDAR_TIMEZONE_PROMPT;
+      }
 
       const args = await extractCalendarEventArgs(
         this.llmService,

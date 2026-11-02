@@ -2,7 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { DateTime } from 'luxon';
 import { CalendarService } from '../../../integrations/calendar/calendar.service';
 import { debugCalendarLog } from '../../../integrations/calendar/calendar-debug';
-import { CalendarTimezoneService } from './calendar-timezone.service';
+import { PendingRequestService } from '../../pending-request.service';
+import {
+  CALENDAR_TIMEZONE_PROMPT,
+  CalendarTimezoneService,
+} from './calendar-timezone.service';
 import { buildCalendarListUserMessage } from './calendar-list-reply';
 import { resolvePendingListRange } from './calendar-list-range';
 import { formatToolFailureMessage } from '../tool-orchestrator.utils';
@@ -10,11 +14,48 @@ import { getSlotListMode, getSlotNumber } from '../tool-orchestrator.intent-slot
 import type { PendingCalendarListPayload } from '../tool-orchestrator.types';
 import type { IntentEnvelope } from '../../intent/intent.types';
 
+function buildListRequestFromEnvelope(
+  envelope?: IntentEnvelope,
+): PendingCalendarListPayload {
+  const mode = getSlotListMode(envelope);
+  const weekOffset = getSlotNumber(envelope, 'weekOffset') ?? 0;
+  const monthOffset = getSlotNumber(envelope, 'monthOffset') ?? 0;
+  const yearOffset = getSlotNumber(envelope, 'yearOffset') ?? 0;
+  const dayOffset = getSlotNumber(envelope, 'dayOffset') ?? 0;
+  const maxEvents = getSlotNumber(envelope, 'maxEvents') ?? 10;
+  const spanDays = getSlotNumber(envelope, 'spanDays') ?? 2;
+
+  if (mode === 'week') {
+    return { mode, weekOffset };
+  }
+  if (mode === 'month') {
+    return { mode, weekOffset: 0, monthOffset };
+  }
+  if (mode === 'year') {
+    return { mode, weekOffset: 0, yearOffset };
+  }
+  if (mode === 'day') {
+    return { mode, weekOffset: 0, dayOffset };
+  }
+  if (mode === 'next_days') {
+    return {
+      mode,
+      weekOffset: 0,
+      spanDays: Math.max(1, Math.min(60, Math.floor(spanDays))),
+    };
+  }
+  if (mode === 'past') {
+    return { mode, weekOffset: 0, maxEvents };
+  }
+  return { mode: 'upcoming', weekOffset, maxEvents };
+}
+
 @Injectable()
 export class CalendarListHandler {
   constructor(
     private readonly calendarService: CalendarService,
     private readonly timezoneService: CalendarTimezoneService,
+    private readonly pendingRequestService: PendingRequestService,
   ) { }
 
   async handleCalendarListIntent(
@@ -22,41 +63,28 @@ export class CalendarListHandler {
     envelope?: IntentEnvelope,
   ): Promise<string> {
     try {
+      const listRequest = buildListRequestFromEnvelope(envelope);
+
       const timeZone = await this.timezoneService.resolveTimeZone(
         sessionId,
         envelope,
       );
 
-      const mode = getSlotListMode(envelope);
-      const weekOffset = getSlotNumber(envelope, 'weekOffset') ?? 0;
-      const monthOffset = getSlotNumber(envelope, 'monthOffset') ?? 0;
-      const yearOffset = getSlotNumber(envelope, 'yearOffset') ?? 0;
-      const dayOffset = getSlotNumber(envelope, 'dayOffset') ?? 0;
-      const maxEvents = getSlotNumber(envelope, 'maxEvents') ?? 10;
-      const spanDays = getSlotNumber(envelope, 'spanDays') ?? 2;
+      if (!timeZone) {
+        this.pendingRequestService.setPending<PendingCalendarListPayload>(
+          sessionId,
+          {
+            actionType: 'calendar_list',
+            originalMessage: envelope?.intent ?? 'calendar_list',
+            payload: listRequest,
+            missingSlots: ['timeZone'],
+            collectedSlots: {},
+          },
+        );
+        return CALENDAR_TIMEZONE_PROMPT;
+      }
 
-      const listRequest: PendingCalendarListPayload =
-        mode === 'week'
-          ? { mode, weekOffset }
-          : mode === 'month'
-            ? { mode, weekOffset: 0, monthOffset }
-            : mode === 'year'
-              ? { mode, weekOffset: 0, yearOffset }
-              : mode === 'day'
-                ? { mode, weekOffset: 0, dayOffset }
-                : mode === 'next_days'
-                  ? {
-                    mode,
-                    weekOffset: 0,
-                    spanDays: Math.max(
-                      1,
-                      Math.min(60, Math.floor(spanDays)),
-                    ),
-                  }
-                  : mode === 'past'
-                    ? { mode, weekOffset: 0, maxEvents }
-                    : { mode: 'upcoming', weekOffset, maxEvents };
-
+      const weekOffset = listRequest.weekOffset;
       const nowLocal = DateTime.now().setZone(timeZone);
 
       const { startLocal, endLocal } = resolvePendingListRange(
