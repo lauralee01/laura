@@ -22,7 +22,10 @@ import type {
 } from './tool-orchestrator.types';
 import type { IntentEnvelope } from '../intent/intent.types';
 import { extractCalendarMutationArgs } from './tool-orchestrator-llm-extractors';
-import { pickUniqueTitleMatch } from './calendar/calendar-event-pick';
+import {
+  looksLikeBareEventPick,
+  pickUniqueTitleMatch,
+} from './calendar/calendar-event-pick';
 
 /**
  * Multi-turn “pending” routes: email draft is handled first, then calendar delete/update
@@ -280,7 +283,8 @@ export class ToolPendingFlowService {
       }
 
       /*
-       * Prefer the changes already saved when the pending selection was created.
+       * Prefer changes saved when the pick list was created. Do not re-run
+       * extract on the original request — that work already happened once.
        */
       let savedNewTitle =
         pendingUpdatePayload.newTitle ?? null;
@@ -292,10 +296,15 @@ export class ToolPendingFlowService {
         pendingUpdatePayload.newEnd ?? null;
 
       /*
-       * If update details are missing, try extracting them from the CURRENT
-       * selection turn first (e.g. "move option 1 to 4pm"), then fallback to original message.
+       * Selection turns like "1" carry no update details. Only extract when
+       * this reply might add changes (e.g. "move option 1 to 4pm").
        */
-      if (!savedNewTitle && !savedNewStart && !savedNewEnd) {
+      if (
+        !savedNewTitle &&
+        !savedNewStart &&
+        !savedNewEnd &&
+        !looksLikeBareEventPick(message)
+      ) {
         const extractedTurnUpdate =
           await extractCalendarMutationArgs(
             this.llmService,
@@ -314,26 +323,6 @@ export class ToolPendingFlowService {
           savedNewTitle = extractedTurnUpdate.newTitle ?? null;
           savedNewStart = extractedTurnUpdate.newStart ?? null;
           savedNewEnd = extractedTurnUpdate.newEnd ?? null;
-        } else {
-          const reExtractedOriginalUpdate =
-            await extractCalendarMutationArgs(
-              this.llmService,
-              pendingUpdate.originalMessage,
-              pendingUpdatePayload.timeZone,
-            );
-
-          if (
-            reExtractedOriginalUpdate?.operation === 'update'
-          ) {
-            savedNewTitle =
-              reExtractedOriginalUpdate.newTitle ?? null;
-
-            savedNewStart =
-              reExtractedOriginalUpdate.newStart ?? null;
-
-            savedNewEnd =
-              reExtractedOriginalUpdate.newEnd ?? null;
-          }
         }
       }
 

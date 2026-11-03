@@ -15,20 +15,37 @@ describe('ToolOrchestratorLlmExtractors', () => {
   });
 
   describe('extractDraftEmailArgs', () => {
-    it('returns null immediately without calling LLM if no email address is in message (fast-path)', async () => {
-      const result = await extractDraftEmailArgs(
-        mockLlmService,
-        'Draft an email to John saying I will be late',
+    it('extracts name + context without requiring @ in the message', async () => {
+      mockLlmService.generate.mockResolvedValue(
+        JSON.stringify({
+          recipients: [],
+          recipientName: 'Jane',
+          subject: null,
+          tone: null,
+          context: 'about the offer',
+        }),
       );
 
-      expect(result).toBeNull();
-      expect(mockLlmService.generate).not.toHaveBeenCalled();
+      const result = await extractDraftEmailArgs(
+        mockLlmService,
+        'Email Jane about the offer',
+      );
+
+      expect(mockLlmService.generate).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({
+        recipients: [],
+        recipientName: 'Jane',
+        subject: undefined,
+        tone: undefined,
+        context: 'about the offer',
+      });
     });
 
     it('extracts email draft args when email is present in message', async () => {
       mockLlmService.generate.mockResolvedValue(
         JSON.stringify({
           recipients: ['alice@example.com'],
+          recipientName: null,
           subject: 'Project Update',
           tone: 'professional',
           context: 'Here is the progress report.',
@@ -43,6 +60,7 @@ describe('ToolOrchestratorLlmExtractors', () => {
       expect(mockLlmService.generate).toHaveBeenCalledTimes(1);
       expect(result).toEqual({
         recipients: ['alice@example.com'],
+        recipientName: undefined,
         subject: 'Project Update',
         tone: 'professional',
         context: 'Here is the progress report.',

@@ -19,35 +19,36 @@ function cleanNumber(val: unknown): number | null {
   return typeof val === 'number' && !Number.isNaN(val) ? val : null;
 }
 
+export type DraftEmailExtraction = {
+  recipients: string[];
+  /** Display name when the user named a person but not an address. */
+  recipientName?: string;
+  subject?: string;
+  tone?: string;
+  context?: string;
+};
+
 export async function extractDraftEmailArgs(
   llm: LlmService,
   message: string,
-): Promise<{
-  recipients: string[];
-  subject?: string;
-  tone?: string;
-  context: string;
-} | null> {
+): Promise<DraftEmailExtraction | null> {
   if (!message?.trim()) return null;
-
-  // FAST PATH: If message contains no email address, this extractor will always return null
-  // because valid recipients are required. Skip the expensive LLM network roundtrip.
-  if (!EMAIL_REGEX.test(message)) {
-    return null;
-  }
 
   const systemPrompt =
     'Extract email draft arguments from user message. Return JSON only:\n' +
     '{\n' +
     '  "recipients": string[],\n' +
+    '  "recipientName": string | null,\n' +
     '  "subject": string | null,\n' +
     '  "tone": string | null,\n' +
-    '  "context": string\n' +
+    '  "context": string | null\n' +
     '}\n' +
     'Rules:\n' +
-    '- recipients: real email addresses in message only. If none, return [].\n' +
-    '- context: what to say in plain language. Describe the ask directly.\n' +
-    '- subject: optional short subject if implied, else null.';
+    '- recipients: real email addresses (must contain @) found in the message. If none, [].\n' +
+    '- recipientName: person/org name when the user names a recipient without an address (e.g. "Jane"). Else null.\n' +
+    '- context: what to say in plain language. Describe the ask directly. null if unclear.\n' +
+    '- subject: optional short subject if implied, else null.\n' +
+    '- Do not invent email addresses.';
 
   const raw = await llm.generate({
     systemPrompt,
@@ -62,26 +63,33 @@ export async function extractDraftEmailArgs(
   if (!parsed) return null;
 
   const recipientsUnknown = parsed['recipients'];
-  const contextUnknown = parsed['context'];
+  const recipients = Array.isArray(recipientsUnknown)
+    ? recipientsUnknown.filter(
+        (v): v is string =>
+          typeof v === 'string' && EMAIL_REGEX.test(v.trim()),
+      )
+    : [];
+
+  const context = cleanString(parsed['context']);
+  const recipientName = cleanString(parsed['recipientName']);
+  const subject = cleanString(parsed['subject']);
+  const tone = cleanString(parsed['tone']);
 
   if (
-    !Array.isArray(recipientsUnknown) ||
-    typeof contextUnknown !== 'string' ||
-    !contextUnknown.trim()
+    recipients.length === 0 &&
+    !recipientName &&
+    !context &&
+    !subject
   ) {
     return null;
   }
 
-  const recipients = recipientsUnknown.filter(
-    (v): v is string => typeof v === 'string' && EMAIL_REGEX.test(v.trim()),
-  );
-  if (recipients.length === 0) return null;
-
   return {
     recipients,
-    subject: cleanString(parsed['subject']),
-    tone: cleanString(parsed['tone']),
-    context: contextUnknown.trim(),
+    recipientName,
+    subject,
+    tone,
+    context,
   };
 }
 

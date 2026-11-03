@@ -39,28 +39,57 @@ export class EmailToolHandler {
       return this.continuePendingEmailDraft(sessionId, message, pendingDraft, envelope);
     }
 
-    const args = await extractDraftEmailArgs(this.llmService, message);
+    /*
+     * Slot-first: Stage-1 recipientEmail / body / subject win. Call the
+     * extract LLM only for gaps (including name-only asks with no @).
+     */
     const slots = envelope?.slots ?? {};
 
-    const recipients =
-      args?.recipients?.length
-        ? args.recipients
-        : typeof slots.recipientEmail === 'string'
-          ? [slots.recipientEmail]
+    let recipients =
+      typeof slots.recipientEmail === 'string' && slots.recipientEmail.trim()
+        ? [slots.recipientEmail.trim()]
+        : Array.isArray(slots.recipientEmails)
+          ? slots.recipientEmails.filter(
+              (v): v is string => typeof v === 'string' && v.includes('@'),
+            )
           : [];
 
-    const recipientName =
-      typeof slots.recipient === 'string' ? slots.recipient : undefined;
+    let recipientName =
+      typeof slots.recipient === 'string' && slots.recipient.trim()
+        ? slots.recipient.trim()
+        : undefined;
 
-    const subject =
-      args?.subject ??
-      (typeof slots.subject === 'string' ? slots.subject : undefined);
+    let subject =
+      typeof slots.subject === 'string' && slots.subject.trim()
+        ? slots.subject.trim()
+        : undefined;
 
-    const context =
-      args?.context ??
-      (typeof slots.body === 'string' ? slots.body : undefined);
+    let context =
+      typeof slots.body === 'string' && slots.body.trim()
+        ? slots.body.trim()
+        : undefined;
 
-    const tone = args?.tone;
+    let tone: string | undefined;
+
+    if (!recipients.length || !context) {
+      const args = await extractDraftEmailArgs(this.llmService, message);
+
+      if (!recipients.length && args?.recipients?.length) {
+        recipients = args.recipients;
+      }
+      if (!recipientName && args?.recipientName) {
+        recipientName = args.recipientName;
+      }
+      if (!subject && args?.subject) {
+        subject = args.subject;
+      }
+      if (!context && args?.context) {
+        context = args.context;
+      }
+      if (args?.tone) {
+        tone = args.tone;
+      }
+    }
 
     if (!recipients.length || !context?.trim()) {
       await this.pendingRequestService.setPending<PendingEmailDraftPayload>(
@@ -81,9 +110,9 @@ export class EmailToolHandler {
       );
 
       if (!recipients.length) {
-        return (
-          'I can draft that email, but I need the recipient email address first.'
-        );
+        return recipientName
+          ? `I can draft that for ${recipientName}, but I need their email address first.`
+          : 'I can draft that email, but I need the recipient email address first.';
       }
 
       return 'I have the recipient. What should the email say?';

@@ -106,3 +106,11 @@ export function pickUniqueTitleMatch<T extends { title: string }>(
 
   return best.option;
 }
+
+/**
+ * True when the reply is only a numbered pick (e.g. "1", "2.") with no
+ * extra update details. Used to skip a wasted mutation extract LLM call.
+ */
+export function looksLikeBareEventPick(message: string): boolean {
+  return /^\s*\d{1,2}\s*[.)]?\s*$/.test(message.trim());
+}
