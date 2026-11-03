@@ -13,4 +13,7 @@ export {
 export { parseIntentEnvelopeFromModelText } from './intent-envelope.parse';
 export { IntentRouterService } from './intent-router.service';
 export { IntentShadowService } from './intent-shadow.service';
-export { buildPendingHintForClassifier } from './pending-hint.build';
+export {
+  buildPendingHintForClassifier,
+  buildPendingHintFromSnapshot,
+} from './pending-hint.build';

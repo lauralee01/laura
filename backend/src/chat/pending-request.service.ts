@@ -83,6 +83,32 @@ export class PendingRequestService {
     return actionTypes.some((actionType) => Boolean(tools[actionType]));
   }
 
+  /** One DB read of all active tool pending actions for this session. */
+  async snapshotTools(sessionId: string): Promise<ToolPendingMap> {
+    return this.loadActiveTools(sessionId.trim());
+  }
+
+  async clearMany(
+    sessionId: string,
+    actionTypes: PendingActionType[],
+  ): Promise<void> {
+    if (actionTypes.length === 0) return;
+    const sid = sessionId.trim();
+    if (!sid) return;
+
+    const tools = await this.loadActiveTools(sid);
+    let changed = false;
+    for (const actionType of actionTypes) {
+      if (actionType in tools) {
+        delete tools[actionType];
+        changed = true;
+      }
+    }
+    if (changed) {
+      await this.sessionPreferences.saveToolPendingMap(sid, tools);
+    }
+  }
+
   private async loadActiveTools(sessionId: string): Promise<ToolPendingMap> {
     const tools = await this.sessionPreferences.getToolPendingMap(sessionId);
     const now = Date.now();

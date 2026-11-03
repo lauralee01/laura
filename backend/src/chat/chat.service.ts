@@ -7,7 +7,7 @@ import { ChatHistoryService } from './chat-history.service';
 import { PendingRequestService } from './pending-request.service';
 import { SessionPreferencesService } from './session-preferences.service';
 import {
-  buildPendingHintForClassifier,
+  buildPendingHintFromSnapshot,
   IntentShadowService,
   IntentRouterService,
   isConfidenceGatedIntent,
@@ -19,6 +19,13 @@ import {
   formatCurrentDateTime,
   resolveSessionTimeZone,
 } from './datetime-context';
+import {
+  hasCalendarPending,
+  pendingActionsInterruptedByIntent,
+  shouldClearWebSearchLocationPending,
+  shouldResumeWebSearchLocation,
+} from './pending-policy';
+import type { ToolPendingMap } from './session-pending.types';
 
 type ChatReply = {
   reply: string;
@@ -160,7 +167,7 @@ export class ChatService {
       conversationId,
     );
 
-    const [pendingAction, sessionTz, storedLocation, priorTurnsFromDb] =
+    const [pendingAction, sessionTz, storedLocation, priorTurnsFromDb, toolPending] =
       await Promise.all([
         sessionId
           ? this.sessionPreferences.getPendingAction(sessionId)
@@ -176,6 +183,9 @@ export class ChatService {
           : dbConversationId
             ? this.chatHistoryService.listTurnsForLlm(dbConversationId)
             : Promise.resolve(undefined),
+        sessionId
+          ? this.pendingRequestService.snapshotTools(sessionId)
+          : Promise.resolve({} as ToolPendingMap),
       ]);
 
     const priorTurns: LlmChatTurn[] | undefined = history ?? priorTurnsFromDb;
@@ -189,66 +199,10 @@ export class ChatService {
         );
     }
 
-    if (pendingAction?.type === 'web_search_missing_location') {
-      const location = message.trim();
-
-      // Save the user's location for future searches
-      await this.sessionPreferences.setLocation(sessionId, location);
-
-      // This pending action has now been handled
-      await this.sessionPreferences.clearPendingAction(sessionId);
-
-      const priorEnvelope = pendingAction.envelope ?? {};
-      const resumedEnvelope = {
-        ...priorEnvelope,
-        slots: {
-          ...(priorEnvelope.slots ?? {}),
-          locationHint: location,
-          userLocationHint: location,
-        },
-      } as unknown as IntentEnvelope;
-
-      const searchResult = await this.toolOrchestrator.handleWebSearchIntent(
-        sessionId,
-        pendingAction.message,
-        resumedEnvelope,
-      );
-
-      const reply =
-        searchResult.kind === 'needs_location'
-          ? 'Which town or city should I use for this search?'
-          : searchResult.text;
-
-      if (searchResult.kind === 'needs_location') {
-        await this.sessionPreferences.setPendingAction(sessionId, {
-          type: 'web_search_missing_location',
-          message: pendingAction.message,
-          envelope: resumedEnvelope,
-        });
-      }
-
-      if (dbConversationId) {
-        await this.chatHistoryService.appendMessage(
-          dbConversationId,
-          'assistant',
-          reply,
-        );
-      }
-
-      if (trackedOnChunk) {
-        trackedOnChunk(reply);
-      }
-
-      return {
-        reply,
-        conversationId: dbConversationId ?? undefined,
-      };
-    }
-
-    const pendingHint = await buildPendingHintForClassifier(
-      sessionId,
-      this.pendingRequestService,
-    );
+    const pendingHint = buildPendingHintFromSnapshot({
+      tools: toolPending,
+      webSearch: pendingAction,
+    });
 
     const intentPromise = (async () => {
       const start = performance.now();
@@ -322,6 +276,74 @@ export class ChatService {
       envelope,
       routingClassifyFailed,
     });
+
+    /*
+     * Web-search location pending: resume only when the classifier still looks
+     * like an answer to the city ask. A new calendar/email/datetime topic clears it.
+     */
+    if (
+      pendingAction?.type === 'web_search_missing_location' &&
+      shouldResumeWebSearchLocation(envelope?.intent)
+    ) {
+      const location = message.trim();
+
+      await this.sessionPreferences.setLocation(sessionId, location);
+      await this.sessionPreferences.clearPendingAction(sessionId);
+
+      const priorEnvelope = pendingAction.envelope ?? {};
+      const resumedEnvelope = {
+        ...priorEnvelope,
+        slots: {
+          ...(priorEnvelope.slots ?? {}),
+          locationHint: location,
+          userLocationHint: location,
+        },
+      } as unknown as IntentEnvelope;
+
+      const searchResult = await this.toolOrchestrator.handleWebSearchIntent(
+        sessionId,
+        pendingAction.message,
+        resumedEnvelope,
+      );
+
+      const reply =
+        searchResult.kind === 'needs_location'
+          ? 'Which town or city should I use for this search?'
+          : searchResult.text;
+
+      if (searchResult.kind === 'needs_location') {
+        await this.sessionPreferences.setPendingAction(sessionId, {
+          type: 'web_search_missing_location',
+          message: pendingAction.message,
+          envelope: resumedEnvelope,
+        });
+      }
+
+      if (dbConversationId) {
+        await this.chatHistoryService.appendMessage(
+          dbConversationId,
+          'assistant',
+          reply,
+        );
+      }
+
+      if (trackedOnChunk) {
+        trackedOnChunk(reply);
+      }
+
+      return {
+        reply,
+        conversationId: dbConversationId ?? undefined,
+      };
+    }
+
+    if (
+      pendingAction?.type === 'web_search_missing_location' &&
+      shouldClearWebSearchLocationPending(envelope?.intent)
+    ) {
+      await this.sessionPreferences.clearPendingAction(sessionId);
+    }
+
     const minToolConfidence =
       this.intentRouter.getToolRoutingMinConfidence();
     /*
@@ -361,18 +383,24 @@ export class ChatService {
         .catch(() => undefined);
     }
 
-    const shouldClearPendingEmailFromEnvelope =
-      envelope?.intent === 'calendar_list' ||
-      envelope?.intent === 'calendar_create' ||
-      envelope?.intent === 'calendar_update' ||
-      envelope?.intent === 'calendar_delete' ||
-      envelope?.intent === 'email_draft';
-    if (await this.pendingRequestService.getPending(sessionId, 'email_send') && shouldClearPendingEmailFromEnvelope) {
-      await this.pendingRequestService.clearPending(sessionId, 'email_send');
+    /*
+     * Pending policy: Stage-1 intent from a different family clears stale
+     * tool pending so new topics are not trapped in old multi-turn flows.
+     */
+    const interruptedActions = pendingActionsInterruptedByIntent(
+      toolPending,
+      envelope?.intent,
+    );
+    if (interruptedActions.length > 0) {
+      await this.pendingRequestService.clearMany(sessionId, interruptedActions);
+      for (const actionType of interruptedActions) {
+        delete toolPending[actionType];
+      }
     }
 
     let toolReply: string | null = null;
-    const isEmailSendPending = await this.pendingRequestService.getPending(sessionId, 'email_send');
+    const isEmailSendPending = Boolean(toolPending.email_send);
+    const isEmailDraftPending = Boolean(toolPending.email_draft);
 
     const isGoogleIntent =
       envelope?.intent === 'calendar_list' ||
@@ -414,24 +442,10 @@ export class ChatService {
      * Resume email_draft without requiring the classifier to emit email_draft
      * again (e.g. user just replies with "jane@x.com").
      */
-    const isEmailDraftPending = await this.pendingRequestService.getPending(
-      sessionId,
-      'email_draft',
-    );
-    const emailDraftInterruptedBy =
-      envelope?.intent === 'calendar_list' ||
-      envelope?.intent === 'calendar_create' ||
-      envelope?.intent === 'calendar_update' ||
-      envelope?.intent === 'calendar_delete' ||
-      envelope?.intent === 'web_search' ||
-      envelope?.intent === 'current_datetime' ||
-      envelope?.intent === 'pending_cancel';
-
     if (
       isEmailDraftPending &&
       toolReply === null &&
-      !isEmailSendPending &&
-      !emailDraftInterruptedBy
+      !isEmailSendPending
     ) {
       toolReply = await this.toolOrchestrator.handleEmailDraftIntent(
         sessionId,
@@ -440,18 +454,7 @@ export class ChatService {
       );
     }
 
-    const hasPendingCalendarAction = await this.pendingRequestService.hasAny(
-      sessionId,
-      [
-        'calendar_update',
-        'calendar_delete',
-        'calendar_create',
-        'calendar_list',
-        'calendar_mutate_tz',
-      ],
-    );
-
-    if (hasPendingCalendarAction && toolReply === null) {
+    if (hasCalendarPending(toolPending) && toolReply === null) {
       toolReply = await this.toolOrchestrator.tryHandle(
         sessionId,
         message,
