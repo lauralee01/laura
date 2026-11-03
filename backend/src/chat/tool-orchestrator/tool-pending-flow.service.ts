@@ -8,7 +8,7 @@ import { CalendarMutationHandler } from './calendar/calendar-mutation.handler';
 import { EmailToolHandler } from './email/email-tool.handler';
 import { mergeTimeOnlyUpdateOntoEventDay } from './calendar/calendar-update-merge';
 import { formatToolFailureMessage } from './tool-orchestrator.utils';
-import { LlmService } from 'src/llm/llm.service';
+import { LlmService } from '../../llm/llm.service';
 import {
   getSlotSelectedIndex,
   getSlotTimeZone,

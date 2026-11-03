@@ -71,7 +71,15 @@ export class EmailToolHandler {
 
     let tone: string | undefined;
 
-    if (!recipients.length || !context) {
+    /*
+     * Extract only when Stage-1 left real gaps. Name + body without an
+     * address is enough to pending — do not spend an LLM call inventing @.
+     */
+    const slotFirstReadyToPending =
+      Boolean(context?.trim()) &&
+      (recipients.length > 0 || Boolean(recipientName));
+
+    if (!slotFirstReadyToPending) {
       const args = await extractDraftEmailArgs(this.llmService, message);
 
       if (!recipients.length && args?.recipients?.length) {
