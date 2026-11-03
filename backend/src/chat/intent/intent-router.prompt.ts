@@ -170,6 +170,23 @@ clarify:
 Use only when the user's goal cannot safely be resolved from the
 message, recent history, or pending context.
 
+MEMORY
+
+Set slots.needsMemory to true when answering well requires Laura's
+stored personal facts about this user — preferences, constraints,
+prior statements, goals, roles, or "what do you know about me".
+
+Examples that need memory:
+"What restaurants would I like?"
+"Remind me what I said about interviews"
+"Based on what you know about me, draft a bio"
+
+Set needsMemory false for pure tool lookups, clock/date questions,
+generic knowledge, greetings, and short confirmations that do not
+depend on personal history.
+
+Omit needsMemory or set false when unsure; retrieve is opt-in.
+
 LOCATION
 
 For web_search:

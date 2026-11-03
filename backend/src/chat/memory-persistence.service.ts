@@ -41,7 +41,21 @@ export class MemoryPersistenceService {
       return;
     }
 
+    let savedCount = 0;
     for (const memory of extractedMemories) {
+      const shouldWrite = await this.shouldWriteMemoryCandidate(
+        userId,
+        memory,
+      );
+
+      if (!shouldWrite) {
+        console.log('[memory-persistence] Skipping near-duplicate memory', {
+          userId,
+          memory,
+        });
+        continue;
+      }
+
       console.log('[memory-persistence] Saving memory', {
         userId,
         memory,
@@ -51,11 +65,13 @@ export class MemoryPersistenceService {
         userId,
         content: memory,
       });
+      savedCount += 1;
     }
 
     console.log('[memory-persistence] Memories saved', {
       userId,
-      count: extractedMemories.length,
+      count: savedCount,
+      skippedDuplicates: extractedMemories.length - savedCount,
     });
   }
 

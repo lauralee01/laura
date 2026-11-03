@@ -25,6 +25,10 @@ import {
   shouldClearWebSearchLocationPending,
   shouldResumeWebSearchLocation,
 } from './pending-policy';
+import {
+  envelopeNeedsMemory,
+  shouldSkipMemoryExtract,
+} from './memory-policy';
 import type { ToolPendingMap } from './session-pending.types';
 
 type ChatReply = {
@@ -46,75 +50,6 @@ export class ChatService {
     private readonly intentRouter: IntentRouterService,
     private readonly googleOAuthService: GoogleOAuthService,
   ) { }
-
-  private normalizeMessageForRouting(message: string): string {
-    return message
-      .trim()
-      .toLowerCase()
-      .replace(
-        /^(thanks|thank you|thx|okay|ok|sure|cool|great|alright)[,!.]?\s+/i,
-        '',
-      )
-      .trim();
-  }
-
-  private shouldRetrieveMemory(message: string): boolean {
-    const clean = this.normalizeMessageForRouting(message);
-
-    if (clean.length < 4) {
-      return false;
-    }
-
-    const isTrivialMessage =
-      /^(hi|hello|hey|greetings|thanks|thank you|thx|ok|okay|yes|no|sure|cool|bye|goodbye|got it|sounds good)[!.]?$/i.test(
-        clean,
-      );
-
-    if (isTrivialMessage) {
-      return false;
-    }
-
-    const isClearlyToolQuery =
-      /\b(weather|forecast|calendar|meeting|meetings|appointment|appointments|email|emails|inbox|timezone|time zone)\b/i.test(
-        clean,
-      );
-
-    if (isClearlyToolQuery) {
-      return false;
-    }
-    const explicitlyReferencesMemory =
-      /\b(do you remember|remember when|remember that|what did i tell you|what have i told you|what do you know about me|based on what you know about me|you know about me)\b/i.test(
-        clean,
-      );
-
-    if (explicitlyReferencesMemory) {
-      return true;
-    }
-
-    const referencesPersonalContext =
-      /\b(my (?:job|work|career|resume|application|interview|favorite|favourite|preference|preferences|diet|allergy|allergies|hobby|hobbies|project|projects|school|university|degree|location|timezone)|where i (?:live|work)|i told you|i mentioned|you know i|you know that i)\b/i.test(
-        clean,
-      );
-
-    if (referencesPersonalContext) {
-      return true;
-    }
-
-    const isGeneralKnowledgeQuestion =
-      /^(explain|explain to me|how does|how do|how can|what is|what are|what does|why is|why does|difference between|what's the difference|can you explain|teach me|show me how|give me an example|write a|convert|format|compare|summarize)\b/i.test(
-        clean,
-      );
-
-    if (isGeneralKnowledgeQuestion) {
-      return false;
-    }
-
-    /*
-     * Default off for speed. Memory is opt-in via explicit references or
-     * personal-context phrases above so most chat turns skip embedding search.
-     */
-    return false;
-  }
 
   async replyTo(
     sessionId: string,
@@ -177,70 +112,39 @@ export class ChatService {
       webSearch: pendingAction,
     });
 
-    const intentPromise = (async () => {
-      const start = performance.now();
+    const intentStart = performance.now();
+    let precomputedEnvelope: IntentEnvelope | undefined;
+    let routingClassifyFailed = false;
+    try {
+      precomputedEnvelope = await this.intentRouter.classify({
+        userMessage: message,
+        pendingHint,
+        sessionTimeZone: sessionTz ?? undefined,
+        history: priorTurns,
+      });
+    } catch {
+      routingClassifyFailed = true;
+      precomputedEnvelope = undefined;
+    }
+    const intentMs = Math.round(performance.now() - intentStart);
 
-      try {
-        const result = await this.intentRouter.classify({
-          userMessage: message,
-          pendingHint,
-          sessionTimeZone: sessionTz ?? undefined,
-          history: priorTurns,
-        });
-
-        return {
-          result,
-          ms: Math.round(performance.now() - start),
-          failed: false,
-        };
-      } catch {
-        return {
-          result: undefined,
-          ms: Math.round(performance.now() - start),
-          failed: true,
-        };
-      }
-    })();
-
-    const shouldFetchMemory =
-      Boolean(sessionId) && this.shouldRetrieveMemory(message);
-
-    const memoriesPromise = (async () => {
-      if (!shouldFetchMemory) {
-        return {
-          result: [],
-          ms: 0,
-          skipped: true,
-        };
-      }
-
-      const start = performance.now();
-
-      const result = await this.memoryService.searchMemories({
+    /*
+     * Memory retrieve is opt-in via Stage-1 slots.needsMemory. Running after
+     * classify avoids the old regex gate and skips embeds on tool/trivial turns.
+     */
+    let memories: Awaited<
+      ReturnType<MemoryService['searchMemories']>
+    > = [];
+    let memoryMs = 0;
+    if (sessionId && envelopeNeedsMemory(precomputedEnvelope)) {
+      const memoryStart = performance.now();
+      memories = await this.memoryService.searchMemories({
         userId: sessionId,
         query: message,
         topK: 3,
       });
-
-      return {
-        result,
-        ms: Math.round(performance.now() - start),
-        skipped: false,
-      };
-    })();
-
-    const [intentResult, memoryResult] = await Promise.all([
-      intentPromise,
-      memoriesPromise,
-    ]);
-
-    const precomputedEnvelope = intentResult.result;
-    const routingClassifyFailed = intentResult.failed;
-
-    const memories = memoryResult.result;
-
-    const intentMs = intentResult.ms;
-    const memoryMs = memoryResult.ms;
+      memoryMs = Math.round(performance.now() - memoryStart);
+    }
 
     const envelope = precomputedEnvelope;
     console.log('[intent-classify-local]', {
@@ -539,11 +443,13 @@ export class ChatService {
           );
       }
 
-      void this.memoryPersistenceService
-        .writeExtractedMemoriesIfAny(sessionId, message)
-        .catch((e) => {
-          console.log('background memory write failed:', e);
-        });
+      if (!shouldSkipMemoryExtract(envelope?.intent, message)) {
+        void this.memoryPersistenceService
+          .writeExtractedMemoriesIfAny(sessionId, message)
+          .catch((e) => {
+            console.log('background memory write failed:', e);
+          });
+      }
 
       return {
         reply: toolReply,
@@ -660,11 +566,13 @@ export class ChatService {
         );
     }
 
-    void this.memoryPersistenceService
-      .writeExtractedMemoriesIfAny(sessionId, message)
-      .catch((e) => {
-        console.log('background memory write failed:', e);
-      });
+    if (!shouldSkipMemoryExtract(envelope?.intent, message)) {
+      void this.memoryPersistenceService
+        .writeExtractedMemoriesIfAny(sessionId, message)
+        .catch((e) => {
+          console.log('background memory write failed:', e);
+        });
+    }
 
     return { reply, conversationId: dbConversationId ?? undefined };
   }
