@@ -47,33 +47,6 @@ export class ChatService {
     private readonly googleOAuthService: GoogleOAuthService,
   ) { }
 
-  private getLastAssistantTurn(history?: LlmChatTurn[]): LlmChatTurn | undefined {
-    if (!history) return undefined;
-
-    for (let i = history.length - 1; i >= 0; i--) {
-      if (history[i].role === 'assistant') return history[i];
-    }
-
-    return undefined;
-  }
-
-  private isLikelyFollowUpAnswer(message: string, history?: LlmChatTurn[]): boolean {
-    const lastAssistantTurn = this.getLastAssistantTurn(history);
-    if (!lastAssistantTurn) return false;
-
-    const cleanMessage = message.trim();
-    const wordCount = cleanMessage.split(/\s+/).filter(Boolean).length;
-
-    const userReplyLooksShort = cleanMessage.length <= 160 && wordCount <= 25;
-
-    const assistantAskedQuestion =
-      /\?|what location|which location|where|when|what time|which day|what kind|which one|who is it for|are you looking for|do you mean|can you clarify|can you confirm/i.test(
-        lastAssistantTurn.content,
-      );
-
-    return assistantAskedQuestion && userReplyLooksShort;
-  }
-
   private normalizeMessageForRouting(message: string): string {
     return message
       .trim()
@@ -526,20 +499,11 @@ export class ChatService {
       }
     }
 
-    const shouldTreatAsFollowUpAnswer =
-      envelope?.intent === 'clarify' &&
-      this.isLikelyFollowUpAnswer(message, priorTurns);
-
     /*
-     * Canned rephrase only for explicit clarify or blocked gated tools.
-     * Never block general_chat (including omitted/low confidence) from the LLM.
+     * Canned rephrase only for destructive tools with known-low confidence.
+     * `clarify` falls through to the chat LLM so Laura can ask one precise question.
      */
-    if (
-      toolReply === null &&
-      envelope &&
-      (envelope.intent === 'clarify' || isGatedToolBlocked) &&
-      !shouldTreatAsFollowUpAnswer
-    ) {
+    if (toolReply === null && isGatedToolBlocked) {
       toolReply =
         'I did not fully catch that. Could you rephrase what you want me to do? ';
     }
@@ -646,6 +610,13 @@ export class ChatService {
         memoryContext +
         '\n\nWhen generating your reply, use these facts naturally when relevant. ' +
         'If a requested detail conflicts with a known user preference or fact, ask a clarifying question.';
+    }
+
+    if (envelope?.intent === 'clarify') {
+      extraContext +=
+        '\n\nThe intent router could not safely choose a tool for this message. ' +
+        'Ask exactly one clear, specific follow-up question that would let you help. ' +
+        'Do not invent that you already completed a calendar, email, or search action.';
     }
 
     const systemPrompt = systemBasePrompt + extraContext;
