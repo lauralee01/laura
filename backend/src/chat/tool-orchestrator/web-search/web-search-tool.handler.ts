@@ -202,11 +202,12 @@ export class WebSearchToolHandler {
                 'Check publication dates and event dates carefully.',
                 'If reliable sources conflict, do not silently choose one. Explain the conflict and what the most recent authoritative source supports.',
                 'Do not infer current status from older qualification, advancement, preview, or historical information.',
-                'Keep the answer concise and useful.',
+                'Keep the answer concise and useful, but always finish complete sentences.',
                 'Use Markdown where appropriate, but do not use markdown headings or raw markdown tables.',
                 'Do not expose URLs in the main body of the answer.',
                 'After the answer, include a **Sources** section containing no more than three provided source URLs.',
                 'Never invent, modify, or shorten source URLs.',
+                'Never stop mid-sentence or mid-list. Always complete the answer and the Sources section.',
             ].join(' ');
 
             const userMessageParts = [
@@ -239,6 +240,12 @@ export class WebSearchToolHandler {
             const text = await this.llm.generate({
                 systemPrompt,
                 userMessage: userMessageParts.join('\n\n'),
+                /*
+                 * Synthesis needs room for answer + Sources. Disable thinking
+                 * so the budget is not eaten before the visible reply finishes.
+                 */
+                maxOutputTokens: 4096,
+                thinkingBudget: 0,
                 errorMode: 'throw',
             });
 

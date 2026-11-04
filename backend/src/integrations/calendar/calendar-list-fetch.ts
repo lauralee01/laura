@@ -7,10 +7,13 @@ import {
 import type { ListCalendarEventSummary } from './calendar.types';
 
 const DEFAULT_PAGE_MAX = 250;
+/** Cap concurrent Google Calendar events.list calls to avoid quota spikes. */
+const CALENDAR_LIST_CONCURRENCY = 4;
 
 /**
  * Loads every calendar id the user can see (calendarList), then lists events in
- * [timeMin, timeMax) for each, merges, sorts by start time, optionally truncates to `maxEvents`.
+ * [timeMin, timeMax) for each (bounded parallelism), merges, sorts by start time,
+ * optionally truncates to `maxEvents`.
  */
 export async function fetchMergedEventsFromAllCalendars(
   calendar: calendar_v3.Calendar,
@@ -41,45 +44,23 @@ export async function fetchMergedEventsFromAllCalendars(
   debugCalendarLog('[calendar.listEvents] calendars', {
     count: calendarIds.length,
     calendarIds,
+    concurrency: CALENDAR_LIST_CONCURRENCY,
   });
 
-  const all: SortableCalendarEvent[] = [];
-
-  for (const calendarId of calendarIds) {
-    let pageToken: string | undefined;
-    do {
-      const { data } = await calendar.events.list({
+  const perCalendarEvents = await mapWithConcurrency(
+    calendarIds,
+    CALENDAR_LIST_CONCURRENCY,
+    (calendarId) =>
+      fetchEventsForCalendar(calendar, {
         calendarId,
+        timeZone: options.timeZone,
         timeMin: options.timeMin,
         timeMax: options.timeMax,
-        singleEvents: true,
-        orderBy: 'startTime',
-        showDeleted: false,
-        maxResults: pageMaxResults,
-        pageToken,
-        timeZone: options.timeZone,
-      });
+        pageMaxResults,
+      }),
+  );
 
-      const items = data.items ?? [];
-
-      debugCalendarLog('[calendar.listEvents] page', {
-        calendarId,
-        nextPageTokenPresent: !!data.nextPageToken,
-        returnedItemCount: items.length,
-        pageTokenUsed: pageToken ?? null,
-        accumulated: all.length,
-      });
-
-      for (const ev of items) {
-        all.push(
-          mapGoogleCalendarEventToSortable(ev, options.timeZone, calendarId),
-        );
-      }
-
-      pageToken = data.nextPageToken ?? undefined;
-    } while (pageToken);
-  }
-
+  const all = perCalendarEvents.flat();
   all.sort((a, b) => a.sortMillis - b.sortMillis);
 
   const out =
@@ -92,6 +73,58 @@ export async function fetchMergedEventsFromAllCalendars(
   });
 
   return out.map((x) => x.summary);
+}
+
+async function fetchEventsForCalendar(
+  calendar: calendar_v3.Calendar,
+  options: {
+    calendarId: string;
+    timeZone: string;
+    timeMin: string;
+    timeMax: string;
+    pageMaxResults: number;
+  },
+): Promise<SortableCalendarEvent[]> {
+  const events: SortableCalendarEvent[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const { data } = await calendar.events.list({
+      calendarId: options.calendarId,
+      timeMin: options.timeMin,
+      timeMax: options.timeMax,
+      singleEvents: true,
+      orderBy: 'startTime',
+      showDeleted: false,
+      maxResults: options.pageMaxResults,
+      pageToken,
+      timeZone: options.timeZone,
+    });
+
+    const items = data.items ?? [];
+
+    debugCalendarLog('[calendar.listEvents] page', {
+      calendarId: options.calendarId,
+      nextPageTokenPresent: !!data.nextPageToken,
+      returnedItemCount: items.length,
+      pageTokenUsed: pageToken ?? null,
+      accumulated: events.length,
+    });
+
+    for (const ev of items) {
+      events.push(
+        mapGoogleCalendarEventToSortable(
+          ev,
+          options.timeZone,
+          options.calendarId,
+        ),
+      );
+    }
+
+    pageToken = data.nextPageToken ?? undefined;
+  } while (pageToken);
+
+  return events;
 }
 
 async function fetchAllCalendarIds(
@@ -114,4 +147,32 @@ async function fetchAllCalendarIds(
   } while (calPageToken);
 
   return calendarIds;
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (items.length === 0) {
+    return [];
+  }
+
+  const limit = Math.max(1, Math.min(concurrency, items.length));
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (nextIndex < items.length) {
+      const current = nextIndex;
+      nextIndex += 1;
+      results[current] = await mapper(items[current], current);
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: limit }, () => worker()),
+  );
+
+  return results;
 }

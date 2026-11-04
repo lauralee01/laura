@@ -12,6 +12,11 @@ export type GenerateInput = {
   history?: LlmChatTurn[];
   temperature?: number;
   maxOutputTokens?: number;
+  /**
+   * Gemini 2.5+ thinking token budget. Tool/synthesis calls should pass `0`
+   * so thinking does not eat the visible answer budget (common cutoff cause).
+   */
+  thinkingBudget?: number;
   /** Instruct model to output JSON directly via constrained decoding. */
   responseMimeType?: 'application/json' | 'text/plain';
   /** Override the default GEMINI_MODEL for fast/light tier execution. */
@@ -128,14 +133,7 @@ export class LlmService {
       ':streamGenerateContent?alt=sse&key=' +
       encodeURIComponent(geminiKey);
 
-    const generationConfig: Record<string, unknown> = {
-      temperature: input.temperature ?? 0.4,
-      maxOutputTokens: input.maxOutputTokens ?? 2000,
-    };
-
-    if (input.responseMimeType) {
-      generationConfig.responseMimeType = input.responseMimeType;
-    }
+    const generationConfig = this.buildGenerationConfig(input);
 
     const payload = {
       systemInstruction: {
@@ -241,6 +239,27 @@ export class LlmService {
     );
   }
 
+  private buildGenerationConfig(
+    input: GenerateInput,
+  ): Record<string, unknown> {
+    const generationConfig: Record<string, unknown> = {
+      temperature: input.temperature ?? 0.4,
+      maxOutputTokens: input.maxOutputTokens ?? 2000,
+    };
+
+    if (input.responseMimeType) {
+      generationConfig.responseMimeType = input.responseMimeType;
+    }
+
+    if (input.thinkingBudget !== undefined) {
+      generationConfig.thinkingConfig = {
+        thinkingBudget: input.thinkingBudget,
+      };
+    }
+
+    return generationConfig;
+  }
+
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
@@ -278,14 +297,7 @@ export class LlmService {
       ':generateContent?key=' +
       encodeURIComponent(apiKey);
 
-    const generationConfig: Record<string, unknown> = {
-      temperature: input.temperature ?? 0.4,
-      maxOutputTokens: input.maxOutputTokens ?? 2000,
-    };
-
-    if (input.responseMimeType) {
-      generationConfig.responseMimeType = input.responseMimeType;
-    }
+    const generationConfig = this.buildGenerationConfig(input);
 
     const payload = {
       systemInstruction: {
@@ -314,17 +326,21 @@ export class LlmService {
 
         const json = jsonUnknown as GeminiGenerateResponse;
         const candidate = json.candidates?.[0];
+        const reply = this.extractGeminiText(json).trim();
+        const finishReason = candidate?.finishReason;
 
-        const reply =
-          candidate?.content?.parts?.[0]?.text ??
-          candidate?.content?.parts?.[0]?.inlineData?.data;
-
-        if (reply != null && String(reply).trim() !== '') {
-          return String(reply);
+        if (reply) {
+          if (finishReason === 'MAX_TOKENS') {
+            console.warn('[gemini] Reply truncated by MAX_TOKENS', {
+              model,
+              maxOutputTokens: input.maxOutputTokens ?? 2000,
+              replyLength: reply.length,
+            });
+          }
+          return reply;
         }
 
         const blockReason = json.promptFeedback?.blockReason;
-        const finishReason = candidate?.finishReason;
 
         if (finishReason === 'UNEXPECTED_TOOL_CALL') {
           return 'I realize I need a tool to answer that, but I don’t have access to the internet or real-time data like the weather. How else can I help?';

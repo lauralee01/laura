@@ -55,6 +55,7 @@ export async function extractDraftEmailArgs(
     userMessage: message,
     temperature: 0.1,
     maxOutputTokens: 350,
+    thinkingBudget: 0,
     responseMimeType: 'application/json',
     errorMode: 'throw',
   });
@@ -164,6 +165,7 @@ export async function extractCalendarEventArgs(
     userMessage: message,
     temperature: 0.1,
     maxOutputTokens: 350,
+    thinkingBudget: 0,
     responseMimeType: 'application/json',
     errorMode: 'throw',
   });
@@ -247,6 +249,7 @@ export async function extractCalendarMutationArgs(
     userMessage: message,
     temperature: 0.1,
     maxOutputTokens: 350,
+    thinkingBudget: 0,
     responseMimeType: 'application/json',
     errorMode: 'throw',
   });
