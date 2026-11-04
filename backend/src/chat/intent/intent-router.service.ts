@@ -120,6 +120,12 @@ export class IntentRouterService {
        */
       maxOutputTokens: 250,
 
+      /*
+       * Thinking tokens eat the output budget and delay JSON. Router
+       * accuracy comes from the prompt + schema, not extended thinking.
+       */
+      thinkingBudget: 0,
+
       responseMimeType: 'application/json',
     });
 

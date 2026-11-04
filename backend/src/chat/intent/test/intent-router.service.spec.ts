@@ -68,5 +68,7 @@ describe('IntentRouterService', () => {
     const call = llmGenerate.mock.calls[0][0];
     expect(call.userMessage).toContain('What do I have tomorrow?');
     expect(call.userMessage).toContain('America/Chicago');
+    expect(call.thinkingBudget).toBe(0);
+    expect(call.temperature).toBe(0);
   });
 });

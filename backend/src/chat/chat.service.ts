@@ -24,6 +24,7 @@ import {
 } from './memory-policy';
 import { buildLauraChatSystemPrompt } from './laura-system-prompt';
 import { ToolRoutingService } from './tool-routing.service';
+import { logChatPerf } from './chat-perf';
 import type { ToolPendingMap } from './session-pending.types';
 
 type ChatReply = {
@@ -65,11 +66,16 @@ export class ChatService {
       }
       : undefined;
 
+    const ensureStart = performance.now();
     const dbConversationId = await this.chatHistoryService.ensureConversation(
       sessionId,
       conversationId,
     );
+    const ensureConversationMs = Math.round(
+      performance.now() - ensureStart,
+    );
 
+    const prefetchStart = performance.now();
     const [pendingAction, sessionTz, storedLocation, priorTurnsFromDb, toolPending] =
       await Promise.all([
         sessionId
@@ -90,6 +96,7 @@ export class ChatService {
           ? this.pendingRequestService.snapshotTools(sessionId)
           : Promise.resolve({} as ToolPendingMap),
       ]);
+    const prefetchMs = Math.round(performance.now() - prefetchStart);
 
     const priorTurns: LlmChatTurn[] | undefined = history ?? priorTurnsFromDb;
 
@@ -131,7 +138,10 @@ export class ChatService {
       ReturnType<MemoryService['searchMemories']>
     > = [];
     let memoryMs = 0;
-    if (sessionId && envelopeNeedsMemory(precomputedEnvelope)) {
+    const memorySkipped = !(
+      sessionId && envelopeNeedsMemory(precomputedEnvelope)
+    );
+    if (!memorySkipped) {
       const memoryStart = performance.now();
       memories = await this.memoryService.searchMemories({
         userId: sessionId,
@@ -270,6 +280,7 @@ export class ChatService {
       }
     }
 
+    const routeStart = performance.now();
     const toolReply = await this.toolRouting.resolveToolReply({
       sessionId,
       message,
@@ -279,6 +290,7 @@ export class ChatService {
       isGatedToolBlocked,
       isChatLikeIntent,
     });
+    const routeMs = Math.round(performance.now() - routeStart);
 
     if (toolReply !== null) {
       if (trackedOnChunk) {
@@ -286,13 +298,17 @@ export class ChatService {
       }
 
       const totalMs = Math.round(performance.now() - requestStart);
-      console.log('[CHAT PERF]', {
-        intentMs,
-        memoryMs,
-        ttftMs: firstTokenMs ?? totalMs,
-        totalMs,
+      logChatPerf({
         type: 'tool',
         intent: envelope?.intent ?? 'unknown',
+        ensureConversationMs,
+        prefetchMs,
+        intentMs,
+        memoryMs,
+        memorySkipped,
+        routeMs,
+        ttftMs: firstTokenMs ?? totalMs,
+        totalMs,
       });
 
       void this.intentShadowService
@@ -347,13 +363,18 @@ export class ChatService {
     const llmMs = Math.round(performance.now() - llmStart);
     const totalMs = Math.round(performance.now() - requestStart);
 
-    console.log('[CHAT PERF]', {
+    logChatPerf({
+      type: 'llm_generation',
+      intent: envelope?.intent ?? 'unknown',
+      ensureConversationMs,
+      prefetchMs,
       intentMs,
       memoryMs,
+      memorySkipped,
+      routeMs,
       llmMs,
       ttftMs: firstTokenMs ?? totalMs,
       totalMs,
-      type: 'llm_generation',
     });
 
     if (dbConversationId) {
