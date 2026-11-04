@@ -1,12 +1,6 @@
-const cred: RequestInit = { credentials: 'include' };
+import { getApiBaseUrl } from './api-base';
 
-function getApiBaseUrl(): string {
-  const base = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
-  if (base) {
-    return base.replace(/\/$/, '');
-  }
-  return 'http://localhost:4000';
-}
+const cred: RequestInit = { credentials: 'include' };
 
 export async function fetchGoogleOAuthStartUrl(): Promise<string> {
   const url = `${getApiBaseUrl()}/integrations/google/start`;

@@ -2,18 +2,12 @@
  * Server-issued anonymous session (HttpOnly cookie). Call `ensureSession` before other API calls.
  */
 
+import { getApiBaseUrl } from './api-base';
+
 export type StoredChatMessage = {
   role: 'user' | 'assistant';
   content: string;
 };
-
-function getApiBaseUrl(): string {
-  const base = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
-  if (base) {
-    return base.replace(/\/$/, '');
-  }
-  return 'http://localhost:4000';
-}
 
 /**
  * Hits `GET /session` with credentials so the API sets/refreshes the `laura_session` cookie.

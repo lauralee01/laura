@@ -648,6 +648,7 @@ export function useChat() {
     creatingConversation,
     isBusy,
     error,
+    setError,
     sidebarOpen,
     setSidebarOpen,
     bottomRef,

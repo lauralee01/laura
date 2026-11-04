@@ -1,14 +1,7 @@
 import type { StoredChatMessage } from './session';
+import { getApiBaseUrl } from './api-base';
 
 const cred: RequestInit = { credentials: 'include' };
-
-function getApiBaseUrl(): string {
-  const base = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
-  if (base) {
-    return base.replace(/\/$/, '');
-  }
-  return 'http://localhost:4000';
-}
 
 export type ChatApiResponse = {
   reply: string;

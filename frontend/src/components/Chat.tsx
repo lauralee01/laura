@@ -21,6 +21,7 @@ export function Chat() {
     setInput,
     streaming,
     error,
+    setError,
     sidebarOpen,
     setSidebarOpen,
     bottomRef,
@@ -106,7 +107,12 @@ export function Chat() {
           initializing={initializing}
         />
 
-        {error && <ChatErrorBanner message={error} />}
+        {error && (
+          <ChatErrorBanner
+            message={error}
+            onDismiss={() => setError(null)}
+          />
+        )}
 
         <ChatComposer
           input={input}
