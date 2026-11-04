@@ -12,6 +12,9 @@ import {
   CalendarListHandler,
   CalendarCreateHandler,
   CalendarMutationHandler,
+  CalendarPendingDeleteFlow,
+  CalendarPendingUpdateFlow,
+  CalendarPendingTimezoneFlow,
   EmailToolHandler,
   ToolOrchestratorService,
   ToolPendingFlowService,
@@ -22,12 +25,14 @@ import { SessionPreferencesService } from './session-preferences.service';
 import { PendingRequestService } from './pending-request.service';
 import { IntentRouterService, IntentShadowService } from './intent';
 import { GoogleOAuthModule } from '../integrations/google/google-oauth.module';
+import { ToolRoutingService } from './tool-routing.service';
 
 @Module({
   imports: [LlmModule, MemoryModule, EmailModule, CalendarModule, WebSearchModule, GoogleOAuthModule],
   controllers: [ChatController],
   providers: [
     ChatService,
+    ToolRoutingService,
     IntentRouterService,
     IntentShadowService,
     WebSearchToolHandler,
@@ -35,6 +40,9 @@ import { GoogleOAuthModule } from '../integrations/google/google-oauth.module';
     CalendarListHandler,
     CalendarCreateHandler,
     CalendarMutationHandler,
+    CalendarPendingDeleteFlow,
+    CalendarPendingUpdateFlow,
+    CalendarPendingTimezoneFlow,
     EmailToolHandler,
     ToolPendingFlowService,
     ToolOrchestratorService,

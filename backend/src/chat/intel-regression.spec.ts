@@ -11,6 +11,7 @@ import { IntentShadowService, IntentRouterService } from './intent';
 import { GoogleOAuthService } from '../integrations/google/google-oauth.service';
 import { EmailToolHandler } from './tool-orchestrator/email/email-tool.handler';
 import { EmailService } from '../integrations/email/email.service';
+import { ToolRoutingService } from './tool-routing.service';
 import type { IntentEnvelope } from './intent/intent.types';
 import type { ToolPendingMap } from './session-pending.types';
 
@@ -58,6 +59,7 @@ describe('chat pipeline intelligence regressions', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ChatService,
+        ToolRoutingService,
         {
           provide: LlmService,
           useValue: {
