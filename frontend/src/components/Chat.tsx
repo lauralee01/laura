@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback } from 'react';
 import { useChat } from '@/hooks/useChat';
 import {
   ChatComposer,
@@ -23,6 +24,8 @@ export function Chat() {
     sidebarOpen,
     setSidebarOpen,
     bottomRef,
+    scrollContainerRef,
+    updateStickToBottom,
     showThinking,
     handleSubmit,
     handleNewChat,
@@ -40,19 +43,39 @@ export function Chat() {
   const sidebarDisabled = isBusy || !sessionReady;
   const composerDisabled = isBusy || !sessionReady;
 
+  const onNewChat = useCallback(() => {
+    void handleNewChat();
+  }, [handleNewChat]);
+
+  const onRename = useCallback(
+    (id: string, title: string) => {
+      void renameConversation(id, title);
+    },
+    [renameConversation],
+  );
+
+  const onDelete = useCallback(
+    (id: string) => {
+      void deleteConversation(id);
+    },
+    [deleteConversation],
+  );
+
+  const onCloseSidebar = useCallback(() => {
+    setSidebarOpen(false);
+  }, [setSidebarOpen]);
+
+  const onOpenSidebar = useCallback(() => {
+    setSidebarOpen(true);
+  }, [setSidebarOpen]);
+
   const sidebarProps = {
     conversations,
     activeId: conversationId,
     onSelect: selectConversation,
-    onNewChat: () => {
-      void handleNewChat();
-    },
-    onRename: (id: string, title: string) => {
-      void renameConversation(id, title);
-    },
-    onDelete: (id: string) => {
-      void deleteConversation(id);
-    },
+    onNewChat,
+    onRename,
+    onDelete,
     disabled: sidebarDisabled,
   };
 
@@ -63,14 +86,14 @@ export function Chat() {
       <ChatMobileDrawer
         sessionReady={sessionReady}
         open={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
+        onClose={onCloseSidebar}
         {...sidebarProps}
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <MobileChatHeader
           sessionReady={sessionReady}
-          onOpenSidebar={() => setSidebarOpen(true)}
+          onOpenSidebar={onOpenSidebar}
         />
 
         <ChatMessageList
@@ -78,6 +101,8 @@ export function Chat() {
           showThinking={showThinking}
           streaming={streaming}
           bottomRef={bottomRef}
+          scrollContainerRef={scrollContainerRef}
+          onScroll={updateStickToBottom}
           initializing={initializing}
         />
 

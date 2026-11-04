@@ -66,6 +66,12 @@ export function useChat() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  /*
+   * Only auto-scroll while the user is already near the bottom so reading
+   * older messages is not yanked down by stream chunks.
+   */
+  const stickToBottomRef = useRef(true);
 
   /*
    * Only the newest open-thread request is allowed to update state.
@@ -88,6 +94,17 @@ export function useChat() {
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  const updateStickToBottom = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) {
+      return;
+    }
+
+    const distanceFromBottom =
+      el.scrollHeight - el.scrollTop - el.clientHeight;
+    stickToBottomRef.current = distanceFromBottom <= 120;
+  }, []);
 
   const abortActiveStream = useCallback(() => {
     streamGenerationRef.current += 1;
@@ -204,6 +221,10 @@ export function useChat() {
   }, []);
 
   useEffect(() => {
+    if (!stickToBottomRef.current && !initializing) {
+      return;
+    }
+
     bottomRef.current?.scrollIntoView({
       behavior: initializing || streaming ? 'auto' : 'smooth',
     });
@@ -244,6 +265,7 @@ export function useChat() {
 
       setInitializing(true);
       setError(null);
+      stickToBottomRef.current = true;
 
       try {
         const history = await fetchChatHistory(id);
@@ -305,6 +327,7 @@ export function useChat() {
     setCreatingConversation(true);
     setError(null);
     setSidebarOpen(false);
+    stickToBottomRef.current = true;
 
     try {
       const newConversationId =
@@ -365,6 +388,7 @@ export function useChat() {
       setInput('');
       setLoading(true);
       setStreaming(false);
+      stickToBottomRef.current = true;
 
       /*
        * Optimistic user turn only. The empty assistant bubble used to
@@ -627,6 +651,8 @@ export function useChat() {
     sidebarOpen,
     setSidebarOpen,
     bottomRef,
+    scrollContainerRef,
+    updateStickToBottom,
     showThinking: loading && !streaming,
     handleSubmit,
     handleNewChat,

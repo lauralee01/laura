@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { BrandLockup } from '@/components/BrandLockup';
 import { GoogleConnectButton } from '@/components/chat-ui/GoogleConnectButton';
 import { SidebarConversationList } from '@/components/chat-ui/SidebarConversationList';
@@ -17,7 +18,7 @@ type Props = {
   disabled: boolean;
 };
 
-export function ChatMobileDrawer({
+export const ChatMobileDrawer = memo(function ChatMobileDrawer({
   sessionReady,
   open,
   onClose,
@@ -59,4 +60,4 @@ export function ChatMobileDrawer({
       </aside>
     </div>
   );
-}
+});
