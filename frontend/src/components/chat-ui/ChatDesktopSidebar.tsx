@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { BrandLockup } from '@/components/BrandLockup';
 import { GoogleConnectButton } from '@/components/chat-ui/GoogleConnectButton';
 import { SidebarConversationList } from '@/components/chat-ui/SidebarConversationList';
@@ -14,7 +15,10 @@ type Props = {
   disabled: boolean;
 };
 
-export function ChatDesktopSidebar({ sessionReady, ...props }: Props) {
+export const ChatDesktopSidebar = memo(function ChatDesktopSidebar({
+  sessionReady,
+  ...props
+}: Props) {
   return (
     <aside className="hidden h-full min-h-0 w-[min(100%,18rem)] shrink-0 flex-col border-r border-zinc-800/80 bg-[#181818] md:flex">
       <div className="flex flex-col gap-3 border-b border-zinc-800/80 px-4 py-3">
@@ -37,4 +41,4 @@ export function ChatDesktopSidebar({ sessionReady, ...props }: Props) {
       </footer>
     </aside>
   );
-}
+});
