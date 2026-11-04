@@ -206,7 +206,9 @@ describe('chat pipeline intelligence regressions', () => {
       topK: 3,
     });
     expect(llmGenerate).toHaveBeenCalled();
-    const systemPrompt = llmGenerate.mock.calls[0][0].systemPrompt as string;
+    const generateArg = llmGenerate.mock.calls[0][0];
+    expect(generateArg.thinkingBudget).toBe(0);
+    const systemPrompt = generateArg.systemPrompt as string;
     expect(systemPrompt).toContain('Prefers short answers');
     expect(systemPrompt).toContain('look up live information');
     expect(systemPrompt).not.toMatch(/cannot verify live information/i);

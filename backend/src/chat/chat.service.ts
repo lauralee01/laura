@@ -345,20 +345,20 @@ export class ChatService {
     });
 
     const llmStart = performance.now();
+    /*
+     * Chat replies feel slow when Gemini spends the budget on hidden
+     * thinking before the first visible token. Disable thinking here so
+     * TTFT tracks answer tokens, not internal deliberation.
+     */
+    const chatLlmInput = {
+      systemPrompt,
+      userMessage: message,
+      history: priorTurns,
+      thinkingBudget: 0 as const,
+    };
     const reply = trackedOnChunk
-      ? await this.llmService.generateStream(
-        {
-          systemPrompt,
-          userMessage: message,
-          history: priorTurns,
-        },
-        trackedOnChunk,
-      )
-      : await this.llmService.generate({
-        systemPrompt,
-        userMessage: message,
-        history: priorTurns,
-      });
+      ? await this.llmService.generateStream(chatLlmInput, trackedOnChunk)
+      : await this.llmService.generate(chatLlmInput);
 
     const llmMs = Math.round(performance.now() - llmStart);
     const totalMs = Math.round(performance.now() - requestStart);
