@@ -1,21 +1,89 @@
 @import "tailwindcss";
 
+/*
+ * Soft studio tokens — light-first calm assistant.
+ * Cool mist canvas, charcoal ink, muted teal accent.
+ * Dark is the same system flipped, not a separate product look.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --canvas: #eef2f4;
+  --canvas-mid: #e4ebef;
+  --canvas-deep: #d7e0e6;
+  --surface: #f7f9fa;
+  --surface-elevated: #ffffff;
+  --ink: #1a2228;
+  --ink-muted: #5c6b76;
+  --accent: #2a6f6b;
+  --accent-soft: #d5e8e6;
+  --accent-hover: #235e5a;
+  --border: #cdd8df;
+  --border-subtle: #dce5ea;
+  --danger: #b33a3a;
+  --danger-soft: #f8e8e8;
+  --success: #2d6a4f;
+  --success-soft: #e2f0e9;
+  --warn: #8a6a20;
+  --warn-soft: #f5efd9;
+  --focus-ring: #2a6f6b66;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --shadow-soft: 0 1px 2px rgb(26 34 40 / 0.04),
+    0 4px 16px rgb(26 34 40 / 0.05);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--canvas);
+  --color-foreground: var(--ink);
+  --color-canvas: var(--canvas);
+  --color-canvas-mid: var(--canvas-mid);
+  --color-canvas-deep: var(--canvas-deep);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-hover: var(--accent-hover);
+  --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --shadow-soft: var(--shadow-soft);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --canvas: #12181c;
+    --canvas-mid: #171e23;
+    --canvas-deep: #0e1316;
+    --surface: #1a2228;
+    --surface-elevated: #222b32;
+    --ink: #e8eef1;
+    --ink-muted: #8fa0ab;
+    --accent: #5b9a95;
+    --accent-soft: #243a39;
+    --accent-hover: #6faca7;
+    --border: #2f3b44;
+    --border-subtle: #263038;
+    --danger: #e07070;
+    --danger-soft: #3a2222;
+    --success: #6fbf95;
+    --success-soft: #1e3228;
+    --warn: #d4b45a;
+    --warn-soft: #332c18;
+    --focus-ring: #5b9a9566;
+    --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.25),
+      0 8px 24px rgb(0 0 0 / 0.28);
   }
 }
 
@@ -31,7 +99,34 @@ body {
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--canvas);
+  background-image:
+    radial-gradient(
+      120% 80% at 12% -10%,
+      color-mix(in srgb, var(--accent-soft) 70%, transparent),
+      transparent 55%
+    ),
+    radial-gradient(
+      90% 60% at 100% 0%,
+      color-mix(in srgb, var(--canvas-mid) 90%, transparent),
+      transparent 50%
+    ),
+    linear-gradient(
+      180deg,
+      var(--canvas) 0%,
+      var(--canvas-mid) 100%
+    );
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }

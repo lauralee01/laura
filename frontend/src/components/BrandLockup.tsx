@@ -27,10 +27,10 @@ export function BrandLockup({
   const textSize = sizeMap[size];
   return (
     <div
-      className={`flex items-center text-zinc-900 dark:text-white ${className ?? ''}`}
+      className={`flex items-center text-ink ${className ?? ''}`}
     >
       <span
-        className={`${wordmark.className} ${textSize} tracking-tight lowercase`}
+        className={`${wordmark.className} ${textSize} tracking-tight lowercase text-ink`}
       >
         laura
       </span>
