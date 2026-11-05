@@ -1,11 +1,16 @@
 export type ChatPerfLog = {
   type: 'tool' | 'llm_generation';
   intent: string;
-  /** Time to ensure/create the conversation row. */
+  /**
+   * Wall time for the parallel bootstrap (ensureConversation + prefs + tools).
+   * Same window as prefetchMs after speed-3; kept for log continuity.
+   */
   ensureConversationMs: number;
-  /** Parallel session/pending/history prefetch. */
+  /** Parallel ensureConversation + session prefs + tools. */
   prefetchMs: number;
-  /** Stage-1 intent classifier LLM. */
+  /** DB history load when the client did not send turns (0 when skipped). */
+  historyMs: number;
+  /** Stage-1 intent classifier LLM (overlaps Google OAuth prefetch). */
   intentMs: number;
   /** Embedding memory retrieve (0 when skipped). */
   memoryMs: number;

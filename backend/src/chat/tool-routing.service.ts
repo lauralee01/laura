@@ -17,6 +17,13 @@ export type ToolRoutingInput = {
   envelope?: IntentEnvelope;
   toolPending: ToolPendingMap;
   sessionTz: string | null;
+  /** Prefetched session location (skips Redis in web search). */
+  storedLocation: string | null;
+  /**
+   * Prefetched Google OAuth check (overlaps classify). When omitted,
+   * isConnected is awaited only for Google intents.
+   */
+  googleConnected?: boolean;
   isGatedToolBlocked: boolean;
   isChatLikeIntent: boolean;
   /** When set, web-search synthesis streams tokens to the chat SSE. */
@@ -51,6 +58,8 @@ export class ToolRoutingService {
       envelope,
       toolPending,
       sessionTz,
+      storedLocation,
+      googleConnected,
       isGatedToolBlocked,
       isChatLikeIntent,
       onChunk,
@@ -70,7 +79,9 @@ export class ToolRoutingService {
 
     if (isGoogleIntent && sessionId && toolReply === null) {
       const isConnected =
-        await this.googleOAuthService.isConnected(sessionId);
+        googleConnected !== undefined
+          ? googleConnected
+          : await this.googleOAuthService.isConnected(sessionId);
       if (!isConnected) {
         const action =
           envelope?.intent === 'email_draft'
@@ -147,6 +158,7 @@ export class ToolRoutingService {
               message,
               envelope,
               onChunk,
+              { location: storedLocation, timeZone: sessionTz },
             );
           if (searchResult.kind === 'needs_location') {
             await this.sessionPreferences.setPendingAction(sessionId, {

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { LlmChatTurn, LlmService } from '../llm/llm.service';
 import { MemoryService } from '../memory/memory.service';
+import { GoogleOAuthService } from '../integrations/google/google-oauth.service';
 import { MemoryPersistenceService } from './memory-persistence.service';
 import { ChatHistoryService } from './chat-history.service';
 import { PendingRequestService } from './pending-request.service';
@@ -45,6 +46,7 @@ export class ChatService {
     private readonly sessionPreferences: SessionPreferencesService,
     private readonly intentShadowService: IntentShadowService,
     private readonly intentRouter: IntentRouterService,
+    private readonly googleOAuthService: GoogleOAuthService,
   ) { }
 
   async replyTo(
@@ -66,18 +68,14 @@ export class ChatService {
       }
       : undefined;
 
-    const ensureStart = performance.now();
-    const dbConversationId = await this.chatHistoryService.ensureConversation(
-      sessionId,
-      conversationId,
-    );
-    const ensureConversationMs = Math.round(
-      performance.now() - ensureStart,
-    );
-
-    const prefetchStart = performance.now();
-    const [pendingAction, sessionTz, storedLocation, priorTurnsFromDb, toolPending] =
+    /*
+     * Bootstrap in parallel: conversation row + session prefs + tool pending.
+     * History depends on the conversation id, so it loads next when needed.
+     */
+    const bootstrapStart = performance.now();
+    const [dbConversationId, pendingAction, sessionTz, storedLocation, toolPending] =
       await Promise.all([
+        this.chatHistoryService.ensureConversation(sessionId, conversationId),
         sessionId
           ? this.sessionPreferences.getPendingAction(sessionId)
           : Promise.resolve(null),
@@ -87,16 +85,22 @@ export class ChatService {
         sessionId
           ? this.sessionPreferences.getLocation(sessionId)
           : Promise.resolve(null),
-        history
-          ? Promise.resolve(undefined)
-          : dbConversationId
-            ? this.chatHistoryService.listTurnsForLlm(dbConversationId)
-            : Promise.resolve(undefined),
         sessionId
           ? this.pendingRequestService.snapshotTools(sessionId)
           : Promise.resolve({} as ToolPendingMap),
       ]);
-    const prefetchMs = Math.round(performance.now() - prefetchStart);
+    const bootstrapMs = Math.round(performance.now() - bootstrapStart);
+    const ensureConversationMs = bootstrapMs;
+    const prefetchMs = bootstrapMs;
+
+    let historyMs = 0;
+    let priorTurnsFromDb: LlmChatTurn[] | undefined;
+    if (!history && dbConversationId) {
+      const historyStart = performance.now();
+      priorTurnsFromDb =
+        await this.chatHistoryService.listTurnsForLlm(dbConversationId);
+      historyMs = Math.round(performance.now() - historyStart);
+    }
 
     const priorTurns: LlmChatTurn[] | undefined = history ?? priorTurnsFromDb;
 
@@ -114,20 +118,35 @@ export class ChatService {
       webSearch: pendingAction,
     });
 
+    /*
+     * Speculative Google OAuth during classify — calendar/email intents need
+     * it on the tool path; overlapping hides Redis latency behind the LLM.
+     */
+    const googleConnectedPromise = sessionId
+      ? this.googleOAuthService.isConnected(sessionId)
+      : Promise.resolve(false);
+
     const intentStart = performance.now();
-    let precomputedEnvelope: IntentEnvelope | undefined;
-    let routingClassifyFailed = false;
-    try {
-      precomputedEnvelope = await this.intentRouter.classify({
+    const classifyPromise = this.intentRouter
+      .classify({
         userMessage: message,
         pendingHint,
         sessionTimeZone: sessionTz ?? undefined,
         history: priorTurns,
-      });
-    } catch {
-      routingClassifyFailed = true;
-      precomputedEnvelope = undefined;
-    }
+      })
+      .then(
+        (result) => ({ ok: true as const, result }),
+        () => ({ ok: false as const, result: undefined }),
+      );
+
+    const [classifyOutcome, googleConnected] = await Promise.all([
+      classifyPromise,
+      googleConnectedPromise.catch(() => false),
+    ]);
+    const routingClassifyFailed = !classifyOutcome.ok;
+    const precomputedEnvelope = classifyOutcome.ok
+      ? classifyOutcome.result
+      : undefined;
     const intentMs = Math.round(performance.now() - intentStart);
 
     /*
@@ -187,6 +206,7 @@ export class ChatService {
         pendingAction.message,
         resumedEnvelope,
         trackedOnChunk,
+        { location, timeZone: sessionTz },
       );
 
       const reply =
@@ -267,7 +287,9 @@ export class ChatService {
         ? envelope.slots.userLocationHint.trim()
         : '';
 
+    let effectiveLocation = storedLocation;
     if (sessionId && userLocationHint) {
+      effectiveLocation = userLocationHint;
       await this.sessionPreferences
         .setLocation(sessionId, userLocationHint)
         .catch(() => undefined);
@@ -295,6 +317,8 @@ export class ChatService {
       envelope,
       toolPending,
       sessionTz,
+      storedLocation: effectiveLocation,
+      googleConnected,
       isGatedToolBlocked,
       isChatLikeIntent,
       onChunk: trackedOnChunk,
@@ -312,6 +336,7 @@ export class ChatService {
         intent: envelope?.intent ?? 'unknown',
         ensureConversationMs,
         prefetchMs,
+        historyMs,
         intentMs,
         memoryMs,
         memorySkipped,
@@ -348,7 +373,7 @@ export class ChatService {
 
     const systemPrompt = buildLauraChatSystemPrompt({
       sessionTimeZone: sessionTz,
-      storedLocation,
+      storedLocation: effectiveLocation,
       memories,
       intent: envelope?.intent,
     });
@@ -377,6 +402,7 @@ export class ChatService {
       intent: envelope?.intent ?? 'unknown',
       ensureConversationMs,
       prefetchMs,
+      historyMs,
       intentMs,
       memoryMs,
       memorySkipped,

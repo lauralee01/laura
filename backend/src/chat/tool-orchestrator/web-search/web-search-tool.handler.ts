@@ -5,12 +5,18 @@ import { WebSearchService } from '../../../integrations/web-search/web-search.se
 import { formatToolFailureMessage } from '../tool-orchestrator.utils';
 import { SessionPreferencesService } from '../../session-preferences.service';
 import type { IntentEnvelope } from '../../intent/intent.types';
-import type { WebSearchToolResult } from './web-search-tool.types';
+import type {
+  WebSearchSessionContext,
+  WebSearchToolResult,
+} from './web-search-tool.types';
 
 const USER_CURRENT_LOCATION = 'USER_CURRENT_LOCATION';
 const DEFAULT_TIME_ZONE = 'America/Chicago';
 
-export type { WebSearchToolResult } from './web-search-tool.types';
+export type {
+  WebSearchSessionContext,
+  WebSearchToolResult,
+} from './web-search-tool.types';
 
 type SearchFreshness = 'live' | 'recent' | 'general';
 type SearchDepth = 'basic' | 'advanced';
@@ -130,16 +136,27 @@ export class WebSearchToolHandler {
         message: string,
         envelope?: IntentEnvelope,
         onChunk?: (chunk: string) => void,
+        sessionContext?: WebSearchSessionContext,
     ): Promise<WebSearchToolResult> {
         try {
             const rawQuery = getSearchQuery(message, envelope);
             const rawLocationHint = getLocationHint(envelope);
 
-            const [storedLocation, storedTimeZone] =
-                await Promise.all([
+            /*
+             * Prefer caller-prefetched prefs (chat bootstrap) so we do not
+             * pay another Redis round-trip on the hot web-search path.
+             */
+            let storedLocation: string | null;
+            let storedTimeZone: string | null;
+            if (sessionContext) {
+                storedLocation = sessionContext.location;
+                storedTimeZone = sessionContext.timeZone;
+            } else {
+                [storedLocation, storedTimeZone] = await Promise.all([
                     this.sessionPreferences.getLocation(sessionId),
                     this.sessionPreferences.getTimeZone(sessionId),
                 ]);
+            }
 
             if (
                 rawLocationHint === USER_CURRENT_LOCATION &&
