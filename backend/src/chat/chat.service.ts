@@ -186,6 +186,7 @@ export class ChatService {
         sessionId,
         pendingAction.message,
         resumedEnvelope,
+        trackedOnChunk,
       );
 
       const reply =
@@ -209,7 +210,14 @@ export class ChatService {
         );
       }
 
-      if (trackedOnChunk) {
+      /*
+       * Synthesis may already have streamed; only dump once for
+       * needs_location / non-stream paths.
+       */
+      if (
+        trackedOnChunk &&
+        !(searchResult.kind === 'reply' && searchResult.streamed)
+      ) {
         trackedOnChunk(reply);
       }
 
@@ -281,7 +289,7 @@ export class ChatService {
     }
 
     const routeStart = performance.now();
-    const toolReply = await this.toolRouting.resolveToolReply({
+    const toolResult = await this.toolRouting.resolveToolReply({
       sessionId,
       message,
       envelope,
@@ -289,12 +297,13 @@ export class ChatService {
       sessionTz,
       isGatedToolBlocked,
       isChatLikeIntent,
+      onChunk: trackedOnChunk,
     });
     const routeMs = Math.round(performance.now() - routeStart);
 
-    if (toolReply !== null) {
-      if (trackedOnChunk) {
-        trackedOnChunk(toolReply);
+    if (toolResult !== null) {
+      if (trackedOnChunk && !toolResult.alreadyStreamed) {
+        trackedOnChunk(toolResult.text);
       }
 
       const totalMs = Math.round(performance.now() - requestStart);
@@ -317,7 +326,7 @@ export class ChatService {
 
       if (dbConversationId) {
         void this.chatHistoryService
-          .appendMessage(dbConversationId, 'assistant', toolReply)
+          .appendMessage(dbConversationId, 'assistant', toolResult.text)
           .catch((e) =>
             console.error('[chat.service] Failed to persist tool reply:', e),
           );
@@ -332,7 +341,7 @@ export class ChatService {
       }
 
       return {
-        reply: toolReply,
+        reply: toolResult.text,
         conversationId: dbConversationId ?? undefined,
       };
     }

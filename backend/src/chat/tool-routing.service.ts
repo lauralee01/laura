@@ -19,6 +19,14 @@ export type ToolRoutingInput = {
   sessionTz: string | null;
   isGatedToolBlocked: boolean;
   isChatLikeIntent: boolean;
+  /** When set, web-search synthesis streams tokens to the chat SSE. */
+  onChunk?: (chunk: string) => void;
+};
+
+export type ToolRoutingResult = {
+  text: string;
+  /** True when tokens were already sent via onChunk (do not re-dump). */
+  alreadyStreamed: boolean;
 };
 
 /**
@@ -36,7 +44,7 @@ export class ToolRoutingService {
 
   async resolveToolReply(
     input: ToolRoutingInput,
-  ): Promise<string | null> {
+  ): Promise<ToolRoutingResult | null> {
     const {
       sessionId,
       message,
@@ -45,9 +53,11 @@ export class ToolRoutingService {
       sessionTz,
       isGatedToolBlocked,
       isChatLikeIntent,
+      onChunk,
     } = input;
 
     let toolReply: string | null = null;
+    let alreadyStreamed = false;
     const isEmailSendPending = Boolean(toolPending.email_send);
     const isEmailDraftPending = Boolean(toolPending.email_draft);
 
@@ -136,6 +146,7 @@ export class ToolRoutingService {
               sessionId,
               message,
               envelope,
+              onChunk,
             );
           if (searchResult.kind === 'needs_location') {
             await this.sessionPreferences.setPendingAction(sessionId, {
@@ -147,6 +158,7 @@ export class ToolRoutingService {
               'Which town or city should I use for this search?';
           } else {
             toolReply = searchResult.text;
+            alreadyStreamed = Boolean(searchResult.streamed);
           }
           break;
         }
@@ -208,6 +220,10 @@ export class ToolRoutingService {
       );
     }
 
-    return toolReply;
+    if (toolReply === null) {
+      return null;
+    }
+
+    return { text: toolReply, alreadyStreamed };
   }
 }

@@ -48,7 +48,7 @@ describe('chat pipeline intelligence regressions', () => {
     toolPending = {};
     snapshotTools = jest.fn(async () => ({ ...toolPending }));
     handleWebSearchIntent = jest.fn().mockResolvedValue({
-      kind: 'ok',
+      kind: 'reply',
       text: 'Here is the weather outlook.',
     });
     llmGenerate = jest.fn().mockResolvedValue(

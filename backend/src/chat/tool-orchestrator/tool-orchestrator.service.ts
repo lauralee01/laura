@@ -85,8 +85,14 @@ export class ToolOrchestratorService {
     sessionId: string,
     message: string,
     envelope?: IntentEnvelope,
+    onChunk?: (chunk: string) => void,
   ): Promise<WebSearchToolResult> {
-    return this.webSearchTools.handleWebSearchIntent(sessionId, message, envelope);
+    return this.webSearchTools.handleWebSearchIntent(
+      sessionId,
+      message,
+      envelope,
+      onChunk,
+    );
   }
 
   tryLlmRoutedEmail(

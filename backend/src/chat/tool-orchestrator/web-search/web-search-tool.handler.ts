@@ -129,6 +129,7 @@ export class WebSearchToolHandler {
         sessionId: string,
         message: string,
         envelope?: IntentEnvelope,
+        onChunk?: (chunk: string) => void,
     ): Promise<WebSearchToolResult> {
         try {
             const rawQuery = getSearchQuery(message, envelope);
@@ -237,7 +238,7 @@ export class WebSearchToolHandler {
                 `Search sources:\n${sources}`,
             );
 
-            const text = await this.llm.generate({
+            const synthesisInput = {
                 systemPrompt,
                 userMessage: userMessageParts.join('\n\n'),
                 /*
@@ -245,10 +246,23 @@ export class WebSearchToolHandler {
                  * so the budget is not eaten before the visible reply finishes.
                  */
                 maxOutputTokens: 4096,
-                thinkingBudget: 0,
-                errorMode: 'throw',
-            });
+                thinkingBudget: 0 as const,
+                errorMode: 'throw' as const,
+            };
 
+            /*
+             * Stream synthesis when the chat SSE path provides onChunk so the
+             * user sees tokens after Tavily returns, not after the full draft.
+             */
+            if (onChunk) {
+                const text = await this.llm.generateStream(
+                    synthesisInput,
+                    onChunk,
+                );
+                return { kind: 'reply', text, streamed: true };
+            }
+
+            const text = await this.llm.generate(synthesisInput);
             return { kind: 'reply', text };
         } catch (error: unknown) {
             return {
