@@ -9,11 +9,11 @@ type Props = {
 
 export function MobileChatHeader({ sessionReady, onOpenSidebar }: Props) {
   return (
-    <header className="flex shrink-0 items-center gap-2 border-b border-zinc-200/80 px-3 py-2.5 dark:border-zinc-800/80 md:hidden">
+    <header className="flex shrink-0 items-center gap-2 border-b border-border-subtle bg-surface/80 px-3 py-2.5 backdrop-blur-sm md:hidden">
       <button
         type="button"
         onClick={onOpenSidebar}
-        className="shrink-0 rounded-lg p-2 text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-400 dark:hover:bg-zinc-800"
+        className="shrink-0 rounded-[var(--radius-sm)] p-2 text-ink-muted transition hover:bg-canvas-mid hover:text-ink"
         aria-label="Open chat history"
       >
         <IconMenu />

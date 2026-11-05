@@ -25,7 +25,7 @@ const markdownComponents = {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="break-words text-blue-500 underline underline-offset-2 hover:text-blue-400 dark:text-blue-400 dark:hover:text-blue-300"
+      className="break-words text-accent underline underline-offset-2 transition hover:text-accent-hover"
     >
       {children}
     </a>
@@ -34,13 +34,13 @@ const markdownComponents = {
     <p className="mb-3 last:mb-0">{children}</p>
   ),
   strong: ({ children }: { children?: React.ReactNode }) => (
-    <strong className="font-semibold">{children}</strong>
+    <strong className="font-semibold text-ink">{children}</strong>
   ),
   ul: ({ children }: { children?: React.ReactNode }) => (
-    <ul className="my-3 list-disc space-y-1 pl-5">{children}</ul>
+    <ul className="my-3 list-disc space-y-1 pl-5 text-ink">{children}</ul>
   ),
   ol: ({ children }: { children?: React.ReactNode }) => (
-    <ol className="my-3 list-decimal space-y-1 pl-5">{children}</ol>
+    <ol className="my-3 list-decimal space-y-1 pl-5 text-ink">{children}</ol>
   ),
   li: ({ children }: { children?: React.ReactNode }) => (
     <li className="pl-1">{children}</li>
@@ -78,14 +78,14 @@ export const ChatMessageList = memo(function ChatMessageList({
       className="min-h-0 w-full max-w-full flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 md:px-6"
     >
       {empty && (
-        <p className="mx-auto max-w-2xl py-12 text-center text-base text-zinc-500 dark:text-zinc-400">
+        <p className="mx-auto max-w-2xl py-12 text-center text-base text-ink-muted">
           Hi, I&apos;m laura. What can I take care of today?
         </p>
       )}
 
       {initializing && messages.length === 0 && (
         <div className="flex items-center justify-center py-16">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-600/20 border-t-zinc-600 dark:border-zinc-500/20 dark:border-t-zinc-300" />
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-accent" />
         </div>
       )}
 
@@ -104,10 +104,10 @@ export const ChatMessageList = memo(function ChatMessageList({
               }`}
             >
               <div
-                className={`min-w-0 max-w-[85%] overflow-hidden rounded-2xl px-4 py-2.5 text-sm leading-relaxed break-words ${
+                className={`min-w-0 max-w-[85%] overflow-hidden rounded-[var(--radius-lg)] px-4 py-2.5 text-sm leading-relaxed break-words ${
                   m.role === 'user'
-                    ? 'bg-zinc-200/90 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
-                    : 'text-zinc-800 shadow-sm dark:text-zinc-100'
+                    ? 'bg-accent-soft text-ink'
+                    : 'bg-surface-elevated/90 text-ink shadow-soft'
                 }`}
               >
                 {m.role === 'assistant' ? (
@@ -126,11 +126,9 @@ export const ChatMessageList = memo(function ChatMessageList({
 
                     {isStreamingAssistant && (
                       <span
-                        className="ml-0.5 inline-block animate-pulse"
+                        className="ml-0.5 inline-block h-3.5 w-1.5 translate-y-[2px] rounded-sm bg-accent animate-pulse"
                         aria-hidden="true"
-                      >
-                        ▋
-                      </span>
+                      />
                     )}
                   </div>
                 ) : (
@@ -145,8 +143,19 @@ export const ChatMessageList = memo(function ChatMessageList({
 
         {showThinking && (
           <li className="flex justify-start">
-            <div className="max-w-[85%] overflow-hidden rounded-2xl border border-zinc-200/80 bg-white/90 px-4 py-2.5 text-sm text-zinc-500 italic break-words dark:border-zinc-800 dark:bg-zinc-900/80">
-              laura is thinking…
+            <div className="flex max-w-[85%] items-center gap-2 overflow-hidden rounded-[var(--radius-lg)] border border-border-subtle bg-surface-elevated/90 px-4 py-3 text-sm text-ink-muted shadow-soft">
+              <span className="flex gap-1" aria-hidden="true">
+                <span className="h-1.5 w-1.5 rounded-full bg-accent/70 animate-pulse" />
+                <span
+                  className="h-1.5 w-1.5 rounded-full bg-accent/70 animate-pulse"
+                  style={{ animationDelay: '150ms' }}
+                />
+                <span
+                  className="h-1.5 w-1.5 rounded-full bg-accent/70 animate-pulse"
+                  style={{ animationDelay: '300ms' }}
+                />
+              </span>
+              <span>laura is thinking…</span>
             </div>
           </li>
         )}

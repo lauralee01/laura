@@ -20,24 +20,26 @@ export const ChatDesktopSidebar = memo(function ChatDesktopSidebar({
   ...props
 }: Props) {
   return (
-    <aside className="hidden h-full min-h-0 w-[min(100%,18rem)] shrink-0 flex-col border-r border-zinc-800/80 bg-[#181818] md:flex">
-      <div className="flex flex-col gap-3 border-b border-zinc-800/80 px-4 py-3">
+    <aside className="hidden h-full min-h-0 w-[min(100%,17.5rem)] shrink-0 flex-col border-r border-border-subtle bg-surface/90 backdrop-blur-sm md:flex">
+      <div className="flex flex-col gap-3 border-b border-border-subtle px-4 py-3.5">
         <div className="flex items-center justify-between gap-2">
           <BrandLockup size="md" />
-          <GoogleConnectButton sessionReady={sessionReady} variant="sidebar" />
         </div>
       </div>
       <SidebarConversationList {...props} />
-      <footer className="shrink-0 border-t border-zinc-800/80 px-4 py-3 text-center text-[11px] text-zinc-600">
-        <span>© {new Date().getFullYear()} Laura</span>
-        <span className="mx-1.5">•</span>
-        <a href="/privacy" className="transition hover:text-zinc-300">
-          Privacy
-        </a>
-        <span className="mx-1.5">•</span>
-        <a href="/terms" className="transition hover:text-zinc-300">
-          Terms
-        </a>
+      <footer className="shrink-0 space-y-2.5 border-t border-border-subtle px-4 py-3">
+        <GoogleConnectButton sessionReady={sessionReady} variant="sidebar" />
+        <p className="text-center text-[11px] text-ink-muted">
+          <span>© {new Date().getFullYear()} Laura</span>
+          <span className="mx-1.5">·</span>
+          <a href="/privacy" className="transition hover:text-ink">
+            Privacy
+          </a>
+          <span className="mx-1.5">·</span>
+          <a href="/terms" className="transition hover:text-ink">
+            Terms
+          </a>
+        </p>
       </footer>
     </aside>
   );

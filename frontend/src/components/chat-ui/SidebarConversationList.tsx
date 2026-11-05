@@ -90,23 +90,24 @@ export function SidebarConversationList({
   return (
     <>
       <div className="flex items-center justify-between gap-2 px-3 py-3">
-        <span className="text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+        <span className="text-xs font-medium uppercase tracking-wider text-ink-muted">
           Chats
         </span>
         <button
           type="button"
           onClick={onNewChat}
           disabled={disabled}
-          className="rounded-lg p-2 text-zinc-600 transition hover:bg-zinc-200/80 hover:text-zinc-900 disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] bg-accent px-2.5 py-1.5 text-xs font-medium text-surface-elevated transition hover:bg-accent-hover disabled:opacity-40"
           aria-label="New chat"
         >
-          <IconPlus />
+          <IconPlus className="h-3.5 w-3.5" />
+          New
         </button>
       </div>
       <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         {conversations.length === 0 ? (
-          <p className="px-3 py-2 text-xs leading-relaxed text-zinc-500 dark:text-zinc-500">
-            No chats yet. Send a message or tap + to start one.
+          <p className="px-3 py-2 text-xs leading-relaxed text-ink-muted">
+            No chats yet. Send a message or tap New to start one.
           </p>
         ) : null}
         <ul className="flex flex-col gap-0.5">
@@ -115,26 +116,31 @@ export function SidebarConversationList({
             return (
               <li key={c.id} className="relative">
                 <div
-                  className={`flex items-stretch gap-0.5 rounded-lg transition ${
+                  className={`flex items-stretch gap-0.5 rounded-[var(--radius-md)] transition ${
                     active
-                      ? 'bg-zinc-200/90 dark:bg-zinc-800'
-                      : 'hover:bg-zinc-200/50 dark:hover:bg-zinc-800/60'
+                      ? 'bg-accent-soft'
+                      : 'hover:bg-canvas-mid/80'
                   }`}
                 >
                   <button
                     type="button"
                     onClick={() => onSelect(c.id)}
                     disabled={disabled}
-                    className="min-w-0 flex-1 flex-col gap-0.5 rounded-l-lg px-3 py-2.5 text-left text-sm text-zinc-700 disabled:opacity-40 dark:text-zinc-300"
+                    className={`min-w-0 flex-1 flex-col gap-0.5 rounded-l-[var(--radius-md)] px-3 py-2.5 text-left text-sm disabled:opacity-40 ${
+                      active ? 'text-ink' : 'text-ink-muted'
+                    }`}
                   >
-                    <span className="line-clamp-2 font-medium leading-snug">
+                    <span className="line-clamp-2 font-medium leading-snug text-ink">
                       {c.preview}
                     </span>
-                    <span className="text-[11px] text-zinc-500 dark:text-zinc-500">
+                    <span className="text-[11px] text-ink-muted">
                       {formatChatDate(c.updatedAt)}
                     </span>
                   </button>
-                  <div className="relative shrink-0" ref={menuId === c.id ? menuRef : undefined}>
+                  <div
+                    className="relative shrink-0"
+                    ref={menuId === c.id ? menuRef : undefined}
+                  >
                     <button
                       type="button"
                       disabled={disabled}
@@ -142,7 +148,7 @@ export function SidebarConversationList({
                         e.stopPropagation();
                         setMenuId((prev) => (prev === c.id ? null : c.id));
                       }}
-                      className="flex h-full items-center rounded-r-lg px-2 text-zinc-500 transition hover:bg-zinc-300/50 hover:text-zinc-900 disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-700/50 dark:hover:text-zinc-100"
+                      className="flex h-full items-center rounded-r-[var(--radius-md)] px-2 text-ink-muted transition hover:bg-canvas-deep/50 hover:text-ink disabled:opacity-40"
                       aria-label={`Chat options: ${c.preview}`}
                       aria-expanded={menuId === c.id}
                     >
@@ -150,14 +156,14 @@ export function SidebarConversationList({
                     </button>
                     {menuId === c.id && (
                       <ul
-                        className="absolute right-0 top-full z-[60] mt-0.5 min-w-[10rem] rounded-lg border border-zinc-200 bg-white py-1 text-sm shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+                        className="absolute right-0 top-full z-[60] mt-0.5 min-w-[10rem] rounded-[var(--radius-md)] border border-border bg-surface-elevated py-1 text-sm shadow-soft"
                         role="menu"
                       >
                         <li>
                           <button
                             type="button"
                             role="menuitem"
-                            className="w-full px-3 py-2 text-left text-zinc-800 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                            className="w-full px-3 py-2 text-left text-ink transition hover:bg-canvas-mid"
                             onClick={() => {
                               setMenuId(null);
                               setRenameTarget({
@@ -173,10 +179,13 @@ export function SidebarConversationList({
                           <button
                             type="button"
                             role="menuitem"
-                            className="w-full px-3 py-2 text-left text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                            className="w-full px-3 py-2 text-left text-danger transition hover:bg-danger-soft"
                             onClick={() => {
                               setMenuId(null);
-                              setDeleteConfirm({ id: c.id, preview: c.preview });
+                              setDeleteConfirm({
+                                id: c.id,
+                                preview: c.preview,
+                              });
                             }}
                           >
                             Delete
@@ -194,19 +203,19 @@ export function SidebarConversationList({
 
       {renameTarget && (
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/40 p-4 backdrop-blur-[1px]"
           role="dialog"
           aria-modal="true"
           aria-labelledby="rename-chat-title"
           onClick={() => setRenameTarget(null)}
         >
           <div
-            className="w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+            className="w-full max-w-sm rounded-[var(--radius-lg)] border border-border bg-surface-elevated p-4 shadow-soft"
             onClick={(e) => e.stopPropagation()}
           >
             <h2
               id="rename-chat-title"
-              className="text-sm font-semibold text-zinc-900 dark:text-zinc-50"
+              className="text-sm font-semibold text-ink"
             >
               Rename chat
             </h2>
@@ -215,10 +224,10 @@ export function SidebarConversationList({
               value={renameTarget.value}
               onChange={(e) =>
                 setRenameTarget((prev) =>
-                  prev ? { ...prev, value: e.target.value } : prev
+                  prev ? { ...prev, value: e.target.value } : prev,
                 )
               }
-              className="mt-3 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-zinc-400 focus:ring-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+              className="mt-3 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-accent"
               maxLength={200}
               autoFocus
               onKeyDown={(e) => {
@@ -231,14 +240,14 @@ export function SidebarConversationList({
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
-                className="rounded-lg px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                className="rounded-[var(--radius-md)] px-3 py-1.5 text-sm text-ink-muted transition hover:bg-canvas-mid hover:text-ink"
                 onClick={() => setRenameTarget(null)}
               >
                 Cancel
               </button>
               <button
                 type="button"
-                className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+                className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-sm font-medium text-surface-elevated transition hover:bg-accent-hover"
                 onClick={() => void submitRename()}
               >
                 Save
@@ -250,7 +259,7 @@ export function SidebarConversationList({
 
       {deleteConfirm && (
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-[1px]"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/45 p-4 backdrop-blur-[1px]"
           role="alertdialog"
           aria-modal="true"
           aria-labelledby="delete-chat-title"
@@ -258,21 +267,21 @@ export function SidebarConversationList({
           onClick={() => !deleting && setDeleteConfirm(null)}
         >
           <div
-            className="w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-5 shadow-2xl dark:border-zinc-600 dark:bg-zinc-900"
+            className="w-full max-w-sm rounded-[var(--radius-lg)] border border-border bg-surface-elevated p-5 shadow-soft"
             onClick={(e) => e.stopPropagation()}
           >
             <h2
               id="delete-chat-title"
-              className="text-base font-semibold text-zinc-900 dark:text-zinc-50"
+              className="text-base font-semibold text-ink"
             >
               Delete chat?
             </h2>
             <p
               id="delete-chat-desc"
-              className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400"
+              className="mt-2 text-sm leading-relaxed text-ink-muted"
             >
               This removes{' '}
-              <span className="font-medium text-zinc-800 dark:text-zinc-200">
+              <span className="font-medium text-ink">
                 “{deleteConfirm.preview}”
               </span>{' '}
               and all messages in it. This cannot be undone.
@@ -281,7 +290,7 @@ export function SidebarConversationList({
               <button
                 type="button"
                 disabled={deleting}
-                className="rounded-lg px-3 py-2 text-sm text-zinc-600 transition hover:bg-zinc-100 disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                className="rounded-[var(--radius-md)] px-3 py-2 text-sm text-ink-muted transition hover:bg-canvas-mid disabled:opacity-50"
                 onClick={() => setDeleteConfirm(null)}
               >
                 Cancel
@@ -289,7 +298,7 @@ export function SidebarConversationList({
               <button
                 type="button"
                 disabled={deleting}
-                className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-50 dark:bg-red-700 dark:hover:bg-red-600"
+                className="rounded-[var(--radius-md)] bg-danger px-3 py-2 text-sm font-medium text-surface-elevated transition hover:opacity-90 disabled:opacity-50"
                 onClick={() => void confirmDelete()}
               >
                 {deleting ? 'Deleting…' : 'Delete'}

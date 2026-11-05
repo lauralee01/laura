@@ -39,13 +39,13 @@ export function ChatComposer({ input, onChange, onSubmit, disabled }: Props) {
   return (
     <form
       onSubmit={onSubmit}
-      className="shrink-0 bg-zinc-50/95 px-3 py-3 dark:border-zinc-800/80 dark:bg-zinc-950/95 md:px-6"
+      className="shrink-0 bg-transparent px-3 py-3 md:px-6"
     >
-      <div className="mx-auto flex max-w-2xl items-center gap-2 rounded-2xl border border-zinc-200/90 bg-white/90 px-3 py-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/70">
+      <div className="mx-auto flex max-w-2xl items-center gap-2 rounded-[var(--radius-lg)] border border-border bg-surface-elevated px-3 py-2 shadow-soft">
         <textarea
           ref={textareaRef}
           rows={1}
-          className="max-h-48 min-h-[2.75rem] min-w-0 flex-1 resize-none rounded-xl bg-transparent py-2 pl-1 text-base leading-relaxed text-zinc-900 outline-none ring-0 placeholder:text-zinc-400 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+          className="max-h-48 min-h-[2.75rem] min-w-0 flex-1 resize-none rounded-[var(--radius-md)] bg-transparent py-2 pl-1 text-base leading-relaxed text-ink outline-none ring-0 placeholder:text-ink-muted"
           placeholder="Talk to laura…"
           value={input}
           onChange={(e) => onChange(e.target.value)}
@@ -62,7 +62,7 @@ export function ChatComposer({ input, onChange, onSubmit, disabled }: Props) {
         <button
           type="submit"
           disabled={disabled || !input.trim()}
-          className="flex h-10 w-10 shrink-0 items-center justify-center self-center rounded-xl bg-zinc-900 text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-30 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+          className="flex h-10 w-10 shrink-0 items-center justify-center self-center rounded-[var(--radius-md)] bg-accent text-surface-elevated transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-30"
           aria-label="Send message"
         >
           <IconSend />

@@ -81,7 +81,7 @@ export function Chat() {
   };
 
   return (
-    <div className="flex h-[100dvh] min-h-0 bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
+    <div className="flex h-[100dvh] min-h-0 bg-transparent text-ink">
       <ChatDesktopSidebar sessionReady={sessionReady} {...sidebarProps} />
 
       <ChatMobileDrawer
@@ -108,10 +108,12 @@ export function Chat() {
         />
 
         {error && (
-          <ChatErrorBanner
-            message={error}
-            onDismiss={() => setError(null)}
-          />
+          <div className="shrink-0 px-3 md:px-6">
+            <ChatErrorBanner
+              message={error}
+              onDismiss={() => setError(null)}
+            />
+          </div>
         )}
 
         <ChatComposer

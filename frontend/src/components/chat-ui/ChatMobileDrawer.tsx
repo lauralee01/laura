@@ -37,26 +37,28 @@ export const ChatMobileDrawer = memo(function ChatMobileDrawer({
     >
       <button
         type="button"
-        className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"
+        className="absolute inset-0 bg-ink/25 backdrop-blur-[2px]"
         aria-label="Close menu"
         onClick={onClose}
       />
-      <aside className="absolute left-0 top-0 flex h-full w-[min(100%,18rem)] flex-col border-r border-zinc-200/80 bg-zinc-100 shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
-        <div className="flex items-center gap-2 border-b border-zinc-200/80 px-3 py-3 dark:border-zinc-800/80">
+      <aside className="absolute left-0 top-0 flex h-full w-[min(100%,17.5rem)] flex-col border-r border-border-subtle bg-surface shadow-soft">
+        <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-3">
           <div className="min-w-0 flex-1">
             <BrandLockup size="md" />
           </div>
-          <GoogleConnectButton sessionReady={sessionReady} />
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 rounded-lg p-2 text-zinc-600 hover:bg-zinc-200/80 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            className="shrink-0 rounded-[var(--radius-sm)] p-2 text-ink-muted transition hover:bg-canvas-mid hover:text-ink"
             aria-label="Close"
           >
             <IconClose />
           </button>
         </div>
         <SidebarConversationList {...listProps} />
+        <div className="shrink-0 border-t border-border-subtle px-4 py-3">
+          <GoogleConnectButton sessionReady={sessionReady} variant="sidebar" />
+        </div>
       </aside>
     </div>
   );
