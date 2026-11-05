@@ -29,12 +29,14 @@ export function Chat() {
     updateStickToBottom,
     showThinking,
     handleSubmit,
+    stopStreaming,
     handleNewChat,
     selectConversation,
     renameConversation,
     deleteConversation,
     initializing,
     isBusy,
+    isGenerating,
   } = useChat();
 
   /*
@@ -129,6 +131,8 @@ export function Chat() {
           input={input}
           onChange={setInput}
           onSubmit={handleSubmit}
+          onStop={stopStreaming}
+          isGenerating={isGenerating}
           disabled={composerDisabled}
         />
       </div>

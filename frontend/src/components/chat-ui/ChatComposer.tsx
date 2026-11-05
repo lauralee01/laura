@@ -6,7 +6,7 @@ import {
   useRef,
   type FormEvent,
 } from 'react';
-import { IconSend } from '@/components/chat-ui/ChatIcons';
+import { IconSend, IconStop } from '@/components/chat-ui/ChatIcons';
 
 const MAX_HEIGHT_PX = 192; // matches max-h-48
 
@@ -14,10 +14,20 @@ type Props = {
   input: string;
   onChange: (value: string) => void;
   onSubmit: (e: FormEvent) => void;
+  onStop?: () => void;
+  /** True while a reply is thinking or streaming — shows Stop instead of Send. */
+  isGenerating?: boolean;
   disabled: boolean;
 };
 
-export function ChatComposer({ input, onChange, onSubmit, disabled }: Props) {
+export function ChatComposer({
+  input,
+  onChange,
+  onSubmit,
+  onStop,
+  isGenerating = false,
+  disabled,
+}: Props) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const syncHeight = useCallback(() => {
@@ -50,23 +60,37 @@ export function ChatComposer({ input, onChange, onSubmit, disabled }: Props) {
           value={input}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => {
+            if (isGenerating) {
+              return;
+            }
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
               e.currentTarget.form?.requestSubmit();
             }
           }}
-          disabled={disabled}
+          disabled={disabled || isGenerating}
           autoComplete="off"
           aria-label="Message"
         />
-        <button
-          type="submit"
-          disabled={disabled || !input.trim()}
-          className="flex h-10 w-10 shrink-0 items-center justify-center self-center rounded-[var(--radius-md)] bg-accent text-surface-elevated transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-30"
-          aria-label="Send message"
-        >
-          <IconSend />
-        </button>
+        {isGenerating ? (
+          <button
+            type="button"
+            onClick={onStop}
+            className="flex h-10 w-10 shrink-0 items-center justify-center self-center rounded-[var(--radius-md)] bg-ink text-surface-elevated transition hover:opacity-90"
+            aria-label="Stop generating"
+          >
+            <IconStop />
+          </button>
+        ) : (
+          <button
+            type="submit"
+            disabled={disabled || !input.trim()}
+            className="flex h-10 w-10 shrink-0 items-center justify-center self-center rounded-[var(--radius-md)] bg-accent text-surface-elevated transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-30"
+            aria-label="Send message"
+          >
+            <IconSend />
+          </button>
+        )}
       </div>
     </form>
   );

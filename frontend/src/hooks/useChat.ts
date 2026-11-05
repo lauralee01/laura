@@ -647,6 +647,8 @@ export function useChat() {
     initializing,
     creatingConversation,
     isBusy,
+    /** True while a reply is in flight (thinking or streaming tokens). */
+    isGenerating: loading || streaming,
     error,
     setError,
     sidebarOpen,
@@ -656,6 +658,7 @@ export function useChat() {
     updateStickToBottom,
     showThinking: loading && !streaming,
     handleSubmit,
+    stopStreaming: abortActiveStream,
     handleNewChat,
     selectConversation,
     renameConversation,
