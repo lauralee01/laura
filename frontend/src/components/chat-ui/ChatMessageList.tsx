@@ -1,6 +1,7 @@
 import { memo, type RefObject } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { ChatEmptyState } from '@/components/chat-ui/ChatEmptyState';
 import type { StoredChatMessage } from '@/lib/session';
 
 type Props = {
@@ -11,6 +12,8 @@ type Props = {
   bottomRef: RefObject<HTMLDivElement | null>;
   scrollContainerRef?: RefObject<HTMLDivElement | null>;
   onScroll?: () => void;
+  onSuggestion?: (prompt: string) => void;
+  suggestionsDisabled?: boolean;
 };
 
 const markdownComponents = {
@@ -68,6 +71,8 @@ export const ChatMessageList = memo(function ChatMessageList({
   scrollContainerRef,
   onScroll,
   initializing,
+  onSuggestion,
+  suggestionsDisabled,
 }: Props) {
   const empty = messages.length === 0 && !showThinking && !initializing;
 
@@ -77,7 +82,13 @@ export const ChatMessageList = memo(function ChatMessageList({
       onScroll={onScroll}
       className="min-h-0 w-full max-w-full flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 md:px-6"
     >
-      {empty && (
+      {empty && onSuggestion && (
+        <ChatEmptyState
+          onSuggestion={onSuggestion}
+          disabled={suggestionsDisabled}
+        />
+      )}
+      {empty && !onSuggestion && (
         <p className="mx-auto max-w-2xl py-12 text-center text-base text-ink-muted">
           Hi, I&apos;m laura. What can I take care of today?
         </p>

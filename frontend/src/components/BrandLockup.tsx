@@ -12,6 +12,8 @@ const sizeMap = {
   sm: 'text-base',
   md: 'text-[1.35rem] leading-none',
   lg: 'text-xl',
+  /** Empty-state hero — brand must dominate the first viewport. */
+  hero: 'text-5xl leading-none md:text-6xl',
 } as const;
 
 type Size = keyof typeof sizeMap;

@@ -70,6 +70,13 @@ export function Chat() {
     setSidebarOpen(true);
   }, [setSidebarOpen]);
 
+  const onSuggestion = useCallback(
+    (prompt: string) => {
+      setInput(prompt);
+    },
+    [setInput],
+  );
+
   const sidebarProps = {
     conversations,
     activeId: conversationId,
@@ -105,6 +112,8 @@ export function Chat() {
           scrollContainerRef={scrollContainerRef}
           onScroll={updateStickToBottom}
           initializing={initializing}
+          onSuggestion={onSuggestion}
+          suggestionsDisabled={composerDisabled}
         />
 
         {error && (
