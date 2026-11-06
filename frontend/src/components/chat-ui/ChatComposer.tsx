@@ -55,7 +55,7 @@ export function ChatComposer({
         <textarea
           ref={textareaRef}
           rows={1}
-          className="max-h-48 min-h-[2.75rem] min-w-0 flex-1 resize-none rounded-[var(--radius-md)] bg-transparent py-2 pl-1 text-base leading-relaxed text-ink outline-none ring-0 placeholder:text-ink-muted"
+          className="max-h-48 min-h-[2.75rem] min-w-0 flex-1 resize-none bg-transparent py-2 pl-1 text-base leading-relaxed text-ink outline-none ring-0 placeholder:text-ink-muted"
           placeholder="Talk to laura…"
           value={input}
           onChange={(e) => onChange(e.target.value)}

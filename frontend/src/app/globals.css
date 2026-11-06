@@ -203,16 +203,17 @@ body {
 }
 
 .laura-composer-shell {
-  transition:
-    border-color 160ms ease,
-    box-shadow 160ms ease;
+  transition: border-color 160ms ease;
 }
 
 .laura-composer-shell:focus-within {
-  border-color: var(--accent);
-  box-shadow:
-    var(--shadow-soft),
-    0 0 0 3px var(--focus-ring);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+
+/* Keep focus on the shell only — no nested outline on the textarea. */
+.laura-composer-shell textarea:focus,
+.laura-composer-shell textarea:focus-visible {
+  outline: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
