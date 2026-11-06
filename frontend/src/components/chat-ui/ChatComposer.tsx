@@ -51,7 +51,7 @@ export function ChatComposer({
       onSubmit={onSubmit}
       className="shrink-0 bg-transparent px-3 py-3 md:px-6"
     >
-      <div className="mx-auto flex max-w-2xl items-center gap-2 rounded-[var(--radius-lg)] border border-border bg-surface-elevated px-3 py-2 shadow-soft">
+      <div className="laura-composer-shell mx-auto flex max-w-2xl items-center gap-2 rounded-[var(--radius-lg)] border border-border bg-surface-elevated px-3 py-2 shadow-soft">
         <textarea
           ref={textareaRef}
           rows={1}

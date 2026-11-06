@@ -110,7 +110,7 @@ export const ChatMessageList = memo(function ChatMessageList({
           return (
             <li
               key={`${i}-${m.role}`}
-              className={`flex min-w-0 ${
+              className={`laura-message-enter flex min-w-0 ${
                 m.role === 'user' ? 'justify-end' : 'justify-start'
               }`}
             >
@@ -153,18 +153,12 @@ export const ChatMessageList = memo(function ChatMessageList({
         })}
 
         {showThinking && (
-          <li className="flex justify-start">
+          <li className="laura-message-enter flex justify-start">
             <div className="flex max-w-[85%] items-center gap-2 overflow-hidden rounded-[var(--radius-lg)] border border-border-subtle bg-surface-elevated/90 px-4 py-3 text-sm text-ink-muted shadow-soft">
               <span className="flex gap-1" aria-hidden="true">
-                <span className="h-1.5 w-1.5 rounded-full bg-accent/70 animate-pulse" />
-                <span
-                  className="h-1.5 w-1.5 rounded-full bg-accent/70 animate-pulse"
-                  style={{ animationDelay: '150ms' }}
-                />
-                <span
-                  className="h-1.5 w-1.5 rounded-full bg-accent/70 animate-pulse"
-                  style={{ animationDelay: '300ms' }}
-                />
+                <span className="laura-think-dot h-1.5 w-1.5 rounded-full bg-accent/80" />
+                <span className="laura-think-dot h-1.5 w-1.5 rounded-full bg-accent/80" />
+                <span className="laura-think-dot h-1.5 w-1.5 rounded-full bg-accent/80" />
               </span>
               <span>laura is thinking…</span>
             </div>

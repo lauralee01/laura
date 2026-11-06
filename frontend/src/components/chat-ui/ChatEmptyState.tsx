@@ -32,7 +32,7 @@ type Props = {
 
 export function ChatEmptyState({ onSuggestion, disabled }: Props) {
   return (
-    <div className="mx-auto flex max-w-2xl flex-col items-center px-2 py-10 text-center md:py-16">
+    <div className="laura-empty-enter mx-auto flex max-w-2xl flex-col items-center px-2 py-10 text-center md:py-16">
       <BrandLockup size="hero" className="justify-center" />
       <p className="mt-5 max-w-md text-base leading-relaxed text-ink-muted md:text-lg">
         What can I take care of today?
@@ -44,7 +44,7 @@ export function ChatEmptyState({ onSuggestion, disabled }: Props) {
               type="button"
               disabled={disabled}
               onClick={() => onSuggestion(item.prompt)}
-              className="rounded-[var(--radius-md)] border border-border bg-surface-elevated px-3.5 py-2 text-sm text-ink shadow-soft transition hover:border-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-40"
+              className="laura-chip rounded-[var(--radius-md)] border border-border bg-surface-elevated px-3.5 py-2 text-sm text-ink shadow-soft hover:border-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-40"
             >
               {item.label}
             </button>
