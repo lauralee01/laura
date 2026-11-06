@@ -61,22 +61,22 @@ export function GoogleOAuthReturnToast() {
 
   const box =
     toast.variant === 'success'
-      ? 'border-emerald-500/35 bg-emerald-950/90 text-emerald-50'
+      ? 'border-success/30 bg-success-soft text-success'
       : toast.variant === 'warn'
-        ? 'border-amber-500/35 bg-amber-950/90 text-amber-50'
-        : 'border-red-500/35 bg-red-950/90 text-red-50';
+        ? 'border-warn/30 bg-warn-soft text-warn'
+        : 'border-danger/30 bg-danger-soft text-danger';
 
   return (
     <div
       role="status"
-      className={`fixed top-4 left-1/2 z-[100] max-w-md -translate-x-1/2 rounded-xl border px-4 py-3 text-sm shadow-lg backdrop-blur-md ${box}`}
+      className={`fixed top-4 left-1/2 z-[100] max-w-md -translate-x-1/2 rounded-[var(--radius-lg)] border px-4 py-3 text-sm shadow-soft ${box}`}
     >
       <div className="flex items-start justify-between gap-3">
-        <p className="leading-snug">{toast.message}</p>
+        <p className="leading-snug text-ink">{toast.message}</p>
         <button
           type="button"
           onClick={dismiss}
-          className="shrink-0 rounded-md p-0.5 opacity-70 hover:opacity-100"
+          className="shrink-0 rounded-[var(--radius-sm)] px-1.5 py-0.5 text-ink-muted transition hover:bg-canvas-mid hover:text-ink"
           aria-label="Dismiss"
         >
           ×

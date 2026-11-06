@@ -8,6 +8,7 @@ import {
   ChatErrorBanner,
   ChatMessageList,
   ChatMobileDrawer,
+  GoogleConnectTip,
   MobileChatHeader,
 } from '@/components/chat-ui';
 
@@ -126,6 +127,10 @@ export function Chat() {
             />
           </div>
         )}
+
+        <div className="shrink-0 px-3 md:px-6">
+          <GoogleConnectTip sessionReady={sessionReady} />
+        </div>
 
         <ChatComposer
           input={input}
