@@ -90,6 +90,13 @@ export function Chat() {
     disabled: sidebarDisabled,
   };
 
+  /**
+   * This is the main component that renders the chat interface.
+   * It renders the desktop sidebar, mobile drawer, message list, error banner,
+   * google connect tip, and composer.
+   * @returns {JSX.Element} The chat interface.
+   */
+
   return (
     <div className="flex h-[100dvh] min-h-0 bg-transparent text-ink">
       <ChatDesktopSidebar sessionReady={sessionReady} {...sidebarProps} />
