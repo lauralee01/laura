@@ -8,6 +8,12 @@ type Toast = {
   variant: 'success' | 'warn' | 'error';
 } | null;
 
+/**
+ * This component is used to display a toast message when the user returns from
+ * the Google OAuth flow.
+ * @returns {JSX.Element} The toast message.
+ */
+
 export function GoogleOAuthReturnToast() {
   const searchParams = useSearchParams();
   const router = useRouter();
