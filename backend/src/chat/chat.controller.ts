@@ -199,6 +199,19 @@ export class ChatController {
     const conversationId = (body?.conversationId ?? '').trim();
     const history = normalizeHistory(body?.history);
 
+    /*
+     * Stop button aborts the browser fetch. Abort the in-flight Gemini
+     * stream too, or the server finishes a full reply, saves it, and the
+     * next "continue" turn looks duplicated against the partial UI text.
+     */
+    const abortController = new AbortController();
+    const onClientClose = () => {
+      if (!res.writableEnded) {
+        abortController.abort();
+      }
+    };
+    req.on('close', onClientClose);
+
     try {
       const result = await this.chatService.replyTo(
         sessionId,
@@ -206,9 +219,16 @@ export class ChatController {
         history,
         conversationId,
         (chunk: string) => {
-          res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
+          if (!abortController.signal.aborted && !res.writableEnded) {
+            res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
+          }
         },
+        abortController.signal,
       );
+
+      if (abortController.signal.aborted || res.writableEnded) {
+        return;
+      }
 
       res.write(
         `data: ${JSON.stringify({
@@ -218,10 +238,15 @@ export class ChatController {
       );
       res.end();
     } catch (err: unknown) {
+      if (abortController.signal.aborted || res.writableEnded) {
+        return;
+      }
       const errorMessage =
         err instanceof Error ? err.message : 'An error occurred';
       res.write(`data: ${JSON.stringify({ error: errorMessage })}\n\n`);
       res.end();
+    } finally {
+      req.off('close', onClientClose);
     }
   }
 

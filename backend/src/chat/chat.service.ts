@@ -55,15 +55,26 @@ export class ChatService {
     history?: LlmChatTurn[],
     conversationId?: string,
     onChunk?: (chunk: string) => void,
+    signal?: AbortSignal,
   ): Promise<ChatReply> {
     const requestStart = performance.now();
     let firstTokenMs: number | undefined;
+    /*
+     * Only tokens actually delivered to the client. On Stop, Gemini may
+     * return a longer string than we streamed — persist the visible partial
+     * so "continue" history matches the UI instead of duplicating a full reply.
+     */
+    let streamedVisible = '';
 
     const trackedOnChunk = onChunk
       ? (chunk: string) => {
+        if (signal?.aborted) {
+          return;
+        }
         if (firstTokenMs === undefined) {
           firstTokenMs = Math.round(performance.now() - requestStart);
         }
+        streamedVisible += chunk;
         onChunk(chunk);
       }
       : undefined;
@@ -390,8 +401,20 @@ export class ChatService {
       history: priorTurns,
       thinkingBudget: 0 as const,
     };
+
+    if (signal?.aborted) {
+      return {
+        reply: '',
+        conversationId: dbConversationId ?? undefined,
+      };
+    }
+
     const reply = trackedOnChunk
-      ? await this.llmService.generateStream(chatLlmInput, trackedOnChunk)
+      ? await this.llmService.generateStream(
+          chatLlmInput,
+          trackedOnChunk,
+          signal,
+        )
       : await this.llmService.generate(chatLlmInput);
 
     const llmMs = Math.round(performance.now() - llmStart);
@@ -412,9 +435,15 @@ export class ChatService {
       totalMs,
     });
 
-    if (dbConversationId) {
+    const textToPersist = onChunk ? streamedVisible : reply;
+
+    /*
+     * Persist whatever the user actually saw — including a Stop-aborted
+     * partial — so the next turn's history matches the UI.
+     */
+    if (dbConversationId && textToPersist.trim()) {
       void this.chatHistoryService
-        .appendMessage(dbConversationId, 'assistant', reply)
+        .appendMessage(dbConversationId, 'assistant', textToPersist)
         .catch((e) =>
           console.error(
             '[chat.service] Failed to persist assistant reply:',
@@ -423,7 +452,10 @@ export class ChatService {
         );
     }
 
-    if (!shouldSkipMemoryExtract(envelope?.intent, message)) {
+    if (
+      textToPersist.trim() &&
+      !shouldSkipMemoryExtract(envelope?.intent, message)
+    ) {
       void this.memoryPersistenceService
         .writeExtractedMemoriesIfAny(sessionId, message)
         .catch((e) => {
@@ -431,6 +463,9 @@ export class ChatService {
         });
     }
 
-    return { reply, conversationId: dbConversationId ?? undefined };
+    return {
+      reply: textToPersist,
+      conversationId: dbConversationId ?? undefined,
+    };
   }
 }

@@ -113,6 +113,7 @@ export class LlmService {
   async generateStream(
     input: GenerateInput,
     onChunk: (chunk: string) => void,
+    signal?: AbortSignal,
   ): Promise<string> {
     const geminiKey = process.env.GEMINI_API_KEY?.trim();
 
@@ -143,90 +144,110 @@ export class LlmService {
       generationConfig,
     };
 
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      throw new GeminiApiError(res.status, errText, model);
-    }
-
-    if (!res.body) {
-      throw new Error('No response body from Gemini stream');
-    }
-
     let fullReply = '';
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder('utf-8');
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        signal,
+      });
 
-    let buffer = '';
-
-    const processDataLine = (line: string): void => {
-      const trimmed = line.trim();
-
-      if (!trimmed.startsWith('data:')) {
-        return;
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        throw new GeminiApiError(res.status, errText, model);
       }
 
-      const jsonStr = trimmed.slice(5).trim();
-
-      if (!jsonStr || jsonStr === '[DONE]') {
-        return;
+      if (!res.body) {
+        throw new Error('No response body from Gemini stream');
       }
 
-      try {
-        const json = JSON.parse(jsonStr) as GeminiGenerateResponse;
-        const text = this.extractGeminiText(json);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder('utf-8');
 
-        if (!text) {
+      let buffer = '';
+
+      const processDataLine = (line: string): void => {
+        const trimmed = line.trim();
+
+        if (!trimmed.startsWith('data:')) {
           return;
         }
 
-        fullReply += text;
-        onChunk(text);
-      } catch (error) {
-        if (process.env.NODE_ENV !== 'production') {
-          console.warn('[gemini-stream] Failed to parse SSE data', {
-            error,
-            chunk: jsonStr.slice(0, 300),
-          });
+        const jsonStr = trimmed.slice(5).trim();
+
+        if (!jsonStr || jsonStr === '[DONE]') {
+          return;
+        }
+
+        try {
+          const json = JSON.parse(jsonStr) as GeminiGenerateResponse;
+          const text = this.extractGeminiText(json);
+
+          if (!text) {
+            return;
+          }
+
+          fullReply += text;
+          onChunk(text);
+        } catch (error) {
+          if (process.env.NODE_ENV !== 'production') {
+            console.warn('[gemini-stream] Failed to parse SSE data', {
+              error,
+              chunk: jsonStr.slice(0, 300),
+            });
+          }
+        }
+      };
+
+      while (true) {
+        if (signal?.aborted) {
+          await reader.cancel().catch(() => undefined);
+          return fullReply;
+        }
+
+        const { done, value } = await reader.read();
+
+        if (done) {
+          break;
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          processDataLine(line);
         }
       }
-    };
 
-    while (true) {
-      const { done, value } = await reader.read();
+      /*
+       * Flush any bytes still held by TextDecoder.
+       */
+      buffer += decoder.decode();
 
-      if (done) {
-        break;
+      if (buffer.trim()) {
+        processDataLine(buffer);
       }
 
-      buffer += decoder.decode(value, { stream: true });
-
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-
-      for (const line of lines) {
-        processDataLine(line);
+      return fullReply;
+    } catch (error: unknown) {
+      /*
+       * Client stop / disconnect: return tokens already streamed so chat
+       * can persist the partial reply instead of finishing a full duplicate.
+       */
+      if (
+        signal?.aborted ||
+        (error instanceof Error && error.name === 'AbortError')
+      ) {
+        return fullReply;
       }
+      throw error;
     }
-
-    /*
-     * Flush any bytes still held by TextDecoder.
-     */
-    buffer += decoder.decode();
-
-    if (buffer.trim()) {
-      processDataLine(buffer);
-    }
-
-    return fullReply;
   }
 
   private extractGeminiText(
