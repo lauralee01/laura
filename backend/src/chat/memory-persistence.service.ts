@@ -20,59 +20,44 @@ export class MemoryPersistenceService {
       return;
     }
 
-    console.log('[memory-persistence] Extracting memories', {
-      userId,
-      message,
-    });
-
     const extractedMemories =
       await this.extractMemoriesToWrite(message);
 
-    console.log('[memory-persistence] Extraction result', {
-      userId,
-      count: extractedMemories.length,
-      extractedMemories,
-    });
-
     if (extractedMemories.length === 0) {
-      console.log(
-        '[memory-persistence] Extractor returned no memories',
-      );
       return;
     }
 
     let savedCount = 0;
-    for (const memory of extractedMemories) {
-      const shouldWrite = await this.shouldWriteMemoryCandidate(
-        userId,
-        memory,
-      );
+    let skippedDuplicates = 0;
 
-      if (!shouldWrite) {
-        console.log('[memory-persistence] Skipping near-duplicate memory', {
+    /*
+     * Candidates are independent: embed+dedupe+write in parallel (max 2).
+     * Each candidate still uses a single embedding for dedupe and insert.
+     */
+    const results = await Promise.all(
+      extractedMemories.map((memory) =>
+        this.memoryService.writeMemoryIfNovel({
           userId,
-          memory,
-        });
-        continue;
+          content: memory,
+        }),
+      ),
+    );
+
+    for (const result of results) {
+      if (result.status === 'written') {
+        savedCount += 1;
+      } else if (result.status === 'duplicate') {
+        skippedDuplicates += 1;
       }
-
-      console.log('[memory-persistence] Saving memory', {
-        userId,
-        memory,
-      });
-
-      await this.memoryService.writeMemory({
-        userId,
-        content: memory,
-      });
-      savedCount += 1;
     }
 
-    console.log('[memory-persistence] Memories saved', {
-      userId,
-      count: savedCount,
-      skippedDuplicates: extractedMemories.length - savedCount,
-    });
+    if (savedCount > 0 || skippedDuplicates > 0) {
+      console.log('[memory-persistence] Memories processed', {
+        userId,
+        savedCount,
+        skippedDuplicates,
+      });
+    }
   }
 
   private async extractMemoriesToWrite(
@@ -143,30 +128,5 @@ If nothing qualifies, return { "memoriesToWrite": [] }.
         return null;
       }
     }
-  }
-
-  private async shouldWriteMemoryCandidate(
-    sessionId: string,
-    candidate: string,
-  ): Promise<boolean> {
-    const thresholdRaw = process.env.MEMORY_DEDUPE_DISTANCE_THRESHOLD?.trim();
-    const threshold = thresholdRaw ? Number(thresholdRaw) : 0.12;
-
-    if (!Number.isFinite(threshold) || threshold < 0) {
-      throw new Error('MEMORY_DEDUPE_DISTANCE_THRESHOLD must be >= 0');
-    }
-
-    const nearest = await this.memoryService.searchMemories({
-      userId: sessionId,
-      query: candidate,
-      topK: 1,
-    });
-
-    if (nearest.length === 0) {
-      return true;
-    }
-
-    const nearestDistance = nearest[0].distance;
-    return nearestDistance > threshold;
   }
 }
