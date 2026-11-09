@@ -100,6 +100,9 @@ describe('chat pipeline intelligence regressions', () => {
           provide: PendingRequestService,
           useValue: {
             snapshotTools,
+            activateToolsSnapshot: jest.fn(
+              async (_sid: string, tools: typeof toolPending) => tools,
+            ),
             clearMany,
             clearPending: jest.fn(),
             getPending: jest.fn().mockResolvedValue(null),
@@ -109,6 +112,12 @@ describe('chat pipeline intelligence regressions', () => {
         {
           provide: SessionPreferencesService,
           useValue: {
+            getChatBootstrap: jest.fn(async () => ({
+              timeZone: 'America/Chicago',
+              location: null,
+              webSearch: null,
+              tools: { ...toolPending },
+            })),
             getPendingAction: jest.fn().mockResolvedValue(null),
             getTimeZone: jest.fn().mockResolvedValue('America/Chicago'),
             getLocation: jest.fn().mockResolvedValue(null),

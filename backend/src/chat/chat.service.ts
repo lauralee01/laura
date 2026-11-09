@@ -80,26 +80,30 @@ export class ChatService {
       : undefined;
 
     /*
-     * Bootstrap in parallel: conversation row + session prefs + tool pending.
-     * History depends on the conversation id, so it loads next when needed.
+     * Bootstrap in parallel: conversation row + one session_preferences read
+     * (tz, location, pending JSON). Tools are pruned in-memory from that row.
      */
     const bootstrapStart = performance.now();
-    const [dbConversationId, pendingAction, sessionTz, storedLocation, toolPending] =
-      await Promise.all([
-        this.chatHistoryService.ensureConversation(sessionId, conversationId),
-        sessionId
-          ? this.sessionPreferences.getPendingAction(sessionId)
-          : Promise.resolve(null),
-        sessionId
-          ? this.sessionPreferences.getTimeZone(sessionId)
-          : Promise.resolve(null),
-        sessionId
-          ? this.sessionPreferences.getLocation(sessionId)
-          : Promise.resolve(null),
-        sessionId
-          ? this.pendingRequestService.snapshotTools(sessionId)
-          : Promise.resolve({} as ToolPendingMap),
-      ]);
+    const [dbConversationId, sessionBootstrap] = await Promise.all([
+      this.chatHistoryService.ensureConversation(sessionId, conversationId),
+      sessionId
+        ? this.sessionPreferences.getChatBootstrap(sessionId)
+        : Promise.resolve({
+            timeZone: null as string | null,
+            location: null as string | null,
+            webSearch: null,
+            tools: {} as ToolPendingMap,
+          }),
+    ]);
+    const pendingAction = sessionBootstrap.webSearch;
+    const sessionTz = sessionBootstrap.timeZone;
+    const storedLocation = sessionBootstrap.location;
+    const toolPending = sessionId
+      ? await this.pendingRequestService.activateToolsSnapshot(
+          sessionId,
+          sessionBootstrap.tools,
+        )
+      : ({} as ToolPendingMap);
     const bootstrapMs = Math.round(performance.now() - bootstrapStart);
     const ensureConversationMs = bootstrapMs;
     const prefetchMs = bootstrapMs;

@@ -9,6 +9,14 @@ import {
   type WebSearchMissingLocationPending,
 } from './session-pending.types';
 
+/** One-row chat bootstrap from `session_preferences`. */
+export type ChatSessionBootstrap = {
+  timeZone: string | null;
+  location: string | null;
+  webSearch: WebSearchMissingLocationPending | null;
+  tools: ToolPendingMap;
+};
+
 @Injectable()
 export class SessionPreferencesService implements OnModuleDestroy {
   private readonly pool: Pool;
@@ -20,6 +28,54 @@ export class SessionPreferencesService implements OnModuleDestroy {
     }
 
     this.pool = new Pool({ connectionString: databaseUrl });
+  }
+
+  /**
+   * Single SELECT for chat replyTo bootstrap (tz + location + pending JSON).
+   * Avoids the old 3–4 round-trips on the same row.
+   */
+  async getChatBootstrap(sessionId: string): Promise<ChatSessionBootstrap> {
+    const sid = (sessionId ?? '').trim();
+    if (!sid) {
+      return {
+        timeZone: null,
+        location: null,
+        webSearch: null,
+        tools: {},
+      };
+    }
+
+    const res = await this.pool.query<{
+      timezone: string | null;
+      location: string | null;
+      pending_action: unknown;
+    }>(
+      `
+      SELECT timezone, location, pending_action
+      FROM session_preferences
+      WHERE session_id = $1
+      LIMIT 1;
+      `,
+      [sid],
+    );
+
+    const row = res.rows[0];
+    if (!row) {
+      return {
+        timeZone: null,
+        location: null,
+        webSearch: null,
+        tools: {},
+      };
+    }
+
+    const doc = parsePendingDocument(row.pending_action ?? null);
+    return {
+      timeZone: row.timezone ?? null,
+      location: row.location ?? null,
+      webSearch: doc.webSearch ?? null,
+      tools: { ...(doc.tools ?? {}) },
+    };
   }
 
   private async readPendingDocument(

@@ -88,6 +88,21 @@ export class PendingRequestService {
     return this.loadActiveTools(sessionId.trim());
   }
 
+  /**
+   * Drop expired entries from a tools map already loaded via getChatBootstrap
+   * (no extra pending_action read). Persists if anything expired.
+   */
+  async activateToolsSnapshot(
+    sessionId: string,
+    tools: ToolPendingMap,
+  ): Promise<ToolPendingMap> {
+    const sid = sessionId.trim();
+    if (!sid) {
+      return {};
+    }
+    return this.pruneExpiredTools(sid, { ...tools });
+  }
+
   async clearMany(
     sessionId: string,
     actionTypes: PendingActionType[],
@@ -111,6 +126,13 @@ export class PendingRequestService {
 
   private async loadActiveTools(sessionId: string): Promise<ToolPendingMap> {
     const tools = await this.sessionPreferences.getToolPendingMap(sessionId);
+    return this.pruneExpiredTools(sessionId, tools);
+  }
+
+  private async pruneExpiredTools(
+    sessionId: string,
+    tools: ToolPendingMap,
+  ): Promise<ToolPendingMap> {
     const now = Date.now();
     let changed = false;
 
