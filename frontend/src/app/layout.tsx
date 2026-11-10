@@ -16,10 +16,13 @@ export const metadata: Metadata = {
   title: "laura — personalized AI agent",
   description: "Chat with laura, your personalized AI assistant.",
   icons: {
-    icon: '/icon.png',
-    shortcut: '/icon.png',
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/icon.png', type: 'image/png', sizes: '180x180' },
+    ],
+    shortcut: '/icon.svg',
     apple: '/icon.png',
-  }
+  },
 };
 
 export default function RootLayout({
