@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { CalendarService } from '../../../integrations/calendar/calendar.service';
 import { LlmService } from '../../../llm/llm.service';
+import {
+  toolOk,
+  type ToolReplyInput,
+} from '../../action-receipt.types';
 import { PendingRequestService } from '../../pending-request.service';
 import {
   CALENDAR_TIMEZONE_PROMPT,
@@ -35,21 +39,26 @@ export class CalendarCreateHandler {
     end: string;
     timeZone: string;
     url?: string;
-  }): string {
-    return (
+  }): ToolReplyInput {
+    const text =
       `Done — I added it to your Google Calendar.\n\n` +
       `**${input.title}**\n` +
       `When: ${input.start} – ${input.end}\n` +
       `Time zone: ${input.timeZone}` +
-      (input.url ? `\n\nOpen in Calendar: ${input.url}` : '')
-    );
+      (input.url ? `\n\nOpen in Calendar: ${input.url}` : '');
+
+    return toolOk(text, {
+      kind: 'calendar_created',
+      title: 'Event added to Calendar',
+      detail: `${input.title} · ${input.start} – ${input.end}`,
+    });
   }
 
   async handleCalendarCreateIntent(
     sessionId: string,
     message: string,
     envelope?: IntentEnvelope,
-  ): Promise<string> {
+  ): Promise<ToolReplyInput> {
     try {
       const pending =
         await this.pendingRequestService.getPending<PendingCalendarCreatePayload>(
@@ -152,7 +161,7 @@ export class CalendarCreateHandler {
     sessionId: string,
     timeZone: string,
     originalMessage: string,
-  ): Promise<string> {
+  ): Promise<ToolReplyInput> {
     try {
       const args = await extractCalendarEventArgs(
         this.llmService,

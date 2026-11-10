@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { CalendarService } from '../../../integrations/calendar/calendar.service';
+import {
+  toolOk,
+  type ToolReplyInput,
+} from '../../action-receipt.types';
 import type { IntentEnvelope } from '../../intent/intent.types';
 import { PendingRequestService } from '../../pending-request.service';
 import type { PendingRequest } from '../../pending-request.service';
@@ -20,7 +24,7 @@ export class CalendarPendingDeleteFlow {
     message: string,
     pendingDelete: PendingRequest<PendingCalendarDeletePayload>,
     envelope?: IntentEnvelope,
-  ): Promise<string> {
+  ): Promise<ToolReplyInput> {
     if (envelope?.intent === 'pending_cancel') {
       await this.pendingRequestService.clearPending(
         sessionId,
@@ -84,8 +88,13 @@ export class CalendarPendingDeleteFlow {
           sessionId,
           'calendar_delete',
         );
-        return (
-          `Deleted from Google Calendar: “${p.title}” (${p.startText}).`
+        return toolOk(
+          `Deleted from Google Calendar: “${p.title}” (${p.startText}).`,
+          {
+            kind: 'calendar_deleted',
+            title: 'Event deleted',
+            detail: `${p.title} · ${p.startText}`,
+          },
         );
       } catch (e: unknown) {
         return formatToolFailureMessage('delete the calendar event', e);

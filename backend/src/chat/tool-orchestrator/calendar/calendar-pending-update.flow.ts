@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { CalendarService } from '../../../integrations/calendar/calendar.service';
 import { LlmService } from '../../../llm/llm.service';
+import type { ToolReplyInput } from '../../action-receipt.types';
 import type { IntentEnvelope } from '../../intent/intent.types';
 import { PendingRequestService } from '../../pending-request.service';
 import type { PendingRequest } from '../../pending-request.service';
@@ -26,7 +27,7 @@ export class CalendarPendingUpdateFlow {
     message: string,
     pendingUpdate: PendingRequest<PendingCalendarUpdatePayload>,
     envelope?: IntentEnvelope,
-  ): Promise<string> {
+  ): Promise<ToolReplyInput> {
     if (envelope?.intent === 'pending_cancel') {
       await this.pendingRequestService.clearPending(
         sessionId,
@@ -79,6 +80,7 @@ export class CalendarPendingUpdateFlow {
           sessionId,
           'calendar_update',
         );
+        return { text: result.text, receipt: result.receipt };
       }
 
       return result.text;
@@ -189,6 +191,7 @@ export class CalendarPendingUpdateFlow {
         sessionId,
         'calendar_update',
       );
+      return { text: result.text, receipt: result.receipt };
     }
 
     return result.text;

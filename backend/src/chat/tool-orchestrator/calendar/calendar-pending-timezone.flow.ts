@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { ToolReplyInput } from '../../action-receipt.types';
 import type { IntentEnvelope } from '../../intent/intent.types';
 import { PendingRequestService } from '../../pending-request.service';
 import { SessionPreferencesService } from '../../session-preferences.service';
@@ -26,7 +27,7 @@ export class CalendarPendingTimezoneFlow {
   async handle(
     sessionId: string,
     envelope?: IntentEnvelope,
-  ): Promise<string | null> {
+  ): Promise<ToolReplyInput | null> {
     const tzCandidate = getSlotTimeZone(envelope);
     if (envelope?.intent !== 'set_timezone' || !tzCandidate) {
       return null;

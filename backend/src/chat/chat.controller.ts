@@ -32,6 +32,11 @@ type ChatRequest = {
 type ChatResponse = {
   reply: string;
   conversationId?: string;
+  receipt?: {
+    kind: string;
+    title: string;
+    detail?: string;
+  };
 };
 
 type ChatHistoryResponse = {
@@ -228,6 +233,12 @@ export class ChatController {
 
       if (abortController.signal.aborted || res.writableEnded) {
         return;
+      }
+
+      if (result.receipt) {
+        res.write(
+          `data: ${JSON.stringify({ receipt: result.receipt })}\n\n`,
+        );
       }
 
       res.write(

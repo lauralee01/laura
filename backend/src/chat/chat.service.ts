@@ -25,12 +25,15 @@ import {
 } from './memory-policy';
 import { buildLauraChatSystemPrompt } from './laura-system-prompt';
 import { ToolRoutingService } from './tool-routing.service';
+import type { ActionReceipt } from './action-receipt.types';
 import { logChatPerf } from './chat-perf';
 import type { ToolPendingMap } from './session-pending.types';
 
 type ChatReply = {
   reply: string;
   conversationId?: string;
+  /** Completed tool action for the chat UI receipt strip. */
+  receipt?: ActionReceipt;
 };
 
 @Injectable()
@@ -383,6 +386,7 @@ export class ChatService {
       return {
         reply: toolResult.text,
         conversationId: dbConversationId ?? undefined,
+        receipt: toolResult.receipt,
       };
     }
 

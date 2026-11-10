@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { ToolReplyInput } from '../action-receipt.types';
 import { CalendarListHandler } from './calendar/calendar-list.handler';
 import { CalendarCreateHandler } from './calendar/calendar-create.handler';
 import { CalendarMutationHandler } from './calendar/calendar-mutation.handler';
@@ -44,7 +45,7 @@ export class ToolOrchestratorService {
     sessionId: string,
     message: string,
     envelope?: IntentEnvelope,
-  ): Promise<string> {
+  ): Promise<ToolReplyInput> {
     return this.calendarCreateHandler.handleCalendarCreateIntent(
       sessionId,
       message,
@@ -56,7 +57,7 @@ export class ToolOrchestratorService {
     sessionId: string,
     message: string,
     envelope?: IntentEnvelope,
-  ): Promise<string> {
+  ): Promise<ToolReplyInput> {
     return this.calendarMutationHandler.handleCalendarMutationIntent(
       sessionId,
       message,
@@ -68,7 +69,7 @@ export class ToolOrchestratorService {
     sessionId: string,
     message: string,
     envelope?: IntentEnvelope,
-  ): Promise<string> {
+  ): Promise<ToolReplyInput> {
     return this.emailTools.handleEmailDraftIntent(sessionId, message, envelope);
   }
 
@@ -76,7 +77,7 @@ export class ToolOrchestratorService {
     sessionId: string,
     message: string,
     envelope?: IntentEnvelope,
-  ): Promise<string | null> {
+  ): Promise<ToolReplyInput | null> {
     return this.emailTools.handlePendingEmailSendTurn(
       sessionId,
       message,
@@ -104,7 +105,7 @@ export class ToolOrchestratorService {
     sessionId: string,
     message: string,
     envelope: IntentEnvelope,
-  ): Promise<string | null> {
+  ): Promise<ToolReplyInput | null> {
     return this.emailTools.tryLlmRoutedEmail(sessionId, message, envelope);
   }
 
@@ -112,7 +113,7 @@ export class ToolOrchestratorService {
     sessionId: string,
     message: string,
     envelope?: IntentEnvelope,
-  ): Promise<string | null> {
+  ): Promise<ToolReplyInput | null> {
     return this.pendingFlow.tryHandle(sessionId, message, envelope);
   }
 }

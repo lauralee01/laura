@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { EmailService } from '../../../integrations/email/email.service';
 import { LlmService } from '../../../llm/llm.service';
+import {
+  toolOk,
+  type ToolReplyInput,
+} from '../../action-receipt.types';
 import { PendingRequestService } from '../../pending-request.service';
 import { extractDraftEmailArgs } from '../tool-orchestrator-llm-extractors';
 import { formatToolFailureMessage } from '../tool-orchestrator.utils';
@@ -28,7 +32,7 @@ export class EmailToolHandler {
     sessionId: string,
     message: string,
     envelope?: IntentEnvelope,
-  ): Promise<string> {
+  ): Promise<ToolReplyInput> {
     const pendingDraft =
       await this.pendingRequestService.getPending<PendingEmailDraftPayload>(
         sessionId,
@@ -139,7 +143,7 @@ export class EmailToolHandler {
     message: string,
     pendingDraft: PendingRequest<PendingEmailDraftPayload>,
     envelope?: IntentEnvelope,
-  ): Promise<string> {
+  ): Promise<ToolReplyInput> {
     const slots = envelope?.slots ?? {};
     const emailFromMessage = this.extractEmail(message);
 
@@ -218,7 +222,7 @@ export class EmailToolHandler {
       context: string;
       tone?: string;
     },
-  ): Promise<string> {
+  ): Promise<ToolReplyInput> {
     try {
       const draft = await this.emailService.draftEmail({
         sessionId,
@@ -244,14 +248,19 @@ export class EmailToolHandler {
         },
       );
 
-      return (
+      const text =
         `I drafted this email in Gmail.\n\n` +
         `To: ${draft.recipients.join(', ')}\n` +
         `Subject: ${draft.subject}\n\n` +
         `${draft.body}\n\n` +
         `---\n` +
-        `Want me to send it? Reply send or yes, or tell me what you’d like changed.`
-      );
+        `Want me to send it? Reply send or yes, or tell me what you’d like changed.`;
+
+      return toolOk(text, {
+        kind: 'email_draft',
+        title: 'Draft saved in Gmail',
+        detail: `To: ${draft.recipients.join(', ')} · Subject: ${draft.subject}`,
+      });
     } catch (e: unknown) {
       return formatToolFailureMessage('create the Gmail draft', e);
     }
@@ -261,7 +270,7 @@ export class EmailToolHandler {
     sessionId: string,
     message: string,
     envelope?: IntentEnvelope,
-  ): Promise<string | null> {
+  ): Promise<ToolReplyInput | null> {
     const pendingSend =
       await this.pendingRequestService.getPending<PendingEmailSendPayload>(
         sessionId,
@@ -299,7 +308,7 @@ export class EmailToolHandler {
     sessionId: string,
     message: string,
     envelope: IntentEnvelope,
-  ): Promise<string | null> {
+  ): Promise<ToolReplyInput | null> {
     const pendingDraft =
       await this.pendingRequestService.getPending<PendingEmailDraftPayload>(
         sessionId,
@@ -350,20 +359,27 @@ export class EmailToolHandler {
   private async sendPendingEmailDraftNow(
     sessionId: string,
     pendingSend: PendingRequest<PendingEmailSendPayload>,
-  ): Promise<string> {
+  ): Promise<ToolReplyInput> {
     try {
-      const sent = await this.emailService.sendDraft(
+      await this.emailService.sendDraft(
         sessionId,
         pendingSend.payload.draftId,
       );
 
       await this.pendingRequestService.clearPending(sessionId, 'email_send');
 
-      return (
+      const to = pendingSend.payload.recipients.join(', ');
+      const subject = pendingSend.payload.subject;
+      const text =
         `Done — your email has been sent.\n\n` +
-        `To: ${pendingSend.payload.recipients.join(', ')}\n` +
-        `Subject: ${pendingSend.payload.subject}`
-      );
+        `To: ${to}\n` +
+        `Subject: ${subject}`;
+
+      return toolOk(text, {
+        kind: 'email_sent',
+        title: 'Email sent',
+        detail: `To: ${to} · Subject: ${subject}`,
+      });
     } catch (e: unknown) {
       return formatToolFailureMessage('send the email', e);
     }

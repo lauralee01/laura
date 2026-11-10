@@ -1,6 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { GoogleOAuthService } from '../integrations/google/google-oauth.service';
 import {
+  coerceToolReply,
+  type ActionReceipt,
+  type ToolReplyInput,
+  type ToolReplyPayload,
+} from './action-receipt.types';
+import {
   formatCurrentDateTime,
   resolveSessionTimeZone,
 } from './datetime-context';
@@ -34,6 +40,8 @@ export type ToolRoutingResult = {
   text: string;
   /** True when tokens were already sent via onChunk (do not re-dump). */
   alreadyStreamed: boolean;
+  /** Structured UI receipt for a completed tool action. */
+  receipt?: ActionReceipt;
 };
 
 /**
@@ -65,10 +73,21 @@ export class ToolRoutingService {
       onChunk,
     } = input;
 
-    let toolReply: string | null = null;
+    /*
+     * Box avoids TS control-flow treating nested assigns as unreachable
+     * (toolReply would otherwise stay typed as never after null checks).
+     */
+    const replyBox: { value: ToolReplyPayload | null } = { value: null };
     let alreadyStreamed = false;
     const isEmailSendPending = Boolean(toolPending.email_send);
     const isEmailDraftPending = Boolean(toolPending.email_draft);
+
+    const take = (value: ToolReplyInput | null | undefined) => {
+      const next = coerceToolReply(value);
+      if (next) {
+        replyBox.value = next;
+      }
+    };
 
     const isGoogleIntent =
       envelope?.intent === 'calendar_list' ||
@@ -77,7 +96,7 @@ export class ToolRoutingService {
       envelope?.intent === 'calendar_delete' ||
       envelope?.intent === 'email_draft';
 
-    if (isGoogleIntent && sessionId && toolReply === null) {
+    if (isGoogleIntent && sessionId && replyBox.value === null) {
       const isConnected =
         googleConnected !== undefined
           ? googleConnected
@@ -87,9 +106,10 @@ export class ToolRoutingService {
           envelope?.intent === 'email_draft'
             ? 'create the Gmail draft'
             : 'access Google Calendar';
-        toolReply =
+        take(
           `I couldn't ${action}. Google is not connected for this session. ` +
-          `Use 'Connect Google' in the app, then try again.`;
+            `Use 'Connect Google' in the app, then try again.`,
+        );
 
         if (envelope?.intent === 'email_draft') {
           await this.pendingRequestService.clearPending(
@@ -100,21 +120,27 @@ export class ToolRoutingService {
       }
     }
 
-    if (isEmailSendPending && toolReply === null) {
+    if (isEmailSendPending && replyBox.value === null) {
       if (envelope) {
-        toolReply = await this.toolOrchestrator.tryLlmRoutedEmail(
+        const routed = await this.toolOrchestrator.tryLlmRoutedEmail(
           sessionId,
           message,
           envelope,
         );
+        if (routed !== null) {
+          take(routed);
+        }
       }
-      if (toolReply === null) {
-        toolReply =
+      if (replyBox.value === null) {
+        const pendingSend =
           await this.toolOrchestrator.handlePendingEmailSendTurn(
             sessionId,
             message,
             envelope,
           );
+        if (pendingSend !== null) {
+          take(pendingSend);
+        }
       }
     }
 
@@ -124,31 +150,37 @@ export class ToolRoutingService {
      */
     if (
       isEmailDraftPending &&
-      toolReply === null &&
+      replyBox.value === null &&
       !isEmailSendPending
     ) {
-      toolReply = await this.toolOrchestrator.handleEmailDraftIntent(
+      take(
+        await this.toolOrchestrator.handleEmailDraftIntent(
+          sessionId,
+          message,
+          envelope,
+        ),
+      );
+    }
+
+    if (hasCalendarPending(toolPending) && replyBox.value === null) {
+      const pending = await this.toolOrchestrator.tryHandle(
         sessionId,
         message,
         envelope,
       );
+      if (pending !== null) {
+        take(pending);
+      }
     }
 
-    if (hasCalendarPending(toolPending) && toolReply === null) {
-      toolReply = await this.toolOrchestrator.tryHandle(
-        sessionId,
-        message,
-        envelope,
-      );
-    }
-
-    if (toolReply === null && !isGatedToolBlocked) {
+    if (replyBox.value === null && !isGatedToolBlocked) {
       switch (envelope?.intent) {
         case 'current_datetime': {
           const timeZone = resolveSessionTimeZone(sessionTz);
           const formatted = formatCurrentDateTime(timeZone);
-          toolReply =
-            `The current date and time in ${timeZone} is ${formatted}.`;
+          take(
+            `The current date and time in ${timeZone} is ${formatted}.`,
+          );
           break;
         }
         case 'web_search': {
@@ -166,49 +198,52 @@ export class ToolRoutingService {
               message,
               envelope,
             });
-            toolReply =
-              'Which town or city should I use for this search?';
+            take('Which town or city should I use for this search?');
           } else {
-            toolReply = searchResult.text;
+            take(searchResult.text);
             alreadyStreamed = Boolean(searchResult.streamed);
           }
           break;
         }
         case 'calendar_list': {
-          toolReply =
+          take(
             await this.toolOrchestrator.handleCalendarListIntent(
               sessionId,
               envelope,
-            );
+            ),
+          );
           break;
         }
         case 'calendar_create': {
-          toolReply =
+          take(
             await this.toolOrchestrator.handleCalendarCreateIntent(
               sessionId,
               message,
               envelope,
-            );
+            ),
+          );
           break;
         }
         case 'calendar_update':
         case 'calendar_delete': {
-          toolReply =
+          take(
             await this.toolOrchestrator.handleCalendarMutationIntent(
               sessionId,
               message,
               envelope,
-            );
+            ),
+          );
           break;
         }
         case 'email_draft': {
           if (!isEmailSendPending) {
-            toolReply =
+            take(
               await this.toolOrchestrator.handleEmailDraftIntent(
                 sessionId,
                 message,
                 envelope,
-              );
+              ),
+            );
           }
           break;
         }
@@ -219,23 +254,31 @@ export class ToolRoutingService {
      * Canned rephrase only for destructive tools with known-low confidence.
      * `clarify` falls through to the chat LLM so Laura can ask one precise question.
      */
-    if (toolReply === null && isGatedToolBlocked) {
-      toolReply =
-        'I did not fully catch that. Could you rephrase what you want me to do? ';
+    if (replyBox.value === null && isGatedToolBlocked) {
+      take(
+        'I did not fully catch that. Could you rephrase what you want me to do? ',
+      );
     }
 
-    if (toolReply === null && !isChatLikeIntent) {
-      toolReply = await this.toolOrchestrator.tryHandle(
+    if (replyBox.value === null && !isChatLikeIntent) {
+      const fallback = await this.toolOrchestrator.tryHandle(
         sessionId,
         message,
         envelope,
       );
+      if (fallback !== null) {
+        take(fallback);
+      }
     }
 
-    if (toolReply === null) {
+    if (replyBox.value === null) {
       return null;
     }
 
-    return { text: toolReply, alreadyStreamed };
+    return {
+      text: replyBox.value.text,
+      alreadyStreamed,
+      receipt: replyBox.value.receipt,
+    };
   }
 }

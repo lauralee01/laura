@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { ToolReplyInput } from '../action-receipt.types';
 import { PendingRequestService } from '../pending-request.service';
 import { CalendarCreateHandler } from './calendar/calendar-create.handler';
 import { CalendarPendingDeleteFlow } from './calendar/calendar-pending-delete.flow';
@@ -31,7 +32,7 @@ export class ToolPendingFlowService {
     sessionId: string,
     message: string,
     envelope?: IntentEnvelope,
-  ): Promise<string | null> {
+  ): Promise<ToolReplyInput | null> {
     const pendingEmail = await this.emailTools.handlePendingEmailSendTurn(
       sessionId,
       message,

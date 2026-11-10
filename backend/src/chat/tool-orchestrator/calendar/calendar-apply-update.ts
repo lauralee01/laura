@@ -1,4 +1,8 @@
 import type { CalendarService } from '../../../integrations/calendar/calendar.service';
+import {
+  toolOk,
+  type ToolReplyPayload,
+} from '../../action-receipt.types';
 import { mergeTimeOnlyUpdateOntoEventDay } from './calendar-update-merge';
 import { formatToolFailureMessage } from '../tool-orchestrator.utils';
 
@@ -23,15 +27,20 @@ export type ApplyCalendarUpdateInput = {
 export function formatCalendarUpdateSuccess(input: {
   title: string;
   url?: string;
-}): string {
-  return (
+}): ToolReplyPayload {
+  const text =
     `Done — I updated **${input.title}** in your Google Calendar.` +
-    (input.url ? `\n\nOpen in Calendar: ${input.url}` : '')
-  );
+    (input.url ? `\n\nOpen in Calendar: ${input.url}` : '');
+
+  return toolOk(text, {
+    kind: 'calendar_updated',
+    title: 'Event updated',
+    detail: input.title,
+  });
 }
 
 export type ApplyCalendarUpdateResult =
-  | { ok: true; text: string }
+  | { ok: true; text: string; receipt?: ToolReplyPayload['receipt'] }
   | { ok: false; text: string };
 
 /**
@@ -73,12 +82,15 @@ export async function applyCalendarUpdate(
       end: resolvedUpdatedEnd,
     });
 
+    const success = formatCalendarUpdateSuccess({
+      title: updated.title,
+      url: updated.url,
+    });
+
     return {
       ok: true,
-      text: formatCalendarUpdateSuccess({
-        title: updated.title,
-        url: updated.url,
-      }),
+      text: success.text,
+      receipt: success.receipt,
     };
   } catch (error: unknown) {
     return {

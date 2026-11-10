@@ -15,7 +15,9 @@ import {
   getSingleDayRangeLocal,
 } from './calendar-ranges';
 import { mergeTimeOnlyUpdateOntoEventDay } from './calendar-update-merge';
+import { formatCalendarUpdateSuccess } from './calendar-apply-update';
 import { formatToolFailureMessage } from '../tool-orchestrator.utils';
+import type { ToolReplyInput } from '../../action-receipt.types';
 import type {
   PendingCalendarDeletePayload,
   PendingCalendarMutateTzPayload,
@@ -63,18 +65,15 @@ export class CalendarMutationHandler {
   formatCalendarUpdateSuccess(input: {
     title: string;
     url?: string;
-  }): string {
-    return (
-      `Done — I updated **${input.title}** in your Google Calendar.` +
-      (input.url ? `\n\nOpen in Calendar: ${input.url}` : '')
-    );
+  }): ToolReplyInput {
+    return formatCalendarUpdateSuccess(input);
   }
 
   async handleCalendarMutationIntent(
     sessionId: string,
     message: string,
     envelope?: IntentEnvelope,
-  ): Promise<string> {
+  ): Promise<ToolReplyInput> {
     try {
       const timeZone = await this.timezoneService.resolveTimeZone(
         sessionId,
@@ -114,7 +113,7 @@ export class CalendarMutationHandler {
     userMessage: string;
     timeZone: string;
     envelope?: IntentEnvelope;
-  }): Promise<string> {
+  }): Promise<ToolReplyInput> {
     const {
       sessionId,
       userMessage,
