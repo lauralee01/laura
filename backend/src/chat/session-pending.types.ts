@@ -45,6 +45,18 @@ export type ToolPendingMap = Partial<
 >;
 
 /**
+ * Most recent Gmail draft Laura created in this session.
+ * Survives send-cancel so a later "delete the draft" can still call Gmail.
+ */
+export type LastEmailDraft = {
+  draftId: string;
+  recipients: string[];
+  subject: string;
+  body: string;
+  updatedAt: number;
+};
+
+/**
  * Unified `session_preferences.pending_action` document.
  * Replaces the old single web-search-only JSON blob and the in-memory tool map.
  */
@@ -52,10 +64,11 @@ export type SessionPendingDocument = {
   version: 1;
   webSearch?: WebSearchMissingLocationPending | null;
   tools?: ToolPendingMap;
+  lastEmailDraft?: LastEmailDraft | null;
 };
 
 export function emptyPendingDocument(): SessionPendingDocument {
-  return { version: 1, webSearch: null, tools: {} };
+  return { version: 1, webSearch: null, tools: {}, lastEmailDraft: null };
 }
 
 export function parsePendingDocument(raw: unknown): SessionPendingDocument {
@@ -89,8 +102,35 @@ export function parsePendingDocument(raw: unknown): SessionPendingDocument {
         ? (obj['webSearch'] as WebSearchMissingLocationPending)
         : null;
 
-    return { version: 1, webSearch, tools };
+    const lastEmailDraft = parseLastEmailDraft(obj['lastEmailDraft']);
+
+    return { version: 1, webSearch, tools, lastEmailDraft };
   }
 
   return emptyPendingDocument();
+}
+
+function parseLastEmailDraft(raw: unknown): LastEmailDraft | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return null;
+  }
+  const obj = raw as Record<string, unknown>;
+  const draftId =
+    typeof obj.draftId === 'string' ? obj.draftId.trim() : '';
+  if (!draftId) return null;
+
+  const recipients = Array.isArray(obj.recipients)
+    ? obj.recipients.filter(
+        (v): v is string => typeof v === 'string' && v.trim().length > 0,
+      )
+    : [];
+  const subject =
+    typeof obj.subject === 'string' ? obj.subject : '';
+  const body = typeof obj.body === 'string' ? obj.body : '';
+  const updatedAt =
+    typeof obj.updatedAt === 'number' && Number.isFinite(obj.updatedAt)
+      ? obj.updatedAt
+      : Date.now();
+
+  return { draftId, recipients, subject, body, updatedAt };
 }

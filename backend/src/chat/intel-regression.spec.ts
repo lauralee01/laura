@@ -79,6 +79,7 @@ describe('chat pipeline intelligence regressions', () => {
             handleCalendarCreateIntent: jest.fn(),
             handleCalendarMutationIntent: jest.fn(),
             handleEmailDraftIntent: jest.fn(),
+            handleEmailDraftFollowUp: jest.fn(),
             handlePendingEmailSendTurn: jest.fn().mockResolvedValue(null),
             tryLlmRoutedEmail: jest.fn().mockResolvedValue(null),
             tryHandle: jest.fn().mockResolvedValue(null),
@@ -266,6 +267,14 @@ describe('email draft without @ gate', () => {
             getPending: jest.fn().mockResolvedValue(null),
             setPending,
             clearPending: jest.fn(),
+          },
+        },
+        {
+          provide: SessionPreferencesService,
+          useValue: {
+            getLastEmailDraft: jest.fn().mockResolvedValue(null),
+            setLastEmailDraft: jest.fn(),
+            clearLastEmailDraft: jest.fn(),
           },
         },
       ],

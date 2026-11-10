@@ -18,6 +18,7 @@ const INTENT_FAMILY: Record<IntentId, IntentFamily> = {
   email_draft: 'email',
   email_send_confirm: 'email',
   email_draft_revise: 'email',
+  email_draft_delete: 'email',
   calendar_list: 'calendar',
   calendar_create: 'calendar',
   calendar_update: 'calendar',

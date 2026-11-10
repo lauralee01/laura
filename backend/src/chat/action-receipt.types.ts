@@ -5,6 +5,7 @@
 export type ActionReceiptKind =
   | 'email_draft'
   | 'email_sent'
+  | 'email_draft_deleted'
   | 'calendar_created'
   | 'calendar_updated'
   | 'calendar_deleted';

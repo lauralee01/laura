@@ -142,6 +142,37 @@ export class EmailService {
   }
 
   /**
+   * Deletes an existing Gmail draft (`users.drafts.delete`).
+   */
+  async deleteDraft(sessionId: string, draftId: string): Promise<void> {
+    const sid = sessionId?.trim();
+    if (!sid) {
+      throw new BadRequestException(
+        'sessionId is required to delete a Gmail draft.',
+      );
+    }
+    const id = draftId?.trim();
+    if (!id) {
+      throw new BadRequestException('draftId is required to delete.');
+    }
+
+    const auth = await this.googleOAuth.getOAuth2ClientForSession(sid);
+    const gmail = google.gmail({ version: 'v1', auth });
+
+    try {
+      await gmail.users.drafts.delete({
+        userId: 'me',
+        id,
+      });
+    } catch (err: unknown) {
+      const detail = err instanceof Error ? err.message : 'Gmail API error';
+      throw new BadRequestException(
+        `Could not delete Gmail draft: ${detail}`,
+      );
+    }
+  }
+
+  /**
    * Rewrites the pending draft with the LLM and updates the same Gmail draft
    * (`users.drafts.update`) so the user can iterate before sending.
    */

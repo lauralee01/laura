@@ -6,11 +6,13 @@ import {
   type ToolReplyInput,
 } from '../../action-receipt.types';
 import { PendingRequestService } from '../../pending-request.service';
+import { SessionPreferencesService } from '../../session-preferences.service';
 import { extractDraftEmailArgs } from '../tool-orchestrator-llm-extractors';
 import { formatToolFailureMessage } from '../tool-orchestrator.utils';
 import type { IntentEnvelope } from '../../intent/intent.types';
 import type { PendingEmailSendPayload } from '../tool-orchestrator.types';
 import type { PendingRequest } from '../../pending-request.service';
+import type { LastEmailDraft } from '../../session-pending.types';
 
 type PendingEmailDraftPayload = {
   recipients?: string[];
@@ -20,12 +22,35 @@ type PendingEmailDraftPayload = {
   tone?: string;
 };
 
+/** True when the user wants the Gmail draft removed, not just send cancelled. */
+export function isEmailDraftDeleteRequest(
+  message: string,
+  envelope?: IntentEnvelope,
+): boolean {
+  if (envelope?.intent === 'email_draft_delete') {
+    return true;
+  }
+
+  const action = envelope?.slots?.action;
+  if (
+    typeof action === 'string' &&
+    /\b(delete|remove|discard|trash)\b/i.test(action)
+  ) {
+    return true;
+  }
+
+  return /\b(delete|remove|discard|trash)\b[\s\S]{0,40}\bdraft\b|\bcancel (the )?draft\b/i.test(
+    message,
+  );
+}
+
 @Injectable()
 export class EmailToolHandler {
   constructor(
     private readonly llmService: LlmService,
     private readonly emailService: EmailService,
     private readonly pendingRequestService: PendingRequestService,
+    private readonly sessionPreferences: SessionPreferencesService,
   ) { }
 
   async handleEmailDraftIntent(
@@ -232,6 +257,13 @@ export class EmailToolHandler {
         context: args.context,
       });
 
+      await this.rememberDraft(sessionId, {
+        draftId: draft.draftId,
+        recipients: draft.recipients,
+        subject: draft.subject,
+        body: draft.body,
+      });
+
       await this.pendingRequestService.setPending<PendingEmailSendPayload>(
         sessionId,
         {
@@ -279,12 +311,14 @@ export class EmailToolHandler {
 
     if (!pendingSend) return null;
 
-    if (envelope?.intent === 'pending_cancel') {
-      await this.pendingRequestService.clearPending(sessionId, 'email_send');
-      return (
-        'Okay — I won’t send that draft from here. ' +
-        'It’s still in your Gmail drafts if you want to send or edit it there.'
-      );
+    if (
+      envelope?.intent === 'pending_cancel' ||
+      isEmailDraftDeleteRequest(message, envelope)
+    ) {
+      if (isEmailDraftDeleteRequest(message, envelope)) {
+        return this.deleteRememberedDraft(sessionId, message, envelope);
+      }
+      return this.cancelPendingSendKeepDraft(sessionId, pendingSend);
     }
 
     if (envelope?.intent === 'email_send_confirm') {
@@ -302,6 +336,67 @@ export class EmailToolHandler {
       `${pendingSend.payload.body}\n\n` +
       'Reply send or yes to send it now, describe a change, or cancel.'
     );
+  }
+
+  /**
+   * Delete / revise routes that must never fall through to the chat LLM
+   * (which would hallucinate Gmail changes).
+   */
+  async handleEmailDraftFollowUp(
+    sessionId: string,
+    message: string,
+    envelope: IntentEnvelope,
+  ): Promise<ToolReplyInput> {
+    if (isEmailDraftDeleteRequest(message, envelope)) {
+      return this.deleteRememberedDraft(sessionId, message, envelope);
+    }
+
+    if (envelope.intent === 'email_draft_revise') {
+      const pendingSend =
+        await this.pendingRequestService.getPending<PendingEmailSendPayload>(
+          sessionId,
+          'email_send',
+        );
+      if (pendingSend) {
+        return this.revisePendingEmailDraftNow(
+          sessionId,
+          pendingSend,
+          message,
+        );
+      }
+
+      const remembered = await this.sessionPreferences.getLastEmailDraft(
+        sessionId,
+      );
+      if (remembered) {
+        const synthetic: PendingRequest<PendingEmailSendPayload> = {
+          actionType: 'email_send',
+          originalMessage: message,
+          payload: {
+            draftId: remembered.draftId,
+            recipients: remembered.recipients,
+            subject: remembered.subject,
+            body: remembered.body,
+          },
+          missingSlots: ['confirmation'],
+          collectedSlots: {},
+          createdAt: remembered.updatedAt,
+          expiresAt: Date.now() + 30 * 60 * 1000,
+        };
+        return this.revisePendingEmailDraftNow(
+          sessionId,
+          synthetic,
+          message,
+        );
+      }
+
+      return (
+        'I don’t have a recent draft in this chat to revise. ' +
+        'Tell me who to email and what it should say, and I’ll draft a new one.'
+      );
+    }
+
+    return this.deleteRememberedDraft(sessionId, message, envelope);
   }
 
   async tryLlmRoutedEmail(
@@ -326,11 +421,14 @@ export class EmailToolHandler {
       );
 
     if (pendingSend) {
-      if (envelope.intent === 'pending_cancel') {
-        await this.pendingRequestService.clearPending(sessionId, 'email_send');
-        return (
-          'No problem — I won’t send it. The draft is still saved in Gmail if you want to review it later.'
-        );
+      if (
+        envelope.intent === 'pending_cancel' ||
+        isEmailDraftDeleteRequest(message, envelope)
+      ) {
+        if (isEmailDraftDeleteRequest(message, envelope)) {
+          return this.deleteRememberedDraft(sessionId, message, envelope);
+        }
+        return this.cancelPendingSendKeepDraft(sessionId, pendingSend);
       }
 
       if (envelope.intent === 'email_send_confirm') {
@@ -349,11 +447,93 @@ export class EmailToolHandler {
       return null;
     }
 
+    if (
+      envelope.intent === 'email_draft_delete' ||
+      envelope.intent === 'email_draft_revise' ||
+      isEmailDraftDeleteRequest(message, envelope)
+    ) {
+      return this.handleEmailDraftFollowUp(sessionId, message, envelope);
+    }
+
     if (envelope.intent === 'email_draft') {
       return this.handleEmailDraftIntent(sessionId, message, envelope);
     }
 
     return null;
+  }
+
+  private async cancelPendingSendKeepDraft(
+    sessionId: string,
+    pendingSend: PendingRequest<PendingEmailSendPayload>,
+  ): Promise<ToolReplyInput> {
+    await this.rememberDraft(sessionId, pendingSend.payload);
+    await this.pendingRequestService.clearPending(sessionId, 'email_send');
+    return (
+      'No problem — I won’t send it. The draft is still saved in Gmail if you want to review it later. ' +
+      'Say “delete the draft” if you want me to remove it from Gmail.'
+    );
+  }
+
+  private async deleteRememberedDraft(
+    sessionId: string,
+    _message: string,
+    _envelope?: IntentEnvelope,
+  ): Promise<ToolReplyInput> {
+    const pendingSend =
+      await this.pendingRequestService.getPending<PendingEmailSendPayload>(
+        sessionId,
+        'email_send',
+      );
+    const remembered =
+      pendingSend?.payload ??
+      (await this.sessionPreferences.getLastEmailDraft(sessionId));
+
+    if (!remembered?.draftId) {
+      return (
+        'I don’t have a recent Gmail draft from this chat to delete. ' +
+        'You can still remove drafts directly in Gmail.'
+      );
+    }
+
+    try {
+      await this.emailService.deleteDraft(sessionId, remembered.draftId);
+      await this.pendingRequestService.clearPending(sessionId, 'email_send');
+      await this.sessionPreferences.clearLastEmailDraft(sessionId);
+
+      const to = remembered.recipients.join(', ');
+      const subject = remembered.subject;
+      const detailParts = [
+        to ? `To: ${to}` : null,
+        subject ? `Subject: ${subject}` : null,
+      ].filter(Boolean);
+      const text =
+        `Done — I deleted that draft from Gmail` +
+        (detailParts.length ? ` (${detailParts.join(' · ')})` : '') +
+        '.';
+
+      return toolOk(text, {
+        kind: 'email_draft_deleted',
+        title: 'Draft deleted from Gmail',
+        detail: detailParts.join(' · ') || undefined,
+      });
+    } catch (e: unknown) {
+      return formatToolFailureMessage('delete the Gmail draft', e);
+    }
+  }
+
+  private async rememberDraft(
+    sessionId: string,
+    draft: Pick<
+      LastEmailDraft,
+      'draftId' | 'recipients' | 'subject' | 'body'
+    >,
+  ): Promise<void> {
+    await this.sessionPreferences.setLastEmailDraft(sessionId, {
+      draftId: draft.draftId,
+      recipients: draft.recipients,
+      subject: draft.subject,
+      body: draft.body,
+    });
   }
 
   private async sendPendingEmailDraftNow(
@@ -367,6 +547,7 @@ export class EmailToolHandler {
       );
 
       await this.pendingRequestService.clearPending(sessionId, 'email_send');
+      await this.sessionPreferences.clearLastEmailDraft(sessionId);
 
       const to = pendingSend.payload.recipients.join(', ');
       const subject = pendingSend.payload.subject;
@@ -389,7 +570,7 @@ export class EmailToolHandler {
     sessionId: string,
     pendingSend: PendingRequest<PendingEmailSendPayload>,
     message: string,
-  ): Promise<string> {
+  ): Promise<ToolReplyInput> {
     try {
       const revised = await this.emailService.reviseDraftEmail({
         sessionId,
@@ -398,6 +579,13 @@ export class EmailToolHandler {
         currentSubject: pendingSend.payload.subject,
         currentBody: pendingSend.payload.body,
         revisionInstruction: message,
+      });
+
+      await this.rememberDraft(sessionId, {
+        draftId: revised.draftId,
+        recipients: revised.recipients,
+        subject: revised.subject,
+        body: revised.body,
       });
 
       await this.pendingRequestService.setPending<PendingEmailSendPayload>(

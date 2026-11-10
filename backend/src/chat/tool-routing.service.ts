@@ -94,7 +94,9 @@ export class ToolRoutingService {
       envelope?.intent === 'calendar_create' ||
       envelope?.intent === 'calendar_update' ||
       envelope?.intent === 'calendar_delete' ||
-      envelope?.intent === 'email_draft';
+      envelope?.intent === 'email_draft' ||
+      envelope?.intent === 'email_draft_revise' ||
+      envelope?.intent === 'email_draft_delete';
 
     if (isGoogleIntent && sessionId && replyBox.value === null) {
       const isConnected =
@@ -103,8 +105,10 @@ export class ToolRoutingService {
           : await this.googleOAuthService.isConnected(sessionId);
       if (!isConnected) {
         const action =
-          envelope?.intent === 'email_draft'
-            ? 'create the Gmail draft'
+          envelope?.intent === 'email_draft' ||
+          envelope?.intent === 'email_draft_revise' ||
+          envelope?.intent === 'email_draft_delete'
+            ? 'use Gmail'
             : 'access Google Calendar';
         take(
           `I couldn't ${action}. Google is not connected for this session. ` +
@@ -239,6 +243,19 @@ export class ToolRoutingService {
           if (!isEmailSendPending) {
             take(
               await this.toolOrchestrator.handleEmailDraftIntent(
+                sessionId,
+                message,
+                envelope,
+              ),
+            );
+          }
+          break;
+        }
+        case 'email_draft_revise':
+        case 'email_draft_delete': {
+          if (envelope) {
+            take(
+              await this.toolOrchestrator.handleEmailDraftFollowUp(
                 sessionId,
                 message,
                 envelope,

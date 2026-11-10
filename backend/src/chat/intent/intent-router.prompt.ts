@@ -152,7 +152,15 @@ email_send_confirm:
 Confirm sending an existing pending draft.
 
 email_draft_revise:
-Revise an existing pending draft.
+Revise an existing pending draft (wording, subject, recipients).
+Do not use this to delete a draft.
+
+email_draft_delete:
+Delete / discard / remove a Gmail draft Laura created.
+Use when the user wants the draft gone from Gmail, including after
+they cancelled sending. Prefer this over pending_cancel when they
+explicitly ask to delete or discard the draft itself.
+slots.action may be "delete".
 
 PENDING ACTIONS
 

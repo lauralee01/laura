@@ -85,6 +85,18 @@ export class ToolOrchestratorService {
     );
   }
 
+  handleEmailDraftFollowUp(
+    sessionId: string,
+    message: string,
+    envelope: IntentEnvelope,
+  ): Promise<ToolReplyInput> {
+    return this.emailTools.handleEmailDraftFollowUp(
+      sessionId,
+      message,
+      envelope,
+    );
+  }
+
   handleWebSearchIntent(
     sessionId: string,
     message: string,

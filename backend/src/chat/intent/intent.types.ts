@@ -14,7 +14,7 @@
 export const INTENT_CLASSIFICATION_SCHEMA_VERSION = 1 as const;
 
 /** Prompt / parser version for logs and regression tests (increment when JSON shape changes). */
-export const INTENT_CLASSIFICATION_PROMPT_VERSION = 'batch-g-v7';
+export const INTENT_CLASSIFICATION_PROMPT_VERSION = 'batch-g-v8';
 
 export const INTENT_IDS = [
   'general_chat',
@@ -25,6 +25,7 @@ export const INTENT_IDS = [
   'email_draft',
   'email_send_confirm',
   'email_draft_revise',
+  'email_draft_delete',
   'pending_confirm',
   'pending_cancel',
   'set_timezone',
@@ -59,6 +60,7 @@ export const CONFIDENCE_GATED_INTENTS = [
   'email_draft',
   'email_send_confirm',
   'email_draft_revise',
+  'email_draft_delete',
 ] as const satisfies readonly IntentId[];
 
 export type ConfidenceGatedIntent =

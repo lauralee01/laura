@@ -4,6 +4,7 @@ import { IANAZone } from 'luxon';
 import {
   emptyPendingDocument,
   parsePendingDocument,
+  type LastEmailDraft,
   type SessionPendingDocument,
   type ToolPendingMap,
   type WebSearchMissingLocationPending,
@@ -106,7 +107,9 @@ export class SessionPreferencesService implements OnModuleDestroy {
 
     const hasWebSearch = Boolean(doc.webSearch);
     const hasTools = Boolean(doc.tools && Object.keys(doc.tools).length > 0);
-    const value = hasWebSearch || hasTools ? doc : null;
+    const hasLastEmailDraft = Boolean(doc.lastEmailDraft?.draftId);
+    const value =
+      hasWebSearch || hasTools || hasLastEmailDraft ? doc : null;
 
     await this.pool.query(
       `
@@ -240,6 +243,41 @@ export class SessionPreferencesService implements OnModuleDestroy {
     const doc = await this.readPendingDocument(sessionId);
     doc.tools = tools;
     await this.writePendingDocument(sessionId, doc);
+  }
+
+  async getLastEmailDraft(
+    sessionId: string,
+  ): Promise<LastEmailDraft | null> {
+    const doc = await this.readPendingDocument(sessionId);
+    return doc.lastEmailDraft ?? null;
+  }
+
+  async setLastEmailDraft(
+    sessionId: string,
+    draft: Omit<LastEmailDraft, 'updatedAt'> & { updatedAt?: number },
+  ): Promise<void> {
+    const sid = sessionId.trim();
+    const draftId = draft.draftId?.trim();
+    if (!sid || !draftId) return;
+
+    const doc = await this.readPendingDocument(sid);
+    doc.lastEmailDraft = {
+      draftId,
+      recipients: draft.recipients ?? [],
+      subject: draft.subject ?? '',
+      body: draft.body ?? '',
+      updatedAt: draft.updatedAt ?? Date.now(),
+    };
+    await this.writePendingDocument(sid, doc);
+  }
+
+  async clearLastEmailDraft(sessionId: string): Promise<void> {
+    const sid = sessionId.trim();
+    if (!sid) return;
+    const doc = await this.readPendingDocument(sid);
+    if (!doc.lastEmailDraft) return;
+    doc.lastEmailDraft = null;
+    await this.writePendingDocument(sid, doc);
   }
 }
 

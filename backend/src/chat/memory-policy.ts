@@ -37,6 +37,7 @@ const SKIP_EXTRACT_INTENTS = new Set<IntentId>([
   'clarify',
   'email_send_confirm',
   'email_draft_revise',
+  'email_draft_delete',
 ]);
 
 /**
