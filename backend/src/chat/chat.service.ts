@@ -25,7 +25,10 @@ import {
 } from './memory-policy';
 import { buildLauraChatSystemPrompt } from './laura-system-prompt';
 import { ToolRoutingService } from './tool-routing.service';
-import type { ActionReceipt } from './action-receipt.types';
+import type {
+  ActionReceipt,
+  ConfirmPrompt,
+} from './action-receipt.types';
 import { logChatPerf } from './chat-perf';
 import type { ToolPendingMap } from './session-pending.types';
 
@@ -34,6 +37,8 @@ type ChatReply = {
   conversationId?: string;
   /** Completed tool action for the chat UI receipt strip. */
   receipt?: ActionReceipt;
+  /** Inline Confirm/Cancel chips for a pending yes/no tool turn. */
+  confirmPrompt?: ConfirmPrompt;
 };
 
 @Injectable()
@@ -387,6 +392,7 @@ export class ChatService {
         reply: toolResult.text,
         conversationId: dbConversationId ?? undefined,
         receipt: toolResult.receipt,
+        confirmPrompt: toolResult.confirmPrompt,
       };
     }
 

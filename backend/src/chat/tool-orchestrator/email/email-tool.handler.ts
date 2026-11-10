@@ -2,7 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { EmailService } from '../../../integrations/email/email.service';
 import { LlmService } from '../../../llm/llm.service';
 import {
+  EMAIL_SEND_CONFIRM_PROMPT,
   toolOk,
+  toolConfirm,
   type ToolReplyInput,
 } from '../../action-receipt.types';
 import { PendingRequestService } from '../../pending-request.service';
@@ -288,11 +290,15 @@ export class EmailToolHandler {
         `---\n` +
         `Want me to send it? Reply send or yes, or tell me what you’d like changed.`;
 
-      return toolOk(text, {
-        kind: 'email_draft',
-        title: 'Draft saved in Gmail',
-        detail: `To: ${draft.recipients.join(', ')} · Subject: ${draft.subject}`,
-      });
+      return toolOk(
+        text,
+        {
+          kind: 'email_draft',
+          title: 'Draft saved in Gmail',
+          detail: `To: ${draft.recipients.join(', ')} · Subject: ${draft.subject}`,
+        },
+        EMAIL_SEND_CONFIRM_PROMPT,
+      );
     } catch (e: unknown) {
       return formatToolFailureMessage('create the Gmail draft', e);
     }
@@ -329,12 +335,13 @@ export class EmailToolHandler {
       return this.revisePendingEmailDraftNow(sessionId, pendingSend, message);
     }
 
-    return (
+    return toolConfirm(
       'I still have a draft ready to send:\n' +
-      `To: ${pendingSend.payload.recipients.join(', ')}\n` +
-      `Subject: ${pendingSend.payload.subject}\n\n` +
-      `${pendingSend.payload.body}\n\n` +
-      'Reply send or yes to send it now, describe a change, or cancel.'
+        `To: ${pendingSend.payload.recipients.join(', ')}\n` +
+        `Subject: ${pendingSend.payload.subject}\n\n` +
+        `${pendingSend.payload.body}\n\n` +
+        'Reply send or yes to send it now, describe a change, or cancel.',
+      EMAIL_SEND_CONFIRM_PROMPT,
     );
   }
 
@@ -604,13 +611,14 @@ export class EmailToolHandler {
         },
       );
 
-      return (
+      return toolConfirm(
         `I updated the draft for you.\n\n` +
-        `To: ${revised.recipients.join(', ')}\n` +
-        `Subject: ${revised.subject}\n\n` +
-        `${revised.body}\n\n` +
-        `---\n` +
-        `Want me to send this version? Reply send or yes, or ask for another change.`
+          `To: ${revised.recipients.join(', ')}\n` +
+          `Subject: ${revised.subject}\n\n` +
+          `${revised.body}\n\n` +
+          `---\n` +
+          `Want me to send this version? Reply send or yes, or ask for another change.`,
+        EMAIL_SEND_CONFIRM_PROMPT,
       );
     } catch (e: unknown) {
       return formatToolFailureMessage('update the Gmail draft', e);

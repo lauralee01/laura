@@ -17,7 +17,11 @@ import {
 import { mergeTimeOnlyUpdateOntoEventDay } from './calendar-update-merge';
 import { formatCalendarUpdateSuccess } from './calendar-apply-update';
 import { formatToolFailureMessage } from '../tool-orchestrator.utils';
-import type { ToolReplyInput } from '../../action-receipt.types';
+import {
+  CALENDAR_DELETE_CONFIRM_PROMPT,
+  toolConfirm,
+  type ToolReplyInput,
+} from '../../action-receipt.types';
 import type {
   PendingCalendarDeletePayload,
   PendingCalendarMutateTzPayload,
@@ -302,11 +306,12 @@ export class CalendarMutationHandler {
             },
           );
 
-          return (
+          return toolConfirm(
             `I found **${matchedCalendarEvent.title}** scheduled for ` +
-            `${matchedCalendarEvent.startText}.\n\n` +
-            'Do you want me to delete it from your Google Calendar? ' +
-            'Reply yes to delete it, or cancel.'
+              `${matchedCalendarEvent.startText}.\n\n` +
+              'Do you want me to delete it from your Google Calendar? ' +
+              'Reply yes to delete it, or cancel.',
+            CALENDAR_DELETE_CONFIRM_PROMPT,
           );
         }
 

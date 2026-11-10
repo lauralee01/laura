@@ -3,6 +3,7 @@ import { GoogleOAuthService } from '../integrations/google/google-oauth.service'
 import {
   coerceToolReply,
   type ActionReceipt,
+  type ConfirmPrompt,
   type ToolReplyInput,
   type ToolReplyPayload,
 } from './action-receipt.types';
@@ -42,6 +43,8 @@ export type ToolRoutingResult = {
   alreadyStreamed: boolean;
   /** Structured UI receipt for a completed tool action. */
   receipt?: ActionReceipt;
+  /** Inline Confirm/Cancel chips for a pending yes/no tool turn. */
+  confirmPrompt?: ConfirmPrompt;
 };
 
 /**
@@ -296,6 +299,7 @@ export class ToolRoutingService {
       text: replyBox.value.text,
       alreadyStreamed,
       receipt: replyBox.value.receipt,
+      confirmPrompt: replyBox.value.confirmPrompt,
     };
   }
 }

@@ -16,10 +16,42 @@ export type ActionReceipt = {
   detail?: string;
 };
 
-/** Tool handler reply: chat text plus optional receipt for the UI. */
+/**
+ * Inline Confirm/Cancel chips for yes/no pending tool turns.
+ * Ephemeral for the live turn — not persisted with message history (v1).
+ * Chip click submits confirmText / cancelText as a normal user message.
+ */
+export type ConfirmPromptKind = 'email_send' | 'calendar_delete';
+
+export type ConfirmPrompt = {
+  kind: ConfirmPromptKind;
+  confirmLabel: string;
+  cancelLabel: string;
+  confirmText: string;
+  cancelText: string;
+};
+
+export const EMAIL_SEND_CONFIRM_PROMPT: ConfirmPrompt = {
+  kind: 'email_send',
+  confirmLabel: 'Send',
+  cancelLabel: 'Cancel',
+  confirmText: 'send',
+  cancelText: 'cancel',
+};
+
+export const CALENDAR_DELETE_CONFIRM_PROMPT: ConfirmPrompt = {
+  kind: 'calendar_delete',
+  confirmLabel: 'Delete',
+  cancelLabel: 'Cancel',
+  confirmText: 'yes',
+  cancelText: 'cancel',
+};
+
+/** Tool handler reply: chat text plus optional receipt / confirm chips for the UI. */
 export type ToolReplyPayload = {
   text: string;
   receipt?: ActionReceipt;
+  confirmPrompt?: ConfirmPrompt;
 };
 
 export type ToolReplyInput = string | ToolReplyPayload;
@@ -31,8 +63,16 @@ export function toolText(text: string): ToolReplyPayload {
 export function toolOk(
   text: string,
   receipt: ActionReceipt,
+  confirmPrompt?: ConfirmPrompt,
 ): ToolReplyPayload {
-  return { text, receipt };
+  return confirmPrompt ? { text, receipt, confirmPrompt } : { text, receipt };
+}
+
+export function toolConfirm(
+  text: string,
+  confirmPrompt: ConfirmPrompt,
+): ToolReplyPayload {
+  return { text, confirmPrompt };
 }
 
 export function coerceToolReply(

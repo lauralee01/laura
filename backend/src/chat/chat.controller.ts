@@ -37,6 +37,13 @@ type ChatResponse = {
     title: string;
     detail?: string;
   };
+  confirmPrompt?: {
+    kind: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    confirmText: string;
+    cancelText: string;
+  };
 };
 
 type ChatHistoryResponse = {
@@ -238,6 +245,14 @@ export class ChatController {
       if (result.receipt) {
         res.write(
           `data: ${JSON.stringify({ receipt: result.receipt })}\n\n`,
+        );
+      }
+
+      if (result.confirmPrompt) {
+        res.write(
+          `data: ${JSON.stringify({
+            confirmPrompt: result.confirmPrompt,
+          })}\n\n`,
         );
       }
 

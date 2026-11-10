@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { CalendarService } from '../../../integrations/calendar/calendar.service';
 import {
+  CALENDAR_DELETE_CONFIRM_PROMPT,
+  toolConfirm,
   toolOk,
   type ToolReplyInput,
 } from '../../action-receipt.types';
@@ -71,9 +73,10 @@ export class CalendarPendingDeleteFlow {
         },
       );
 
-      return (
+      return toolConfirm(
         `Delete “${opt.title}” (${opt.startText})?\n\n` +
-        `Reply yes to remove it from Google Calendar, or cancel.`
+          `Reply yes to remove it from Google Calendar, or cancel.`,
+        CALENDAR_DELETE_CONFIRM_PROMPT,
       );
     }
 
@@ -101,9 +104,10 @@ export class CalendarPendingDeleteFlow {
       }
     }
 
-    return (
+    return toolConfirm(
       `Still waiting: delete “${p.title}”?\n` +
-      `Reply yes to confirm, or cancel.`
+        `Reply yes to confirm, or cancel.`,
+      CALENDAR_DELETE_CONFIRM_PROMPT,
     );
   }
 }
