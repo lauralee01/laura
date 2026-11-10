@@ -406,62 +406,82 @@ export function useChat() {
       let assistantStarted = false;
 
       try {
-        const { conversationId: returnedConversationId } =
-          await sendChatMessageStream(
-            {
-              conversationId: submitConversationId,
-              message: submittedText,
-              history: priorHistory,
-            },
-            (chunk: string) => {
-              if (generationId !== streamGenerationRef.current) {
-                return;
+        const {
+          conversationId: returnedConversationId,
+          receipt,
+        } = await sendChatMessageStream(
+          {
+            conversationId: submitConversationId,
+            message: submittedText,
+            history: priorHistory,
+          },
+          (chunk: string) => {
+            if (generationId !== streamGenerationRef.current) {
+              return;
+            }
+
+            if (!assistantStarted) {
+              assistantStarted = true;
+              setLoading(false);
+              setStreaming(true);
+              setMessages((prev) => [
+                ...prev,
+                {
+                  role: 'assistant',
+                  content: chunk,
+                },
+              ]);
+              accumulatedReply = chunk;
+              return;
+            }
+
+            accumulatedReply += chunk;
+
+            setMessages((prev) => {
+              if (prev.length === 0) {
+                return prev;
               }
 
-              if (!assistantStarted) {
-                assistantStarted = true;
-                setLoading(false);
-                setStreaming(true);
-                setMessages((prev) => [
-                  ...prev,
-                  {
-                    role: 'assistant',
-                    content: chunk,
-                  },
-                ]);
-                accumulatedReply = chunk;
-                return;
+              const next = [...prev];
+              const lastIndex = next.length - 1;
+              const lastMessage = next[lastIndex];
+
+              if (lastMessage?.role === 'assistant') {
+                next[lastIndex] = {
+                  ...lastMessage,
+                  content: accumulatedReply,
+                };
               }
 
-              accumulatedReply += chunk;
-
-              setMessages((prev) => {
-                if (prev.length === 0) {
-                  return prev;
-                }
-
-                const next = [...prev];
-                const lastIndex = next.length - 1;
-                const lastMessage = next[lastIndex];
-
-                if (lastMessage?.role === 'assistant') {
-                  next[lastIndex] = {
-                    ...lastMessage,
-                    content: accumulatedReply,
-                  };
-                }
-
-                return next;
-              });
-            },
-            abortController.signal,
-          );
+              return next;
+            });
+          },
+          abortController.signal,
+        );
 
         if (generationId !== streamGenerationRef.current) {
           return;
         }
 
         setStreaming(false);
+
+        if (receipt) {
+          setMessages((prev) => {
+            if (prev.length === 0) {
+              return prev;
+            }
+            const next = [...prev];
+            const lastIndex = next.length - 1;
+            const lastMessage = next[lastIndex];
+            if (lastMessage?.role === 'assistant') {
+              next[lastIndex] = {
+                ...lastMessage,
+                receipt,
+              };
+            }
+            return next;
+          });
+        }
 
         const activeConversationId =
           returnedConversationId ?? submitConversationId;

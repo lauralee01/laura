@@ -1,6 +1,7 @@
 import { memo, type RefObject } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { ActionReceiptStrip } from '@/components/chat-ui/ActionReceiptStrip';
 import { ChatEmptyState } from '@/components/chat-ui/ChatEmptyState';
 import type { StoredChatMessage } from '@/lib/session';
 
@@ -114,39 +115,44 @@ export const ChatMessageList = memo(function ChatMessageList({
                 m.role === 'user' ? 'justify-end' : 'justify-start'
               }`}
             >
-              <div
-                className={`min-w-0 max-w-[85%] overflow-hidden rounded-[var(--radius-lg)] px-4 py-2.5 text-sm leading-relaxed break-words ${
-                  m.role === 'user'
-                    ? 'bg-accent-soft text-ink'
-                    : 'bg-surface-elevated/90 text-ink shadow-soft'
-                }`}
-              >
-                {m.role === 'assistant' ? (
-                  <div>
-                    {/*
-                     * Defer markdown parse until the stream finishes so each
-                     * token does not rebuild the full remark AST.
-                     */}
-                    {isStreamingAssistant ? (
-                      <span className="whitespace-pre-wrap break-words">
-                        {m.content}
-                      </span>
-                    ) : (
-                      <MessageMarkdown content={m.content} />
-                    )}
+              <div className="flex min-w-0 max-w-[85%] flex-col">
+                <div
+                  className={`min-w-0 overflow-hidden rounded-[var(--radius-lg)] px-4 py-2.5 text-sm leading-relaxed break-words ${
+                    m.role === 'user'
+                      ? 'bg-accent-soft text-ink'
+                      : 'bg-surface-elevated/90 text-ink shadow-soft'
+                  }`}
+                >
+                  {m.role === 'assistant' ? (
+                    <div>
+                      {/*
+                       * Defer markdown parse until the stream finishes so each
+                       * token does not rebuild the full remark AST.
+                       */}
+                      {isStreamingAssistant ? (
+                        <span className="whitespace-pre-wrap break-words">
+                          {m.content}
+                        </span>
+                      ) : (
+                        <MessageMarkdown content={m.content} />
+                      )}
 
-                    {isStreamingAssistant && (
-                      <span
-                        className="ml-0.5 inline-block h-3.5 w-1.5 translate-y-[2px] rounded-sm bg-accent animate-pulse"
-                        aria-hidden="true"
-                      />
-                    )}
-                  </div>
-                ) : (
-                  <span className="whitespace-pre-wrap break-words">
-                    {m.content}
-                  </span>
-                )}
+                      {isStreamingAssistant && (
+                        <span
+                          className="ml-0.5 inline-block h-3.5 w-1.5 translate-y-[2px] rounded-sm bg-accent animate-pulse"
+                          aria-hidden="true"
+                        />
+                      )}
+                    </div>
+                  ) : (
+                    <span className="whitespace-pre-wrap break-words">
+                      {m.content}
+                    </span>
+                  )}
+                </div>
+                {m.role === 'assistant' && m.receipt && !isStreamingAssistant ? (
+                  <ActionReceiptStrip receipt={m.receipt} />
+                ) : null}
               </div>
             </li>
           );

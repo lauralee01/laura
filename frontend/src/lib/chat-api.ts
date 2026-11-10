@@ -1,3 +1,5 @@
+import type { ActionReceipt } from './action-receipt';
+import { parseActionReceipt } from './action-receipt';
 import type { StoredChatMessage } from './session';
 import { getApiBaseUrl } from './api-base';
 
@@ -6,6 +8,7 @@ const cred: RequestInit = { credentials: 'include' };
 export type ChatApiResponse = {
   reply: string;
   conversationId?: string;
+  receipt?: ActionReceipt;
 };
 
 export type ChatHistoryResponse = {
@@ -77,6 +80,7 @@ export async function sendChatMessage(input: {
 function consumeSseDataLine(
   jsonStr: string,
   onChunk: (chunk: string) => void,
+  onReceipt?: (receipt: ActionReceipt) => void,
 ): string | undefined {
   let parsed: {
     chunk?: string;
@@ -84,6 +88,7 @@ function consumeSseDataLine(
     started?: boolean;
     conversationId?: string;
     error?: string;
+    receipt?: unknown;
   };
 
   try {
@@ -104,6 +109,11 @@ function consumeSseDataLine(
     onChunk(parsed.chunk);
   }
 
+  const receipt = parseActionReceipt(parsed.receipt);
+  if (receipt) {
+    onReceipt?.(receipt);
+  }
+
   if (parsed.done && parsed.conversationId) {
     return parsed.conversationId;
   }
@@ -119,7 +129,7 @@ export async function sendChatMessageStream(
   },
   onChunk: (chunk: string) => void,
   signal?: AbortSignal,
-): Promise<{ conversationId?: string }> {
+): Promise<{ conversationId?: string; receipt?: ActionReceipt }> {
   const url = `${getApiBaseUrl()}/chat/stream`;
   const res = await fetch(url, {
     method: 'POST',
@@ -148,6 +158,7 @@ export async function sendChatMessageStream(
   const decoder = new TextDecoder('utf-8');
   let buffer = '';
   let finalConversationId: string | undefined;
+  let finalReceipt: ActionReceipt | undefined;
 
   const processBuffer = (flushAll: boolean) => {
     const lines = buffer.split('\n');
@@ -166,6 +177,9 @@ export async function sendChatMessageStream(
       const conversationIdFromEvent = consumeSseDataLine(
         jsonStr,
         onChunk,
+        (receipt) => {
+          finalReceipt = receipt;
+        },
       );
       if (conversationIdFromEvent) {
         finalConversationId = conversationIdFromEvent;
@@ -196,7 +210,10 @@ export async function sendChatMessageStream(
     throw err;
   }
 
-  return { conversationId: finalConversationId };
+  return {
+    conversationId: finalConversationId,
+    receipt: finalReceipt,
+  };
 }
 
 export async function fetchChatHistory(

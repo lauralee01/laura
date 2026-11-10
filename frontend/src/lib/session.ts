@@ -4,9 +4,13 @@
 
 import { getApiBaseUrl } from './api-base';
 
+import type { ActionReceipt } from './action-receipt';
+
 export type StoredChatMessage = {
   role: 'user' | 'assistant';
   content: string;
+  /** Ephemeral tool receipt for the live turn (not restored from history). */
+  receipt?: ActionReceipt;
 };
 
 /**
