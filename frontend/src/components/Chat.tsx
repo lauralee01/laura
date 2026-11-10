@@ -30,6 +30,7 @@ export function Chat() {
     updateStickToBottom,
     showThinking,
     handleSubmit,
+    sendMessage,
     stopStreaming,
     handleNewChat,
     selectConversation,
@@ -124,6 +125,8 @@ export function Chat() {
           initializing={initializing}
           onSuggestion={onSuggestion}
           suggestionsDisabled={composerDisabled}
+          chipsDisabled={composerDisabled}
+          onConfirmChip={sendMessage}
         />
 
         {error && (

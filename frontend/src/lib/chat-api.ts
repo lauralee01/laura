@@ -1,5 +1,7 @@
 import type { ActionReceipt } from './action-receipt';
 import { parseActionReceipt } from './action-receipt';
+import type { ConfirmPrompt } from './confirm-prompt';
+import { parseConfirmPrompt } from './confirm-prompt';
 import type { StoredChatMessage } from './session';
 import { getApiBaseUrl } from './api-base';
 
@@ -9,6 +11,7 @@ export type ChatApiResponse = {
   reply: string;
   conversationId?: string;
   receipt?: ActionReceipt;
+  confirmPrompt?: ConfirmPrompt;
 };
 
 export type ChatHistoryResponse = {
@@ -81,6 +84,7 @@ function consumeSseDataLine(
   jsonStr: string,
   onChunk: (chunk: string) => void,
   onReceipt?: (receipt: ActionReceipt) => void,
+  onConfirmPrompt?: (prompt: ConfirmPrompt) => void,
 ): string | undefined {
   let parsed: {
     chunk?: string;
@@ -89,6 +93,7 @@ function consumeSseDataLine(
     conversationId?: string;
     error?: string;
     receipt?: unknown;
+    confirmPrompt?: unknown;
   };
 
   try {
@@ -114,6 +119,11 @@ function consumeSseDataLine(
     onReceipt?.(receipt);
   }
 
+  const confirmPrompt = parseConfirmPrompt(parsed.confirmPrompt);
+  if (confirmPrompt) {
+    onConfirmPrompt?.(confirmPrompt);
+  }
+
   if (parsed.done && parsed.conversationId) {
     return parsed.conversationId;
   }
@@ -129,7 +139,11 @@ export async function sendChatMessageStream(
   },
   onChunk: (chunk: string) => void,
   signal?: AbortSignal,
-): Promise<{ conversationId?: string; receipt?: ActionReceipt }> {
+): Promise<{
+  conversationId?: string;
+  receipt?: ActionReceipt;
+  confirmPrompt?: ConfirmPrompt;
+}> {
   const url = `${getApiBaseUrl()}/chat/stream`;
   const res = await fetch(url, {
     method: 'POST',
@@ -159,6 +173,7 @@ export async function sendChatMessageStream(
   let buffer = '';
   let finalConversationId: string | undefined;
   let finalReceipt: ActionReceipt | undefined;
+  let finalConfirmPrompt: ConfirmPrompt | undefined;
 
   const processBuffer = (flushAll: boolean) => {
     const lines = buffer.split('\n');
@@ -179,6 +194,9 @@ export async function sendChatMessageStream(
         onChunk,
         (receipt) => {
           finalReceipt = receipt;
+        },
+        (prompt) => {
+          finalConfirmPrompt = prompt;
         },
       );
       if (conversationIdFromEvent) {
@@ -213,6 +231,7 @@ export async function sendChatMessageStream(
   return {
     conversationId: finalConversationId,
     receipt: finalReceipt,
+    confirmPrompt: finalConfirmPrompt,
   };
 }
 

@@ -2,6 +2,7 @@ import { memo, type RefObject } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ActionReceiptStrip } from '@/components/chat-ui/ActionReceiptStrip';
+import { ConfirmChipStrip } from '@/components/chat-ui/ConfirmChipStrip';
 import { ChatEmptyState } from '@/components/chat-ui/ChatEmptyState';
 import type { StoredChatMessage } from '@/lib/session';
 
@@ -15,6 +16,8 @@ type Props = {
   onScroll?: () => void;
   onSuggestion?: (prompt: string) => void;
   suggestionsDisabled?: boolean;
+  chipsDisabled?: boolean;
+  onConfirmChip?: (text: string) => void;
 };
 
 const markdownComponents = {
@@ -74,6 +77,8 @@ export const ChatMessageList = memo(function ChatMessageList({
   initializing,
   onSuggestion,
   suggestionsDisabled,
+  chipsDisabled,
+  onConfirmChip,
 }: Props) {
   const empty = messages.length === 0 && !showThinking && !initializing;
 
@@ -152,6 +157,17 @@ export const ChatMessageList = memo(function ChatMessageList({
                 </div>
                 {m.role === 'assistant' && m.receipt && !isStreamingAssistant ? (
                   <ActionReceiptStrip receipt={m.receipt} />
+                ) : null}
+                {m.role === 'assistant' &&
+                m.confirmPrompt &&
+                !isStreamingAssistant &&
+                onConfirmChip ? (
+                  <ConfirmChipStrip
+                    prompt={m.confirmPrompt}
+                    disabled={chipsDisabled}
+                    onConfirm={onConfirmChip}
+                    onCancel={onConfirmChip}
+                  />
                 ) : null}
               </div>
             </li>

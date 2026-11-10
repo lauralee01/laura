@@ -5,12 +5,15 @@
 import { getApiBaseUrl } from './api-base';
 
 import type { ActionReceipt } from './action-receipt';
+import type { ConfirmPrompt } from './confirm-prompt';
 
 export type StoredChatMessage = {
   role: 'user' | 'assistant';
   content: string;
   /** Ephemeral tool receipt for the live turn (not restored from history). */
   receipt?: ActionReceipt;
+  /** Ephemeral Confirm/Cancel chips for the live turn (not restored from history). */
+  confirmPrompt?: ConfirmPrompt;
 };
 
 /**

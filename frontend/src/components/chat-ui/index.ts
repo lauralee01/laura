@@ -6,5 +6,6 @@ export { ChatEmptyState } from './ChatEmptyState';
 export { ChatComposer } from './ChatComposer';
 export { ChatErrorBanner } from './ChatErrorBanner';
 export { ActionReceiptStrip } from './ActionReceiptStrip';
+export { ConfirmChipStrip } from './ConfirmChipStrip';
 export { GoogleConnectButton } from './GoogleConnectButton';
 export { GoogleConnectTip } from './GoogleConnectTip';

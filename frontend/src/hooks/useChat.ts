@@ -361,11 +361,9 @@ export function useChat() {
     streaming,
   ]);
 
-  const handleSubmit = useCallback(
-    async (event: FormEvent) => {
-      event.preventDefault();
-
-      const submittedText = input.trim();
+  const sendMessage = useCallback(
+    async (rawText: string) => {
+      const submittedText = rawText.trim();
 
       if (
         !submittedText ||
@@ -391,11 +389,14 @@ export function useChat() {
       stickToBottomRef.current = true;
 
       /*
-       * Optimistic user turn only. The empty assistant bubble used to
-       * appear beside "laura is thinking…" — append assistant on first chunk.
+       * Optimistic user turn only. Clear prior confirm chips so they
+       * don't linger after the user answers (chip or typed).
+       * Append assistant on first chunk (not beside "thinking…").
        */
       setMessages((previousMessages) => [
-        ...previousMessages,
+        ...previousMessages.map((m) =>
+          m.confirmPrompt ? { ...m, confirmPrompt: undefined } : m,
+        ),
         {
           role: 'user',
           content: submittedText,
@@ -409,6 +410,7 @@ export function useChat() {
         const {
           conversationId: returnedConversationId,
           receipt,
+          confirmPrompt,
         } = await sendChatMessageStream(
           {
             conversationId: submitConversationId,
@@ -465,7 +467,7 @@ export function useChat() {
 
         setStreaming(false);
 
-        if (receipt) {
+        if (receipt || confirmPrompt) {
           setMessages((prev) => {
             if (prev.length === 0) {
               return prev;
@@ -476,7 +478,8 @@ export function useChat() {
             if (lastMessage?.role === 'assistant') {
               next[lastIndex] = {
                 ...lastMessage,
-                receipt,
+                ...(receipt ? { receipt } : {}),
+                ...(confirmPrompt ? { confirmPrompt } : {}),
               };
             }
             return next;
@@ -540,13 +543,20 @@ export function useChat() {
     },
     [
       conversationId,
-      input,
       loading,
       messages,
       reloadSidebar,
       sessionReady,
       streaming,
     ],
+  );
+
+  const handleSubmit = useCallback(
+    async (event: FormEvent) => {
+      event.preventDefault();
+      await sendMessage(input);
+    },
+    [input, sendMessage],
   );
 
   const selectConversation = useCallback(
@@ -678,6 +688,7 @@ export function useChat() {
     updateStickToBottom,
     showThinking: loading && !streaming,
     handleSubmit,
+    sendMessage,
     stopStreaming: abortActiveStream,
     handleNewChat,
     selectConversation,
