@@ -1,6 +1,7 @@
 export type ActionReceiptKind =
   | 'email_draft'
   | 'email_sent'
+  | 'email_draft_deleted'
   | 'calendar_created'
   | 'calendar_updated'
   | 'calendar_deleted';
@@ -14,6 +15,7 @@ export type ActionReceipt = {
 const RECEIPT_KINDS = new Set<string>([
   'email_draft',
   'email_sent',
+  'email_draft_deleted',
   'calendar_created',
   'calendar_updated',
   'calendar_deleted',
