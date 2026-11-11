@@ -22,6 +22,12 @@ type MemorySearchResult = {
   distance: number;
 };
 
+export type MemoryListItem = {
+  id: number;
+  content: string;
+  createdAt: string;
+};
+
 type WriteMemoryIfNovelInput = {
   userId: string;
   content: string;
@@ -96,6 +102,96 @@ export class MemoryService implements OnModuleDestroy {
 
     const id = await this.insertMemory(input.userId, content, embedding);
     return { status: 'written', id };
+  }
+
+  async listMemories(userId: string): Promise<MemoryListItem[]> {
+    const sid = userId.trim();
+    if (!sid) {
+      return [];
+    }
+
+    const res = await this.pool.query<{
+      id: number;
+      content: string;
+      created_at: Date;
+    }>(
+      `
+      SELECT id, content, created_at
+      FROM memories
+      WHERE user_id = $1
+      ORDER BY created_at DESC, id DESC;
+      `,
+      [sid],
+    );
+
+    return res.rows.map((r) => ({
+      id: Number(r.id),
+      content: r.content,
+      createdAt: r.created_at.toISOString(),
+    }));
+  }
+
+  async updateMemory(
+    userId: string,
+    id: number,
+    content: string,
+  ): Promise<MemoryListItem | null> {
+    const sid = userId.trim();
+    const trimmed = content.trim();
+    if (!sid || !Number.isFinite(id) || id <= 0) {
+      return null;
+    }
+    if (!trimmed) {
+      throw new Error('content must not be empty');
+    }
+
+    const embeddingValues = await this.embeddingsService.embedText(
+      trimmed,
+      'RETRIEVAL_DOCUMENT',
+    );
+    const embeddingVectorLiteral = this.toVectorLiteral(embeddingValues);
+
+    const res = await this.pool.query<{
+      id: number;
+      content: string;
+      created_at: Date;
+    }>(
+      `
+      UPDATE memories
+      SET content = $3, embedding = $4::vector
+      WHERE id = $1 AND user_id = $2
+      RETURNING id, content, created_at;
+      `,
+      [id, sid, trimmed, embeddingVectorLiteral],
+    );
+
+    const row = res.rows[0];
+    if (!row) {
+      return null;
+    }
+
+    return {
+      id: Number(row.id),
+      content: row.content,
+      createdAt: row.created_at.toISOString(),
+    };
+  }
+
+  async deleteMemory(userId: string, id: number): Promise<boolean> {
+    const sid = userId.trim();
+    if (!sid || !Number.isFinite(id) || id <= 0) {
+      return false;
+    }
+
+    const res = await this.pool.query(
+      `
+      DELETE FROM memories
+      WHERE id = $1 AND user_id = $2;
+      `,
+      [id, sid],
+    );
+
+    return (res.rowCount ?? 0) > 0;
   }
 
   async searchMemories(
