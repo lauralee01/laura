@@ -6,5 +6,6 @@ export { CalendarMutationHandler } from './calendar/calendar-mutation.handler';
 export { CalendarPendingDeleteFlow } from './calendar/calendar-pending-delete.flow';
 export { CalendarPendingUpdateFlow } from './calendar/calendar-pending-update.flow';
 export { CalendarPendingTimezoneFlow } from './calendar/calendar-pending-timezone.flow';
+export { MorningBriefingHandler } from './briefing/morning-briefing.handler';
 export { EmailToolHandler } from './email/email-tool.handler';
 export { ToolPendingFlowService } from './tool-pending-flow.service';

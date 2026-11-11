@@ -97,6 +97,7 @@ export class ToolRoutingService {
       envelope?.intent === 'calendar_create' ||
       envelope?.intent === 'calendar_update' ||
       envelope?.intent === 'calendar_delete' ||
+      envelope?.intent === 'morning_briefing' ||
       envelope?.intent === 'email_draft' ||
       envelope?.intent === 'email_draft_revise' ||
       envelope?.intent === 'email_draft_delete';
@@ -217,6 +218,16 @@ export class ToolRoutingService {
             await this.toolOrchestrator.handleCalendarListIntent(
               sessionId,
               envelope,
+            ),
+          );
+          break;
+        }
+        case 'morning_briefing': {
+          take(
+            await this.toolOrchestrator.handleMorningBriefingIntent(
+              sessionId,
+              sessionTz,
+              storedLocation,
             ),
           );
           break;

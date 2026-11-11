@@ -23,6 +23,7 @@ const INTENT_FAMILY: Record<IntentId, IntentFamily> = {
   calendar_create: 'calendar',
   calendar_update: 'calendar',
   calendar_delete: 'calendar',
+  morning_briefing: 'calendar',
   web_search: 'web_search',
   current_datetime: 'chat',
   general_chat: 'chat',

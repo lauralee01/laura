@@ -80,6 +80,7 @@ describe('chat pipeline intelligence regressions', () => {
             handleCalendarMutationIntent: jest.fn(),
             handleEmailDraftIntent: jest.fn(),
             handleEmailDraftFollowUp: jest.fn(),
+            handleMorningBriefingIntent: jest.fn(),
             handlePendingEmailSendTurn: jest.fn().mockResolvedValue(null),
             tryLlmRoutedEmail: jest.fn().mockResolvedValue(null),
             tryHandle: jest.fn().mockResolvedValue(null),

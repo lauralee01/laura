@@ -142,6 +142,18 @@ changed, or rescheduled.
 calendar_delete:
 Use when an existing calendar event should be removed or cancelled.
 
+morning_briefing:
+Use when the user wants a morning briefing, daily brief, or
+"what's my day looking like" overview that combines today with
+calendar (and optionally local weather). Prefer this over a bare
+calendar_list when they ask to be briefed / catch up on the day,
+not merely "what's on my calendar today".
+
+Examples:
+"What's my morning briefing?"
+"Brief me for today"
+"Catch me up on my day"
+
 EMAIL
 
 email_draft:

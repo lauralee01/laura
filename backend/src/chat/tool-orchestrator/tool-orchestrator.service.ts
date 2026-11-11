@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { ToolReplyInput } from '../action-receipt.types';
+import { MorningBriefingHandler } from './briefing/morning-briefing.handler';
 import { CalendarListHandler } from './calendar/calendar-list.handler';
 import { CalendarCreateHandler } from './calendar/calendar-create.handler';
 import { CalendarMutationHandler } from './calendar/calendar-mutation.handler';
@@ -16,6 +17,7 @@ import type { IntentEnvelope } from '../intent/intent.types';
  * Facade for chat tool actions. Delegates to:
  * - CalendarHandlers — list/create/update/delete via Google Calendar + LLM extractors
  * - {@link EmailToolHandler} — Gmail drafts, send, revise while pending
+ * - {@link MorningBriefingHandler} — composed today calendar + optional weather
  * - {@link ToolPendingFlowService} — multi-turn pending state and `set_timezone` resumes
  *
  * ChatService calls these methods directly for LLM-routed intents; `tryHandle` covers everything else.
@@ -28,8 +30,21 @@ export class ToolOrchestratorService {
     private readonly calendarMutationHandler: CalendarMutationHandler,
     private readonly emailTools: EmailToolHandler,
     private readonly webSearchTools: WebSearchToolHandler,
+    private readonly morningBriefingHandler: MorningBriefingHandler,
     private readonly pendingFlow: ToolPendingFlowService,
   ) { }
+
+  handleMorningBriefingIntent(
+    sessionId: string,
+    sessionTz: string | null,
+    storedLocation: string | null,
+  ): Promise<string> {
+    return this.morningBriefingHandler.handleMorningBriefing(
+      sessionId,
+      sessionTz,
+      storedLocation,
+    );
+  }
 
   handleCalendarListIntent(
     sessionId: string,
