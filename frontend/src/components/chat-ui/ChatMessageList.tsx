@@ -15,6 +15,7 @@ type Props = {
   scrollContainerRef?: RefObject<HTMLDivElement | null>;
   onScroll?: () => void;
   onSuggestion?: (prompt: string) => void;
+  onSendSuggestion?: (prompt: string) => void;
   suggestionsDisabled?: boolean;
   chipsDisabled?: boolean;
   onConfirmChip?: (text: string) => void;
@@ -76,6 +77,7 @@ export const ChatMessageList = memo(function ChatMessageList({
   onScroll,
   initializing,
   onSuggestion,
+  onSendSuggestion,
   suggestionsDisabled,
   chipsDisabled,
   onConfirmChip,
@@ -91,6 +93,7 @@ export const ChatMessageList = memo(function ChatMessageList({
       {empty && onSuggestion && (
         <ChatEmptyState
           onSuggestion={onSuggestion}
+          onSendSuggestion={onSendSuggestion}
           disabled={suggestionsDisabled}
         />
       )}

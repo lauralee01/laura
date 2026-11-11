@@ -137,6 +137,7 @@ export function Chat() {
           onScroll={updateStickToBottom}
           initializing={initializing}
           onSuggestion={onSuggestion}
+          onSendSuggestion={sendMessage}
           suggestionsDisabled={composerDisabled}
           chipsDisabled={composerDisabled}
           onConfirmChip={sendMessage}
