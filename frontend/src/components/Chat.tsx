@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useChat } from '@/hooks/useChat';
 import {
   ChatComposer,
@@ -9,6 +9,7 @@ import {
   ChatMessageList,
   ChatMobileDrawer,
   GoogleConnectTip,
+  MemoryBrowserPanel,
   MobileChatHeader,
 } from '@/components/chat-ui';
 
@@ -40,6 +41,8 @@ export function Chat() {
     isBusy,
     isGenerating,
   } = useChat();
+
+  const [memoriesOpen, setMemoriesOpen] = useState(false);
 
   /*
    * Keep composer + sidebar locked for the full stream lifecycle, not just
@@ -81,6 +84,15 @@ export function Chat() {
     [setInput],
   );
 
+  const onOpenMemories = useCallback(() => {
+    setSidebarOpen(false);
+    setMemoriesOpen(true);
+  }, [setSidebarOpen]);
+
+  const onCloseMemories = useCallback(() => {
+    setMemoriesOpen(false);
+  }, []);
+
   const sidebarProps = {
     conversations,
     activeId: conversationId,
@@ -89,6 +101,7 @@ export function Chat() {
     onRename,
     onDelete,
     disabled: sidebarDisabled,
+    onOpenMemories,
   };
 
   /**
@@ -151,6 +164,12 @@ export function Chat() {
           disabled={composerDisabled}
         />
       </div>
+
+      <MemoryBrowserPanel
+        open={memoriesOpen}
+        onClose={onCloseMemories}
+        sessionReady={sessionReady}
+      />
     </div>
   );
 }

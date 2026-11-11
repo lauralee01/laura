@@ -13,10 +13,12 @@ type Props = {
   onRename: (id: string, title: string) => void | Promise<void>;
   onDelete: (id: string) => void | Promise<void>;
   disabled: boolean;
+  onOpenMemories?: () => void;
 };
 
 export const ChatDesktopSidebar = memo(function ChatDesktopSidebar({
   sessionReady,
+  onOpenMemories,
   ...props
 }: Props) {
   return (
@@ -29,6 +31,16 @@ export const ChatDesktopSidebar = memo(function ChatDesktopSidebar({
       <SidebarConversationList {...props} />
       <footer className="shrink-0 space-y-2.5 border-t border-border-subtle px-4 py-3">
         <GoogleConnectButton sessionReady={sessionReady} variant="sidebar" />
+        {onOpenMemories ? (
+          <button
+            type="button"
+            onClick={onOpenMemories}
+            disabled={!sessionReady}
+            className="w-full rounded-[var(--radius-md)] border border-border-subtle bg-surface-elevated px-3 py-2 text-left text-xs font-medium text-ink transition hover:border-accent/30 hover:bg-accent-soft/40 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Memories
+          </button>
+        ) : null}
         <p className="text-center text-[11px] text-ink-muted">
           <span>© {new Date().getFullYear()} Laura</span>
           <span className="mx-1.5">·</span>
