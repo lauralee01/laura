@@ -59,6 +59,7 @@ export function useChat() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [streaming, setStreaming] = useState(false);
+  const [statusLabel, setStatusLabel] = useState<string | null>(null);
   const [initializing, setInitializing] = useState(true);
   const [creatingConversation, setCreatingConversation] =
     useState(false);
@@ -112,6 +113,7 @@ export function useChat() {
     streamAbortRef.current = null;
     setLoading(false);
     setStreaming(false);
+    setStatusLabel(null);
   }, []);
 
   const reloadSidebar = useCallback(async () => {
@@ -386,6 +388,7 @@ export function useChat() {
       setInput('');
       setLoading(true);
       setStreaming(false);
+      setStatusLabel(null);
       stickToBottomRef.current = true;
 
       /*
@@ -424,6 +427,7 @@ export function useChat() {
 
             if (!assistantStarted) {
               assistantStarted = true;
+              setStatusLabel(null);
               setLoading(false);
               setStreaming(true);
               setMessages((prev) => [
@@ -459,6 +463,12 @@ export function useChat() {
             });
           },
           abortController.signal,
+          (label: string) => {
+            if (generationId !== streamGenerationRef.current) {
+              return;
+            }
+            setStatusLabel(label);
+          },
         );
 
         if (generationId !== streamGenerationRef.current) {
@@ -466,6 +476,7 @@ export function useChat() {
         }
 
         setStreaming(false);
+        setStatusLabel(null);
 
         if (receipt || confirmPrompt) {
           setMessages((prev) => {
@@ -516,6 +527,7 @@ export function useChat() {
             : 'Something went wrong.';
 
         setError(errorMessage);
+        setStatusLabel(null);
 
         /*
          * Only roll back if we are still on the conversation that sent
@@ -535,6 +547,7 @@ export function useChat() {
         if (generationId === streamGenerationRef.current) {
           setLoading(false);
           setStreaming(false);
+          setStatusLabel(null);
           if (streamAbortRef.current === abortController) {
             streamAbortRef.current = null;
           }
@@ -687,6 +700,7 @@ export function useChat() {
     scrollContainerRef,
     updateStickToBottom,
     showThinking: loading && !streaming,
+    statusLabel,
     handleSubmit,
     sendMessage,
     stopStreaming: abortActiveStream,

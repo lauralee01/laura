@@ -9,6 +9,7 @@ import type { StoredChatMessage } from '@/lib/session';
 type Props = {
   messages: StoredChatMessage[];
   showThinking: boolean;
+  statusLabel?: string | null;
   streaming: boolean;
   initializing: boolean;
   bottomRef: RefObject<HTMLDivElement | null>;
@@ -71,6 +72,7 @@ function MessageMarkdown({ content }: { content: string }) {
 export const ChatMessageList = memo(function ChatMessageList({
   messages,
   showThinking,
+  statusLabel,
   streaming,
   bottomRef,
   scrollContainerRef,
@@ -185,7 +187,7 @@ export const ChatMessageList = memo(function ChatMessageList({
                 <span className="laura-think-dot h-1.5 w-1.5 rounded-full bg-accent/80" />
                 <span className="laura-think-dot h-1.5 w-1.5 rounded-full bg-accent/80" />
               </span>
-              <span>laura is thinking…</span>
+              <span>{statusLabel?.trim() || 'laura is thinking…'}</span>
             </div>
           </li>
         )}

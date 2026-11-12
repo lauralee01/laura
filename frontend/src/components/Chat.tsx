@@ -30,6 +30,7 @@ export function Chat() {
     scrollContainerRef,
     updateStickToBottom,
     showThinking,
+    statusLabel,
     handleSubmit,
     sendMessage,
     stopStreaming,
@@ -131,6 +132,7 @@ export function Chat() {
         <ChatMessageList
           messages={messages}
           showThinking={showThinking}
+          statusLabel={statusLabel}
           streaming={streaming}
           bottomRef={bottomRef}
           scrollContainerRef={scrollContainerRef}

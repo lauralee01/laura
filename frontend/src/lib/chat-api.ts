@@ -80,11 +80,23 @@ export async function sendChatMessage(input: {
   return { reply, conversationId };
 }
 
+function parseStatusLabel(value: unknown): string | undefined {
+  if (typeof value !== 'object' || value === null) {
+    return undefined;
+  }
+  const label = (value as { label?: unknown }).label;
+  if (typeof label !== 'string' || !label.trim()) {
+    return undefined;
+  }
+  return label.trim();
+}
+
 function consumeSseDataLine(
   jsonStr: string,
   onChunk: (chunk: string) => void,
   onReceipt?: (receipt: ActionReceipt) => void,
   onConfirmPrompt?: (prompt: ConfirmPrompt) => void,
+  onStatus?: (label: string) => void,
 ): string | undefined {
   let parsed: {
     chunk?: string;
@@ -94,6 +106,7 @@ function consumeSseDataLine(
     error?: string;
     receipt?: unknown;
     confirmPrompt?: unknown;
+    status?: unknown;
   };
 
   try {
@@ -108,6 +121,11 @@ function consumeSseDataLine(
 
   if (parsed.started) {
     return undefined;
+  }
+
+  const statusLabel = parseStatusLabel(parsed.status);
+  if (statusLabel) {
+    onStatus?.(statusLabel);
   }
 
   if (parsed.chunk) {
@@ -139,6 +157,7 @@ export async function sendChatMessageStream(
   },
   onChunk: (chunk: string) => void,
   signal?: AbortSignal,
+  onStatus?: (label: string) => void,
 ): Promise<{
   conversationId?: string;
   receipt?: ActionReceipt;
@@ -198,6 +217,7 @@ export async function sendChatMessageStream(
         (prompt) => {
           finalConfirmPrompt = prompt;
         },
+        onStatus,
       );
       if (conversationIdFromEvent) {
         finalConversationId = conversationIdFromEvent;
