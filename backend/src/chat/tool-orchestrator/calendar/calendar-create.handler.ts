@@ -6,6 +6,7 @@ import {
   type ToolReplyInput,
 } from '../../action-receipt.types';
 import { PendingRequestService } from '../../pending-request.service';
+import { SessionPreferencesService } from '../../session-preferences.service';
 import {
   CALENDAR_TIMEZONE_PROMPT,
   CalendarTimezoneService,
@@ -15,6 +16,7 @@ import { getSlotString } from '../tool-orchestrator.intent-slots';
 import { formatToolFailureMessage } from '../tool-orchestrator.utils';
 import type { PendingCalendarCreatePayload } from '../tool-orchestrator.types';
 import type { IntentEnvelope } from '../../intent/intent.types';
+import { DEFAULT_MEETING_MINUTES } from '../../session-prefs.types';
 
 function slotHintsFromEnvelope(envelope?: IntentEnvelope) {
   return {
@@ -31,7 +33,17 @@ export class CalendarCreateHandler {
     private readonly calendarService: CalendarService,
     private readonly pendingRequestService: PendingRequestService,
     private readonly timezoneService: CalendarTimezoneService,
+    private readonly sessionPreferences: SessionPreferencesService,
   ) { }
+
+  private async defaultMeetingMinutes(sessionId: string): Promise<number> {
+    try {
+      const prefs = await this.sessionPreferences.getSessionPrefs(sessionId);
+      return prefs.defaultMeetingMinutes || DEFAULT_MEETING_MINUTES;
+    } catch {
+      return DEFAULT_MEETING_MINUTES;
+    }
+  }
 
   private formatCalendarCreateSuccess(input: {
     title: string;
@@ -94,6 +106,7 @@ export class CalendarCreateHandler {
         baseMessage,
         timeZone,
         slotHintsFromEnvelope(envelope),
+        await this.defaultMeetingMinutes(sessionId),
       );
 
       if (
@@ -167,6 +180,8 @@ export class CalendarCreateHandler {
         this.llmService,
         originalMessage,
         timeZone,
+        undefined,
+        await this.defaultMeetingMinutes(sessionId),
       );
       if (!args || !args.title?.trim() || !args.start?.trim() || !args.end?.trim()) {
         await this.pendingRequestService.setPending<PendingCalendarCreatePayload>(

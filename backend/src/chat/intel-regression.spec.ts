@@ -117,6 +117,8 @@ describe('chat pipeline intelligence regressions', () => {
             getChatBootstrap: jest.fn(async () => ({
               timeZone: 'America/Chicago',
               location: null,
+              tone: 'warm',
+              defaultMeetingMinutes: 60,
               webSearch: null,
               tools: { ...toolPending },
             })),

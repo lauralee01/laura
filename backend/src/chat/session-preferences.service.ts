@@ -9,11 +9,21 @@ import {
   type ToolPendingMap,
   type WebSearchMissingLocationPending,
 } from './session-pending.types';
+import {
+  DEFAULT_MEETING_MINUTES,
+  DEFAULT_SESSION_TONE,
+  isSessionTone,
+  normalizeMeetingMinutes,
+  type SessionPrefs,
+  type SessionTone,
+} from './session-prefs.types';
 
 /** One-row chat bootstrap from `session_preferences`. */
 export type ChatSessionBootstrap = {
   timeZone: string | null;
   location: string | null;
+  tone: SessionTone;
+  defaultMeetingMinutes: number;
   webSearch: WebSearchMissingLocationPending | null;
   tools: ToolPendingMap;
 };
@@ -38,21 +48,18 @@ export class SessionPreferencesService implements OnModuleDestroy {
   async getChatBootstrap(sessionId: string): Promise<ChatSessionBootstrap> {
     const sid = (sessionId ?? '').trim();
     if (!sid) {
-      return {
-        timeZone: null,
-        location: null,
-        webSearch: null,
-        tools: {},
-      };
+      return this.emptyBootstrap();
     }
 
     const res = await this.pool.query<{
       timezone: string | null;
       location: string | null;
+      tone: string | null;
+      default_meeting_minutes: number | null;
       pending_action: unknown;
     }>(
       `
-      SELECT timezone, location, pending_action
+      SELECT timezone, location, tone, default_meeting_minutes, pending_action
       FROM session_preferences
       WHERE session_id = $1
       LIMIT 1;
@@ -62,21 +69,50 @@ export class SessionPreferencesService implements OnModuleDestroy {
 
     const row = res.rows[0];
     if (!row) {
-      return {
-        timeZone: null,
-        location: null,
-        webSearch: null,
-        tools: {},
-      };
+      return this.emptyBootstrap();
     }
 
     const doc = parsePendingDocument(row.pending_action ?? null);
     return {
       timeZone: row.timezone ?? null,
       location: row.location ?? null,
+      tone: this.coerceTone(row.tone),
+      defaultMeetingMinutes: this.coerceMeetingMinutes(
+        row.default_meeting_minutes,
+      ),
       webSearch: doc.webSearch ?? null,
       tools: { ...(doc.tools ?? {}) },
     };
+  }
+
+  async getSessionPrefs(sessionId: string): Promise<SessionPrefs> {
+    const bootstrap = await this.getChatBootstrap(sessionId);
+    return {
+      timeZone: bootstrap.timeZone,
+      location: bootstrap.location,
+      tone: bootstrap.tone,
+      defaultMeetingMinutes: bootstrap.defaultMeetingMinutes,
+    };
+  }
+
+  private emptyBootstrap(): ChatSessionBootstrap {
+    return {
+      timeZone: null,
+      location: null,
+      tone: DEFAULT_SESSION_TONE,
+      defaultMeetingMinutes: DEFAULT_MEETING_MINUTES,
+      webSearch: null,
+      tools: {},
+    };
+  }
+
+  private coerceTone(value: string | null | undefined): SessionTone {
+    return isSessionTone(value) ? value : DEFAULT_SESSION_TONE;
+  }
+
+  private coerceMeetingMinutes(value: number | null | undefined): number {
+    const normalized = normalizeMeetingMinutes(value);
+    return normalized ?? DEFAULT_MEETING_MINUTES;
   }
 
   private async readPendingDocument(
@@ -206,6 +242,72 @@ export class SessionPreferencesService implements OnModuleDestroy {
       updated_at = NOW();
     `,
       [sid, loc],
+    );
+  }
+
+  async clearLocation(sessionId: string): Promise<void> {
+    const sid = sessionId.trim();
+    if (!sid) return;
+
+    await this.pool.query(
+      `
+      INSERT INTO session_preferences (session_id, location, updated_at)
+      VALUES ($1, NULL, NOW())
+      ON CONFLICT (session_id)
+      DO UPDATE SET
+        location = NULL,
+        updated_at = NOW();
+      `,
+      [sid],
+    );
+  }
+
+  async setTone(sessionId: string, tone: SessionTone): Promise<void> {
+    const sid = sessionId.trim();
+    if (!sid) return;
+    if (!isSessionTone(tone)) {
+      throw new BadRequestException(
+        'tone must be one of: warm, concise, casual',
+      );
+    }
+
+    await this.pool.query(
+      `
+      INSERT INTO session_preferences (session_id, tone, updated_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (session_id)
+      DO UPDATE SET
+        tone = EXCLUDED.tone,
+        updated_at = NOW();
+      `,
+      [sid, tone],
+    );
+  }
+
+  async setDefaultMeetingMinutes(
+    sessionId: string,
+    minutes: number,
+  ): Promise<void> {
+    const sid = sessionId.trim();
+    if (!sid) return;
+
+    const normalized = normalizeMeetingMinutes(minutes);
+    if (normalized === null) {
+      throw new BadRequestException(
+        'defaultMeetingMinutes must be an integer between 15 and 180',
+      );
+    }
+
+    await this.pool.query(
+      `
+      INSERT INTO session_preferences (session_id, default_meeting_minutes, updated_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (session_id)
+      DO UPDATE SET
+        default_meeting_minutes = EXCLUDED.default_meeting_minutes,
+        updated_at = NOW();
+      `,
+      [sid, normalized],
     );
   }
 

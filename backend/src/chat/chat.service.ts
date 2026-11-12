@@ -32,6 +32,10 @@ import type {
 import { logChatPerf } from './chat-perf';
 import type { ToolPendingMap } from './session-pending.types';
 import { labelForToolTurn } from './tool-status';
+import {
+  DEFAULT_MEETING_MINUTES,
+  DEFAULT_SESSION_TONE,
+} from './session-prefs.types';
 
 type ChatReply = {
   reply: string;
@@ -101,6 +105,8 @@ export class ChatService {
         : Promise.resolve({
             timeZone: null as string | null,
             location: null as string | null,
+            tone: DEFAULT_SESSION_TONE,
+            defaultMeetingMinutes: DEFAULT_MEETING_MINUTES,
             webSearch: null,
             tools: {} as ToolPendingMap,
           }),
@@ -108,6 +114,7 @@ export class ChatService {
     const pendingAction = sessionBootstrap.webSearch;
     const sessionTz = sessionBootstrap.timeZone;
     const storedLocation = sessionBootstrap.location;
+    const sessionTone = sessionBootstrap.tone ?? DEFAULT_SESSION_TONE;
     const toolPending = sessionId
       ? await this.pendingRequestService.activateToolsSnapshot(
           sessionId,
@@ -412,6 +419,7 @@ export class ChatService {
       storedLocation: effectiveLocation,
       memories,
       intent: envelope?.intent,
+      tone: sessionTone,
     });
 
     const llmStart = performance.now();

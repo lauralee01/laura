@@ -13,7 +13,19 @@ describe('AppController', () => {
         AppService,
         {
           provide: SessionPreferencesService,
-          useValue: { setTimeZone: jest.fn() },
+          useValue: {
+            setTimeZone: jest.fn(),
+            getSessionPrefs: jest.fn(async () => ({
+              timeZone: null,
+              location: null,
+              tone: 'warm',
+              defaultMeetingMinutes: 60,
+            })),
+            setLocation: jest.fn(),
+            clearLocation: jest.fn(),
+            setTone: jest.fn(),
+            setDefaultMeetingMinutes: jest.fn(),
+          },
         },
       ],
     }).compile();

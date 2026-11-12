@@ -3,6 +3,21 @@ import { DateTime } from 'luxon';
 const LOCAL_DATE_TIME_FORMAT = "yyyy-MM-dd'T'HH:mm:ss";
 const DEFAULT_EVENT_DURATION_MILLISECONDS = 60 * 60 * 1000;
 
+/** Optional override for session default meeting length (ms). */
+export function defaultEventDurationMs(
+  meetingMinutes?: number,
+): number {
+  if (
+    typeof meetingMinutes === 'number' &&
+    Number.isFinite(meetingMinutes) &&
+    meetingMinutes >= 15 &&
+    meetingMinutes <= 180
+  ) {
+    return Math.round(meetingMinutes) * 60 * 1000;
+  }
+  return DEFAULT_EVENT_DURATION_MILLISECONDS;
+}
+
 const DEBUG_LOG_PREFIX = '[calendar-time-only-merge]';
 
 /**

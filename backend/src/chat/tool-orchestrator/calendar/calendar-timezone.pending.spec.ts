@@ -37,6 +37,12 @@ describe('calendar missing-timezone pending', () => {
           useValue: {
             getTimeZone,
             setTimeZone: jest.fn(),
+            getSessionPrefs: jest.fn(async () => ({
+              timeZone: null,
+              location: null,
+              tone: 'warm',
+              defaultMeetingMinutes: 60,
+            })),
             getToolPendingMap: jest.fn(async () => ({ ...toolMap })),
             saveToolPendingMap: jest.fn(async (_sid: string, tools: ToolPendingMap) => {
               toolMap = { ...tools };

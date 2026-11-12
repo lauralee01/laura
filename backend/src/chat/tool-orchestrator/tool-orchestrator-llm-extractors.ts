@@ -115,12 +115,17 @@ export async function extractCalendarEventArgs(
   message: string,
   timeZone: string,
   slotHints?: CalendarEventSlotHints,
+  defaultMeetingMinutes = 60,
 ): Promise<CalendarEventArgs | null> {
   if (!message?.trim()) return null;
 
   const hintTitle = slotHints?.title?.trim();
   const hintStart = slotHints?.start?.trim();
   const hintEnd = slotHints?.end?.trim();
+  const meetingMinutes = Math.max(
+    15,
+    Math.min(180, Math.round(defaultMeetingMinutes) || 60),
+  );
 
   /*
    * Slot-first: when Stage-1 already filled title + times, skip the second LLM.
@@ -141,6 +146,11 @@ export async function extractCalendarEventArgs(
   if (hintStart) knownBits.push(`Known start: ${hintStart}`);
   if (hintEnd) knownBits.push(`Known end: ${hintEnd}`);
 
+  const durationRule =
+    meetingMinutes === 60
+      ? 'If no end time given, end = start + 1 hour.'
+      : `If no end time given, end = start + ${meetingMinutes} minutes.`;
+
   const systemPrompt =
     `Extract calendar event arguments. Return JSON only:\n` +
     `{\n` +
@@ -154,7 +164,7 @@ export async function extractCalendarEventArgs(
     `- Today in ${timeZone} is ${todayInZone}.\n` +
     `- Month+day without year: pick NEXT occurrence on/after ${todayInZone}.\n` +
     `- start/end: ISO datetime strings in LOCAL time for ${timeZone} (format: YYYY-MM-DDTHH:mm:ss, NO 'Z' or offset).\n` +
-    `- If no end time given, end = start + 1 hour.\n` +
+    `- ${durationRule}\n` +
     `- If start undetermined, set start & end to null.` +
     (knownBits.length
       ? `\n- Prefer these Stage-1 hints when filling gaps:\n  ${knownBits.join('\n  ')}`
