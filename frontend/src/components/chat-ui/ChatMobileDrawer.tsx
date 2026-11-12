@@ -17,6 +17,7 @@ type Props = {
   onDelete: (id: string) => void | Promise<void>;
   disabled: boolean;
   onOpenMemories?: () => void;
+  onOpenSettings?: () => void;
 };
 
 export const ChatMobileDrawer = memo(function ChatMobileDrawer({
@@ -24,6 +25,7 @@ export const ChatMobileDrawer = memo(function ChatMobileDrawer({
   open,
   onClose,
   onOpenMemories,
+  onOpenSettings,
   ...listProps
 }: Props) {
   if (!open) {
@@ -60,6 +62,16 @@ export const ChatMobileDrawer = memo(function ChatMobileDrawer({
         <SidebarConversationList {...listProps} />
         <div className="shrink-0 space-y-2 border-t border-border-subtle px-4 py-3">
           <GoogleConnectButton sessionReady={sessionReady} variant="sidebar" />
+          {onOpenSettings ? (
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              disabled={!sessionReady}
+              className="w-full rounded-[var(--radius-md)] border border-border-subtle bg-surface-elevated px-3 py-2 text-left text-xs font-medium text-ink transition hover:border-accent/30 hover:bg-accent-soft/40 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Settings
+            </button>
+          ) : null}
           {onOpenMemories ? (
             <button
               type="button"

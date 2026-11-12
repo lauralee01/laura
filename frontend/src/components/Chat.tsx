@@ -10,6 +10,7 @@ import {
   ChatMobileDrawer,
   GoogleConnectTip,
   MemoryBrowserPanel,
+  SettingsPanel,
   MobileChatHeader,
 } from '@/components/chat-ui';
 
@@ -44,6 +45,7 @@ export function Chat() {
   } = useChat();
 
   const [memoriesOpen, setMemoriesOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   /*
    * Keep composer + sidebar locked for the full stream lifecycle, not just
@@ -87,11 +89,22 @@ export function Chat() {
 
   const onOpenMemories = useCallback(() => {
     setSidebarOpen(false);
+    setSettingsOpen(false);
     setMemoriesOpen(true);
   }, [setSidebarOpen]);
 
   const onCloseMemories = useCallback(() => {
     setMemoriesOpen(false);
+  }, []);
+
+  const onOpenSettings = useCallback(() => {
+    setSidebarOpen(false);
+    setMemoriesOpen(false);
+    setSettingsOpen(true);
+  }, [setSidebarOpen]);
+
+  const onCloseSettings = useCallback(() => {
+    setSettingsOpen(false);
   }, []);
 
   const sidebarProps = {
@@ -103,6 +116,7 @@ export function Chat() {
     onDelete,
     disabled: sidebarDisabled,
     onOpenMemories,
+    onOpenSettings,
   };
 
   /**
@@ -171,6 +185,12 @@ export function Chat() {
       <MemoryBrowserPanel
         open={memoriesOpen}
         onClose={onCloseMemories}
+        sessionReady={sessionReady}
+      />
+
+      <SettingsPanel
+        open={settingsOpen}
+        onClose={onCloseSettings}
         sessionReady={sessionReady}
       />
     </div>

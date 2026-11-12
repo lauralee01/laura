@@ -14,11 +14,13 @@ type Props = {
   onDelete: (id: string) => void | Promise<void>;
   disabled: boolean;
   onOpenMemories?: () => void;
+  onOpenSettings?: () => void;
 };
 
 export const ChatDesktopSidebar = memo(function ChatDesktopSidebar({
   sessionReady,
   onOpenMemories,
+  onOpenSettings,
   ...props
 }: Props) {
   return (
@@ -31,16 +33,28 @@ export const ChatDesktopSidebar = memo(function ChatDesktopSidebar({
       <SidebarConversationList {...props} />
       <footer className="shrink-0 space-y-2.5 border-t border-border-subtle px-4 py-3">
         <GoogleConnectButton sessionReady={sessionReady} variant="sidebar" />
-        {onOpenMemories ? (
-          <button
-            type="button"
-            onClick={onOpenMemories}
-            disabled={!sessionReady}
-            className="w-full rounded-[var(--radius-md)] border border-border-subtle bg-surface-elevated px-3 py-2 text-left text-xs font-medium text-ink transition hover:border-accent/30 hover:bg-accent-soft/40 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Memories
-          </button>
-        ) : null}
+        <div className="flex flex-col gap-2">
+          {onOpenSettings ? (
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              disabled={!sessionReady}
+              className="w-full rounded-[var(--radius-md)] border border-border-subtle bg-surface-elevated px-3 py-2 text-left text-xs font-medium text-ink transition hover:border-accent/30 hover:bg-accent-soft/40 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Settings
+            </button>
+          ) : null}
+          {onOpenMemories ? (
+            <button
+              type="button"
+              onClick={onOpenMemories}
+              disabled={!sessionReady}
+              className="w-full rounded-[var(--radius-md)] border border-border-subtle bg-surface-elevated px-3 py-2 text-left text-xs font-medium text-ink transition hover:border-accent/30 hover:bg-accent-soft/40 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Memories
+            </button>
+          ) : null}
+        </div>
         <p className="text-center text-[11px] text-ink-muted">
           <span>© {new Date().getFullYear()} Laura</span>
           <span className="mx-1.5">·</span>
