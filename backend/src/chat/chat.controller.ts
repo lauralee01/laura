@@ -236,6 +236,13 @@ export class ChatController {
           }
         },
         abortController.signal,
+        (label: string) => {
+          if (!abortController.signal.aborted && !res.writableEnded) {
+            res.write(
+              `data: ${JSON.stringify({ status: { label } })}\n\n`,
+            );
+          }
+        },
       );
 
       if (abortController.signal.aborted || res.writableEnded) {

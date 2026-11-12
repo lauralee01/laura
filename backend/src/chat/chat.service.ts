@@ -31,6 +31,7 @@ import type {
 } from './action-receipt.types';
 import { logChatPerf } from './chat-perf';
 import type { ToolPendingMap } from './session-pending.types';
+import { labelForToolTurn } from './tool-status';
 
 type ChatReply = {
   reply: string;
@@ -64,6 +65,7 @@ export class ChatService {
     conversationId?: string,
     onChunk?: (chunk: string) => void,
     signal?: AbortSignal,
+    onStatus?: (label: string) => void,
   ): Promise<ChatReply> {
     const requestStart = performance.now();
     let firstTokenMs: number | undefined;
@@ -224,6 +226,10 @@ export class ChatService {
         },
       } as unknown as IntentEnvelope;
 
+      if (!signal?.aborted) {
+        onStatus?.('Searching the web…');
+      }
+
       const searchResult = await this.toolOrchestrator.handleWebSearchIntent(
         sessionId,
         pendingAction.message,
@@ -334,6 +340,11 @@ export class ChatService {
     }
 
     const routeStart = performance.now();
+    const statusLabel = labelForToolTurn(envelope?.intent, toolPending);
+    if (statusLabel && !signal?.aborted) {
+      onStatus?.(statusLabel);
+    }
+
     const toolResult = await this.toolRouting.resolveToolReply({
       sessionId,
       message,
