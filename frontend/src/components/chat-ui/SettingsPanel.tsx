@@ -66,6 +66,14 @@ export function SettingsPanel({ open, onClose, sessionReady }: Props) {
     void load();
   }, [open, load]);
 
+  useEffect(() => {
+    if (!savedFlash) {
+      return;
+    }
+    const id = window.setTimeout(() => setSavedFlash(false), 4000);
+    return () => window.clearTimeout(id);
+  }, [savedFlash]);
+
   const save = async () => {
     const minutes = Number(meetingMinutes);
     if (!Number.isFinite(minutes) || minutes < 15 || minutes > 180) {
@@ -120,6 +128,25 @@ export function SettingsPanel({ open, onClose, sessionReady }: Props) {
         onClick={onClose}
       />
 
+      {savedFlash ? (
+        <div
+          role="status"
+          className="fixed top-4 left-1/2 z-[70] max-w-md -translate-x-1/2 rounded-[var(--radius-lg)] border border-success/30 bg-success-soft px-4 py-3 text-sm shadow-soft"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <p className="leading-snug text-ink">Settings saved.</p>
+            <button
+              type="button"
+              onClick={() => setSavedFlash(false)}
+              className="shrink-0 rounded-[var(--radius-sm)] px-1.5 py-0.5 text-ink-muted transition hover:bg-canvas-mid hover:text-ink"
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <aside className="relative flex h-full w-full max-w-[24rem] flex-col border-l border-border-subtle bg-surface shadow-soft">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border-subtle px-4 py-3.5">
           <div className="min-w-0">
@@ -146,12 +173,6 @@ export function SettingsPanel({ open, onClose, sessionReady }: Props) {
           {error ? (
             <p className="mb-3 rounded-[var(--radius-md)] border border-danger/30 bg-danger-soft px-3 py-2 text-xs text-danger">
               {error}
-            </p>
-          ) : null}
-
-          {savedFlash ? (
-            <p className="mb-3 rounded-[var(--radius-md)] border border-accent/30 bg-accent-soft/60 px-3 py-2 text-xs text-accent">
-              Saved.
             </p>
           ) : null}
 
