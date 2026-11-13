@@ -36,6 +36,7 @@ export function MemoryBrowserPanel({ open, onClose, sessionReady }: Props) {
   const [deleteTarget, setDeleteTarget] = useState<MemoryItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [editSavedFlash, setEditSavedFlash] = useState(false);
+  const [deleteSavedFlash, setDeleteSavedFlash] = useState(false);
 
   const load = useCallback(async () => {
     if (!sessionReady) {
@@ -62,6 +63,7 @@ export function MemoryBrowserPanel({ open, onClose, sessionReady }: Props) {
       setDeleteTarget(null);
       setError(null);
       setEditSavedFlash(false);
+      setDeleteSavedFlash(false);
       return;
     }
     void load();
@@ -74,6 +76,14 @@ export function MemoryBrowserPanel({ open, onClose, sessionReady }: Props) {
     const id = window.setTimeout(() => setEditSavedFlash(false), 4000);
     return () => window.clearTimeout(id);
   }, [editSavedFlash]);
+
+  useEffect(() => {
+    if (!deleteSavedFlash) {
+      return;
+    }
+    const id = window.setTimeout(() => setDeleteSavedFlash(false), 4000);
+    return () => window.clearTimeout(id);
+  }, [deleteSavedFlash]);
 
   const startEdit = (item: MemoryItem) => {
     setEditingId(item.id);
@@ -122,6 +132,7 @@ export function MemoryBrowserPanel({ open, onClose, sessionReady }: Props) {
     }
     setDeleting(true);
     setError(null);
+    setDeleteSavedFlash(false);
     try {
       await deleteMemory(deleteTarget.id);
       setMemories((prev) => prev.filter((m) => m.id !== deleteTarget.id));
@@ -129,6 +140,7 @@ export function MemoryBrowserPanel({ open, onClose, sessionReady }: Props) {
         cancelEdit();
       }
       setDeleteTarget(null);
+      setDeleteSavedFlash(true);
     } catch (err: unknown) {
       setError(
         err instanceof Error ? err.message : 'Could not delete memory.',
@@ -166,6 +178,25 @@ export function MemoryBrowserPanel({ open, onClose, sessionReady }: Props) {
             <button
               type="button"
               onClick={() => setEditSavedFlash(false)}
+              className="shrink-0 rounded-[var(--radius-sm)] px-1.5 py-0.5 text-ink-muted transition hover:bg-canvas-mid hover:text-ink"
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {deleteSavedFlash ? (
+        <div
+          role="status"
+          className="fixed top-4 left-1/2 z-[80] max-w-md -translate-x-1/2 rounded-[var(--radius-lg)] border border-success/30 bg-success-soft px-4 py-3 text-sm shadow-soft"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <p className="leading-snug text-ink">Memory deleted.</p>
+            <button
+              type="button"
+              onClick={() => setDeleteSavedFlash(false)}
               className="shrink-0 rounded-[var(--radius-sm)] px-1.5 py-0.5 text-ink-muted transition hover:bg-canvas-mid hover:text-ink"
               aria-label="Dismiss"
             >
