@@ -35,6 +35,7 @@ export function MemoryBrowserPanel({ open, onClose, sessionReady }: Props) {
   const [savingId, setSavingId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<MemoryItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [editSavedFlash, setEditSavedFlash] = useState(false);
 
   const load = useCallback(async () => {
     if (!sessionReady) {
@@ -60,10 +61,19 @@ export function MemoryBrowserPanel({ open, onClose, sessionReady }: Props) {
       setEditDraft('');
       setDeleteTarget(null);
       setError(null);
+      setEditSavedFlash(false);
       return;
     }
     void load();
   }, [open, load]);
+
+  useEffect(() => {
+    if (!editSavedFlash) {
+      return;
+    }
+    const id = window.setTimeout(() => setEditSavedFlash(false), 4000);
+    return () => window.clearTimeout(id);
+  }, [editSavedFlash]);
 
   const startEdit = (item: MemoryItem) => {
     setEditingId(item.id);
@@ -88,6 +98,7 @@ export function MemoryBrowserPanel({ open, onClose, sessionReady }: Props) {
 
     setSavingId(editingId);
     setError(null);
+    setEditSavedFlash(false);
     try {
       const updated = await updateMemory(editingId, content);
       setMemories((prev) =>
@@ -95,6 +106,7 @@ export function MemoryBrowserPanel({ open, onClose, sessionReady }: Props) {
       );
       setEditingId(null);
       setEditDraft('');
+      setEditSavedFlash(true);
     } catch (err: unknown) {
       setError(
         err instanceof Error ? err.message : 'Could not save memory.',
@@ -143,6 +155,25 @@ export function MemoryBrowserPanel({ open, onClose, sessionReady }: Props) {
         aria-label="Close memories"
         onClick={onClose}
       />
+
+      {editSavedFlash ? (
+        <div
+          role="status"
+          className="fixed top-4 left-1/2 z-[80] max-w-md -translate-x-1/2 rounded-[var(--radius-lg)] border border-success/30 bg-success-soft px-4 py-3 text-sm shadow-soft"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <p className="leading-snug text-ink">Memory updated.</p>
+            <button
+              type="button"
+              onClick={() => setEditSavedFlash(false)}
+              className="shrink-0 rounded-[var(--radius-sm)] px-1.5 py-0.5 text-ink-muted transition hover:bg-canvas-mid hover:text-ink"
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <aside className="relative flex h-full w-full max-w-[24rem] flex-col border-l border-border-subtle bg-surface shadow-soft">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border-subtle px-4 py-3.5">
