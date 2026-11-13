@@ -163,7 +163,7 @@ export function MemoryBrowserPanel({ open, onClose, sessionReady }: Props) {
     >
       <button
         type="button"
-        className="absolute inset-0 bg-ink/40 backdrop-blur-[1px]"
+        className="absolute inset-0 bg-black/65 backdrop-blur-[1px]"
         aria-label="Close memories"
         onClick={onClose}
       />
@@ -322,7 +322,7 @@ export function MemoryBrowserPanel({ open, onClose, sessionReady }: Props) {
 
       {deleteTarget ? (
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/45 p-4 backdrop-blur-[1px]"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-4 backdrop-blur-[1px]"
           role="alertdialog"
           aria-modal="true"
           aria-labelledby="delete-memory-title"
