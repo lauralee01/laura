@@ -203,7 +203,7 @@ export function SidebarConversationList({
 
       {renameTarget && (
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/40 p-4 backdrop-blur-[1px]"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-4 backdrop-blur-[1px]"
           role="dialog"
           aria-modal="true"
           aria-labelledby="rename-chat-title"
@@ -259,7 +259,7 @@ export function SidebarConversationList({
 
       {deleteConfirm && (
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/45 p-4 backdrop-blur-[1px]"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-4 backdrop-blur-[1px]"
           role="alertdialog"
           aria-modal="true"
           aria-labelledby="delete-chat-title"
