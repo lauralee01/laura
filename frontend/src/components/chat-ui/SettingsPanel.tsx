@@ -123,7 +123,7 @@ export function SettingsPanel({ open, onClose, sessionReady }: Props) {
     >
       <button
         type="button"
-        className="absolute inset-0 bg-ink/40 backdrop-blur-[1px]"
+        className="absolute inset-0 bg-black/65 backdrop-blur-[1px]"
         aria-label="Close settings"
         onClick={onClose}
       />
