@@ -261,7 +261,7 @@ export function SettingsPanel({ open, onClose, sessionReady }: Props) {
             type="button"
             disabled={saving || loading}
             onClick={() => void save()}
-            className="w-full rounded-[var(--radius-md)] bg-accent px-3 py-2.5 text-sm font-medium text-surface-elevated transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full cursor-pointer rounded-[var(--radius-md)] bg-accent px-3 py-2.5 text-sm font-medium text-surface-elevated transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? 'Saving…' : 'Save settings'}
           </button>
