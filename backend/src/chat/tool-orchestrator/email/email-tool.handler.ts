@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { EmailService } from '../../../integrations/email/email.service';
 import { LlmService } from '../../../llm/llm.service';
 import {
+  EMAIL_RECIPIENT_CONFIRM_PROMPT,
   EMAIL_SEND_CONFIRM_PROMPT,
   toolOk,
   toolConfirm,
@@ -59,6 +60,7 @@ export class EmailToolHandler {
     sessionId: string,
     message: string,
     envelope?: IntentEnvelope,
+    conversationId?: string,
   ): Promise<ToolReplyInput> {
     const pendingDraft =
       await this.pendingRequestService.getPending<PendingEmailDraftPayload>(
@@ -67,7 +69,13 @@ export class EmailToolHandler {
       );
 
     if (pendingDraft) {
-      return this.continuePendingEmailDraft(sessionId, message, pendingDraft, envelope);
+      return this.continuePendingEmailDraft(
+        sessionId,
+        message,
+        pendingDraft,
+        envelope,
+        conversationId,
+      );
     }
 
     /*
@@ -84,6 +92,11 @@ export class EmailToolHandler {
               (v): v is string => typeof v === 'string' && v.includes('@'),
             )
           : [];
+
+    const emailInMessage = this.extractEmail(message);
+    if (!recipients.length && emailInMessage) {
+      recipients = [emailInMessage];
+    }
 
     let recipientName =
       typeof slots.recipient === 'string' && slots.recipient.trim()
@@ -130,6 +143,37 @@ export class EmailToolHandler {
       }
     }
 
+    if (!recipients.length && recipientName && context?.trim()) {
+      const known = await this.sessionPreferences.findEmailContact(
+        sessionId,
+        conversationId,
+        recipientName,
+      );
+      if (known) {
+        await this.pendingRequestService.setPending<PendingEmailDraftPayload>(
+          sessionId,
+          {
+            actionType: 'email_draft',
+            originalMessage: message,
+            payload: {
+              recipients: [known.email],
+              recipientName,
+              subject,
+              context,
+              tone,
+            },
+            missingSlots: ['confirmation'],
+            collectedSlots: {},
+          },
+        );
+
+        return toolConfirm(
+          `I have ${known.email} for ${recipientName} from earlier in this chat. Use that?`,
+          EMAIL_RECIPIENT_CONFIRM_PROMPT,
+        );
+      }
+    }
+
     if (!recipients.length || !context?.trim()) {
       await this.pendingRequestService.setPending<PendingEmailDraftPayload>(
         sessionId,
@@ -157,12 +201,18 @@ export class EmailToolHandler {
       return 'I have the recipient. What should the email say?';
     }
 
-    return this.createGmailDraft(sessionId, message, {
-      recipients,
-      subject,
-      context,
-      tone,
-    });
+    return this.createGmailDraft(
+      sessionId,
+      message,
+      {
+        recipients,
+        subject,
+        context,
+        tone,
+        recipientName,
+      },
+      conversationId,
+    );
   }
 
   private async continuePendingEmailDraft(
@@ -170,15 +220,93 @@ export class EmailToolHandler {
     message: string,
     pendingDraft: PendingRequest<PendingEmailDraftPayload>,
     envelope?: IntentEnvelope,
+    conversationId?: string,
   ): Promise<ToolReplyInput> {
     const slots = envelope?.slots ?? {};
     const emailFromMessage = this.extractEmail(message);
+    const awaitingRecipientConfirm =
+      pendingDraft.missingSlots.includes('confirmation');
+
+    if (awaitingRecipientConfirm) {
+      const wantsDifferent =
+        envelope?.intent === 'pending_cancel' ||
+        /\bdifferent(\s+address)?\b/i.test(message.trim()) ||
+        /^cancel$/i.test(message.trim());
+
+      if (wantsDifferent) {
+        await this.pendingRequestService.setPending<PendingEmailDraftPayload>(
+          sessionId,
+          {
+            actionType: 'email_draft',
+            originalMessage: pendingDraft.originalMessage,
+            payload: {
+              ...pendingDraft.payload,
+              recipients: [],
+            },
+            missingSlots: ['recipientEmail'],
+            collectedSlots: {},
+          },
+        );
+        return pendingDraft.payload.recipientName
+          ? `Got it. What email address should I use for ${pendingDraft.payload.recipientName}?`
+          : 'Got it. What email address should I send it to?';
+      }
+
+      if (emailFromMessage) {
+        await this.pendingRequestService.clearPending(sessionId, 'email_draft');
+        return this.createGmailDraft(
+          sessionId,
+          pendingDraft.originalMessage,
+          {
+            recipients: [emailFromMessage],
+            subject: pendingDraft.payload.subject,
+            context: pendingDraft.payload.context ?? '',
+            tone: pendingDraft.payload.tone,
+            recipientName: pendingDraft.payload.recipientName,
+          },
+          conversationId,
+        );
+      }
+
+      const affirmed =
+        envelope?.intent === 'pending_confirm' ||
+        /^(yes|y|use|ok|okay)$/i.test(message.trim());
+
+      if (
+        affirmed &&
+        pendingDraft.payload.recipients?.length &&
+        pendingDraft.payload.context?.trim()
+      ) {
+        await this.pendingRequestService.clearPending(sessionId, 'email_draft');
+        return this.createGmailDraft(
+          sessionId,
+          pendingDraft.originalMessage,
+          {
+            recipients: pendingDraft.payload.recipients,
+            subject: pendingDraft.payload.subject,
+            context: pendingDraft.payload.context,
+            tone: pendingDraft.payload.tone,
+            recipientName: pendingDraft.payload.recipientName,
+          },
+          conversationId,
+        );
+      }
+
+      const knownEmail = pendingDraft.payload.recipients?.[0];
+      const name = pendingDraft.payload.recipientName;
+      return toolConfirm(
+        knownEmail && name
+          ? `I have ${knownEmail} for ${name} from earlier in this chat. Use that?`
+          : 'Should I use the email from earlier in this chat?',
+        EMAIL_RECIPIENT_CONFIRM_PROMPT,
+      );
+    }
 
     const recipients =
-      pendingDraft.payload.recipients?.length
-        ? pendingDraft.payload.recipients
-        : emailFromMessage
-          ? [emailFromMessage]
+      emailFromMessage
+        ? [emailFromMessage]
+        : pendingDraft.payload.recipients?.length
+          ? pendingDraft.payload.recipients
           : typeof slots.recipientEmail === 'string'
             ? [slots.recipientEmail]
             : [];
@@ -232,12 +360,18 @@ export class EmailToolHandler {
 
     await this.pendingRequestService.clearPending(sessionId, 'email_draft');
 
-    return this.createGmailDraft(sessionId, pendingDraft.originalMessage, {
-      recipients,
-      subject,
-      context,
-      tone,
-    });
+    return this.createGmailDraft(
+      sessionId,
+      pendingDraft.originalMessage,
+      {
+        recipients,
+        subject,
+        context,
+        tone,
+        recipientName: pendingDraft.payload.recipientName,
+      },
+      conversationId,
+    );
   }
 
   private async createGmailDraft(
@@ -248,9 +382,20 @@ export class EmailToolHandler {
       subject?: string;
       context: string;
       tone?: string;
+      recipientName?: string;
     },
+    conversationId?: string,
   ): Promise<ToolReplyInput> {
     try {
+      if (args.recipientName && args.recipients[0]) {
+        await this.sessionPreferences.upsertEmailContact(
+          sessionId,
+          conversationId,
+          args.recipientName,
+          args.recipients[0],
+        );
+      }
+
       const draft = await this.emailService.draftEmail({
         sessionId,
         recipients: args.recipients,
@@ -353,6 +498,7 @@ export class EmailToolHandler {
     sessionId: string,
     message: string,
     envelope: IntentEnvelope,
+    _conversationId?: string,
   ): Promise<ToolReplyInput> {
     if (isEmailDraftDeleteRequest(message, envelope)) {
       return this.deleteRememberedDraft(sessionId, message, envelope);
@@ -410,6 +556,7 @@ export class EmailToolHandler {
     sessionId: string,
     message: string,
     envelope: IntentEnvelope,
+    conversationId?: string,
   ): Promise<ToolReplyInput | null> {
     const pendingDraft =
       await this.pendingRequestService.getPending<PendingEmailDraftPayload>(
@@ -418,7 +565,13 @@ export class EmailToolHandler {
       );
 
     if (pendingDraft) {
-      return this.continuePendingEmailDraft(sessionId, message, pendingDraft, envelope);
+      return this.continuePendingEmailDraft(
+        sessionId,
+        message,
+        pendingDraft,
+        envelope,
+        conversationId,
+      );
     }
 
     const pendingSend =
@@ -448,7 +601,12 @@ export class EmailToolHandler {
 
       if (envelope.intent === 'email_draft') {
         await this.pendingRequestService.clearPending(sessionId, 'email_send');
-        return this.handleEmailDraftIntent(sessionId, message, envelope);
+        return this.handleEmailDraftIntent(
+          sessionId,
+          message,
+          envelope,
+          conversationId,
+        );
       }
 
       return null;
@@ -459,11 +617,21 @@ export class EmailToolHandler {
       envelope.intent === 'email_draft_revise' ||
       isEmailDraftDeleteRequest(message, envelope)
     ) {
-      return this.handleEmailDraftFollowUp(sessionId, message, envelope);
+      return this.handleEmailDraftFollowUp(
+        sessionId,
+        message,
+        envelope,
+        conversationId,
+      );
     }
 
     if (envelope.intent === 'email_draft') {
-      return this.handleEmailDraftIntent(sessionId, message, envelope);
+      return this.handleEmailDraftIntent(
+        sessionId,
+        message,
+        envelope,
+        conversationId,
+      );
     }
 
     return null;

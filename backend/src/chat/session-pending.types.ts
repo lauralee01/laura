@@ -57,6 +57,17 @@ export type LastEmailDraft = {
 };
 
 /**
+ * Name→email learned from drafts in a single conversation (feature #9b).
+ * Not a cross-chat contacts book.
+ */
+export type ConversationEmailContact = {
+  name: string;
+  email: string;
+  conversationId: string;
+  updatedAt: number;
+};
+
+/**
  * Unified `session_preferences.pending_action` document.
  * Replaces the old single web-search-only JSON blob and the in-memory tool map.
  */
@@ -65,10 +76,21 @@ export type SessionPendingDocument = {
   webSearch?: WebSearchMissingLocationPending | null;
   tools?: ToolPendingMap;
   lastEmailDraft?: LastEmailDraft | null;
+  emailContacts?: ConversationEmailContact[];
 };
 
 export function emptyPendingDocument(): SessionPendingDocument {
-  return { version: 1, webSearch: null, tools: {}, lastEmailDraft: null };
+  return {
+    version: 1,
+    webSearch: null,
+    tools: {},
+    lastEmailDraft: null,
+    emailContacts: [],
+  };
+}
+
+export function normalizeContactName(name: string): string {
+  return name.trim().toLowerCase();
 }
 
 export function parsePendingDocument(raw: unknown): SessionPendingDocument {
@@ -103,8 +125,9 @@ export function parsePendingDocument(raw: unknown): SessionPendingDocument {
         : null;
 
     const lastEmailDraft = parseLastEmailDraft(obj['lastEmailDraft']);
+    const emailContacts = parseEmailContacts(obj['emailContacts']);
 
-    return { version: 1, webSearch, tools, lastEmailDraft };
+    return { version: 1, webSearch, tools, lastEmailDraft, emailContacts };
   }
 
   return emptyPendingDocument();
@@ -133,4 +156,33 @@ function parseLastEmailDraft(raw: unknown): LastEmailDraft | null {
       : Date.now();
 
   return { draftId, recipients, subject, body, updatedAt };
+}
+
+function parseEmailContacts(raw: unknown): ConversationEmailContact[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  const out: ConversationEmailContact[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      continue;
+    }
+    const obj = item as Record<string, unknown>;
+    const name = typeof obj.name === 'string' ? obj.name.trim() : '';
+    const email = typeof obj.email === 'string' ? obj.email.trim() : '';
+    const conversationId =
+      typeof obj.conversationId === 'string'
+        ? obj.conversationId.trim()
+        : '';
+    if (!name || !email.includes('@') || !conversationId) {
+      continue;
+    }
+    const updatedAt =
+      typeof obj.updatedAt === 'number' && Number.isFinite(obj.updatedAt)
+        ? obj.updatedAt
+        : Date.now();
+    out.push({ name, email, conversationId, updatedAt });
+  }
+  return out;
 }

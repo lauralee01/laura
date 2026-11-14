@@ -30,5 +30,32 @@ describe('parsePendingDocument', () => {
     });
 
     expect(doc.tools?.email_draft?.actionType).toBe('email_draft');
+    expect(doc.emailContacts).toEqual([]);
+  });
+
+  it('parses conversation email contacts', () => {
+    const doc = parsePendingDocument({
+      version: 1,
+      webSearch: null,
+      tools: {},
+      emailContacts: [
+        {
+          name: 'Martha',
+          email: 'martha@example.com',
+          conversationId: 'conv-1',
+          updatedAt: 42,
+        },
+        { name: 'bad', email: 'no-at', conversationId: 'conv-1' },
+      ],
+    });
+
+    expect(doc.emailContacts).toEqual([
+      {
+        name: 'Martha',
+        email: 'martha@example.com',
+        conversationId: 'conv-1',
+        updatedAt: 42,
+      },
+    ]);
   });
 });

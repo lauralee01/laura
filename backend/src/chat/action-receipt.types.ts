@@ -21,7 +21,10 @@ export type ActionReceipt = {
  * Ephemeral for the live turn — not persisted with message history (v1).
  * Chip click submits confirmText / cancelText as a normal user message.
  */
-export type ConfirmPromptKind = 'email_send' | 'calendar_delete';
+export type ConfirmPromptKind =
+  | 'email_send'
+  | 'calendar_delete'
+  | 'email_recipient';
 
 export type ConfirmPrompt = {
   kind: ConfirmPromptKind;
@@ -45,6 +48,14 @@ export const CALENDAR_DELETE_CONFIRM_PROMPT: ConfirmPrompt = {
   cancelLabel: 'Cancel',
   confirmText: 'yes',
   cancelText: 'cancel',
+};
+
+export const EMAIL_RECIPIENT_CONFIRM_PROMPT: ConfirmPrompt = {
+  kind: 'email_recipient',
+  confirmLabel: 'Use',
+  cancelLabel: 'Different address',
+  confirmText: 'yes',
+  cancelText: 'different address',
 };
 
 /** Tool handler reply: chat text plus optional receipt / confirm chips for the UI. */

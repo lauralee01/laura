@@ -3,7 +3,9 @@ import { Pool } from 'pg';
 import { IANAZone } from 'luxon';
 import {
   emptyPendingDocument,
+  normalizeContactName,
   parsePendingDocument,
+  type ConversationEmailContact,
   type LastEmailDraft,
   type SessionPendingDocument,
   type ToolPendingMap,
@@ -144,8 +146,11 @@ export class SessionPreferencesService implements OnModuleDestroy {
     const hasWebSearch = Boolean(doc.webSearch);
     const hasTools = Boolean(doc.tools && Object.keys(doc.tools).length > 0);
     const hasLastEmailDraft = Boolean(doc.lastEmailDraft?.draftId);
+    const hasEmailContacts = Boolean(doc.emailContacts?.length);
     const value =
-      hasWebSearch || hasTools || hasLastEmailDraft ? doc : null;
+      hasWebSearch || hasTools || hasLastEmailDraft || hasEmailContacts
+        ? doc
+        : null;
 
     await this.pool.query(
       `
@@ -379,6 +384,58 @@ export class SessionPreferencesService implements OnModuleDestroy {
     const doc = await this.readPendingDocument(sid);
     if (!doc.lastEmailDraft) return;
     doc.lastEmailDraft = null;
+    await this.writePendingDocument(sid, doc);
+  }
+
+  async findEmailContact(
+    sessionId: string,
+    conversationId: string | undefined,
+    name: string,
+  ): Promise<ConversationEmailContact | null> {
+    const sid = sessionId.trim();
+    const cid = (conversationId ?? '').trim();
+    const key = normalizeContactName(name);
+    if (!sid || !cid || !key) return null;
+
+    const doc = await this.readPendingDocument(sid);
+    const hit = (doc.emailContacts ?? []).find(
+      (c) =>
+        c.conversationId === cid && normalizeContactName(c.name) === key,
+    );
+    return hit ?? null;
+  }
+
+  async upsertEmailContact(
+    sessionId: string,
+    conversationId: string | undefined,
+    name: string,
+    email: string,
+  ): Promise<void> {
+    const sid = sessionId.trim();
+    const cid = (conversationId ?? '').trim();
+    const displayName = name.trim();
+    const addr = email.trim();
+    if (!sid || !cid || !displayName || !addr.includes('@')) return;
+
+    const key = normalizeContactName(displayName);
+    const doc = await this.readPendingDocument(sid);
+    const contacts = [...(doc.emailContacts ?? [])];
+    const idx = contacts.findIndex(
+      (c) =>
+        c.conversationId === cid && normalizeContactName(c.name) === key,
+    );
+    const next: ConversationEmailContact = {
+      name: displayName,
+      email: addr,
+      conversationId: cid,
+      updatedAt: Date.now(),
+    };
+    if (idx >= 0) {
+      contacts[idx] = next;
+    } else {
+      contacts.push(next);
+    }
+    doc.emailContacts = contacts;
     await this.writePendingDocument(sid, doc);
   }
 }

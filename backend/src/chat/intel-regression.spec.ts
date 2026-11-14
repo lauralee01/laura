@@ -240,9 +240,11 @@ describe('email draft without @ gate', () => {
   let handler: EmailToolHandler;
   let setPending: jest.Mock;
   let generate: jest.Mock;
+  let findEmailContact: jest.Mock;
 
   beforeEach(async () => {
     setPending = jest.fn().mockResolvedValue(undefined);
+    findEmailContact = jest.fn().mockResolvedValue(null);
     generate = jest.fn().mockResolvedValue(
       JSON.stringify({
         recipients: [],
@@ -278,6 +280,8 @@ describe('email draft without @ gate', () => {
             getLastEmailDraft: jest.fn().mockResolvedValue(null),
             setLastEmailDraft: jest.fn(),
             clearLastEmailDraft: jest.fn(),
+            findEmailContact,
+            upsertEmailContact: jest.fn(),
           },
         },
       ],
@@ -294,6 +298,7 @@ describe('email draft without @ gate', () => {
         recipient: 'Jane',
         body: 'about the offer',
       }),
+      'conv-1',
     );
 
     expect(reply).toMatch(/Jane/i);
@@ -314,6 +319,7 @@ describe('email draft without @ gate', () => {
       'sess-1',
       'Email Jane about the offer',
       envelope('email_draft', {}),
+      'conv-1',
     );
 
     expect(generate).toHaveBeenCalled();
@@ -321,5 +327,176 @@ describe('email draft without @ gate', () => {
     const pendingArg = setPending.mock.calls[0][1];
     expect(pendingArg.payload.recipientName).toBe('Jane');
     expect(pendingArg.payload.context).toBe('about the offer');
+  });
+});
+
+describe('same-conversation email contact reuse', () => {
+  let handler: EmailToolHandler;
+  let setPending: jest.Mock;
+  let clearPending: jest.Mock;
+  let getPending: jest.Mock;
+  let findEmailContact: jest.Mock;
+  let upsertEmailContact: jest.Mock;
+  let draftEmail: jest.Mock;
+
+  beforeEach(async () => {
+    setPending = jest.fn().mockResolvedValue(undefined);
+    clearPending = jest.fn().mockResolvedValue(undefined);
+    getPending = jest.fn().mockResolvedValue(null);
+    findEmailContact = jest.fn().mockResolvedValue(null);
+    upsertEmailContact = jest.fn().mockResolvedValue(undefined);
+    draftEmail = jest.fn().mockResolvedValue({
+      draftId: 'draft-1',
+      recipients: ['jane@example.com'],
+      subject: 'Offer',
+      body: 'Hello Jane',
+    });
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        EmailToolHandler,
+        {
+          provide: LlmService,
+          useValue: { generate: jest.fn() },
+        },
+        {
+          provide: EmailService,
+          useValue: { draftEmail },
+        },
+        {
+          provide: PendingRequestService,
+          useValue: {
+            getPending,
+            setPending,
+            clearPending,
+          },
+        },
+        {
+          provide: SessionPreferencesService,
+          useValue: {
+            getLastEmailDraft: jest.fn().mockResolvedValue(null),
+            setLastEmailDraft: jest.fn(),
+            clearLastEmailDraft: jest.fn(),
+            findEmailContact,
+            upsertEmailContact,
+          },
+        },
+      ],
+    }).compile();
+
+    handler = module.get(EmailToolHandler);
+  });
+
+  it('offers confirm chips when this conversation already knows the name', async () => {
+    findEmailContact.mockResolvedValue({
+      name: 'Jane',
+      email: 'jane@example.com',
+      conversationId: 'conv-1',
+      updatedAt: Date.now(),
+    });
+
+    const reply = await handler.handleEmailDraftIntent(
+      'sess-1',
+      'Email Jane about the offer',
+      envelope('email_draft', {
+        recipient: 'Jane',
+        body: 'about the offer',
+      }),
+      'conv-1',
+    );
+
+    expect(draftEmail).not.toHaveBeenCalled();
+    expect(reply).toEqual(
+      expect.objectContaining({
+        text: expect.stringMatching(/jane@example\.com/i),
+        confirmPrompt: expect.objectContaining({
+          kind: 'email_recipient',
+          confirmLabel: 'Use',
+        }),
+      }),
+    );
+    const pendingArg = setPending.mock.calls[0][1];
+    expect(pendingArg.missingSlots).toEqual(['confirmation']);
+    expect(pendingArg.payload.recipients).toEqual(['jane@example.com']);
+  });
+
+  it('creates the draft after the user confirms the remembered address', async () => {
+    getPending.mockResolvedValue({
+      actionType: 'email_draft',
+      originalMessage: 'Email Jane about the offer',
+      payload: {
+        recipients: ['jane@example.com'],
+        recipientName: 'Jane',
+        context: 'about the offer',
+        subject: undefined,
+        tone: undefined,
+      },
+      missingSlots: ['confirmation'],
+      collectedSlots: {},
+      createdAt: 1,
+      expiresAt: 2,
+    });
+
+    const reply = await handler.handleEmailDraftIntent(
+      'sess-1',
+      'yes',
+      envelope('pending_confirm', {}),
+      'conv-1',
+    );
+
+    expect(draftEmail).toHaveBeenCalled();
+    expect(upsertEmailContact).toHaveBeenCalledWith(
+      'sess-1',
+      'conv-1',
+      'Jane',
+      'jane@example.com',
+    );
+    expect(reply).toEqual(
+      expect.objectContaining({
+        receipt: expect.objectContaining({ kind: 'email_draft' }),
+      }),
+    );
+  });
+
+  it('overrides the remembered address when the user pastes a new @', async () => {
+    getPending.mockResolvedValue({
+      actionType: 'email_draft',
+      originalMessage: 'Email Jane about the offer',
+      payload: {
+        recipients: ['jane@example.com'],
+        recipientName: 'Jane',
+        context: 'about the offer',
+      },
+      missingSlots: ['confirmation'],
+      collectedSlots: {},
+      createdAt: 1,
+      expiresAt: 2,
+    });
+
+    draftEmail.mockResolvedValue({
+      draftId: 'draft-2',
+      recipients: ['other@example.com'],
+      subject: 'Offer',
+      body: 'Hello',
+    });
+
+    await handler.handleEmailDraftIntent(
+      'sess-1',
+      'use other@example.com instead',
+      envelope('email_draft', {}),
+      'conv-1',
+    );
+
+    expect(draftEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipients: ['other@example.com'],
+      }),
+    );
+    expect(upsertEmailContact).toHaveBeenCalledWith(
+      'sess-1',
+      'conv-1',
+      'Jane',
+      'other@example.com',
+    );
   });
 });

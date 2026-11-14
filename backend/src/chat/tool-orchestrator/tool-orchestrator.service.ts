@@ -84,8 +84,14 @@ export class ToolOrchestratorService {
     sessionId: string,
     message: string,
     envelope?: IntentEnvelope,
+    conversationId?: string,
   ): Promise<ToolReplyInput> {
-    return this.emailTools.handleEmailDraftIntent(sessionId, message, envelope);
+    return this.emailTools.handleEmailDraftIntent(
+      sessionId,
+      message,
+      envelope,
+      conversationId,
+    );
   }
 
   handlePendingEmailSendTurn(
@@ -104,11 +110,13 @@ export class ToolOrchestratorService {
     sessionId: string,
     message: string,
     envelope: IntentEnvelope,
+    conversationId?: string,
   ): Promise<ToolReplyInput> {
     return this.emailTools.handleEmailDraftFollowUp(
       sessionId,
       message,
       envelope,
+      conversationId,
     );
   }
 
@@ -132,8 +140,14 @@ export class ToolOrchestratorService {
     sessionId: string,
     message: string,
     envelope: IntentEnvelope,
+    conversationId?: string,
   ): Promise<ToolReplyInput | null> {
-    return this.emailTools.tryLlmRoutedEmail(sessionId, message, envelope);
+    return this.emailTools.tryLlmRoutedEmail(
+      sessionId,
+      message,
+      envelope,
+      conversationId,
+    );
   }
 
   tryHandle(

@@ -359,6 +359,7 @@ export class ChatService {
       toolPending,
       sessionTz,
       storedLocation: effectiveLocation,
+      conversationId: dbConversationId ?? undefined,
       googleConnected,
       isGatedToolBlocked,
       isChatLikeIntent,

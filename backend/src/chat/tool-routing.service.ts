@@ -26,6 +26,8 @@ export type ToolRoutingInput = {
   sessionTz: string | null;
   /** Prefetched session location (skips Redis in web search). */
   storedLocation: string | null;
+  /** Active chat id — scopes same-conversation email contact reuse. */
+  conversationId?: string;
   /**
    * Prefetched Google OAuth check (overlaps classify). When omitted,
    * isConnected is awaited only for Google intents.
@@ -70,6 +72,7 @@ export class ToolRoutingService {
       toolPending,
       sessionTz,
       storedLocation,
+      conversationId,
       googleConnected,
       isGatedToolBlocked,
       isChatLikeIntent,
@@ -134,6 +137,7 @@ export class ToolRoutingService {
           sessionId,
           message,
           envelope,
+          conversationId,
         );
         if (routed !== null) {
           take(routed);
@@ -166,6 +170,7 @@ export class ToolRoutingService {
           sessionId,
           message,
           envelope,
+          conversationId,
         ),
       );
     }
@@ -260,6 +265,7 @@ export class ToolRoutingService {
                 sessionId,
                 message,
                 envelope,
+                conversationId,
               ),
             );
           }
@@ -273,6 +279,7 @@ export class ToolRoutingService {
                 sessionId,
                 message,
                 envelope,
+                conversationId,
               ),
             );
           }
