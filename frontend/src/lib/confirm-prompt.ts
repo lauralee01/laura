@@ -1,4 +1,7 @@
-export type ConfirmPromptKind = 'email_send' | 'calendar_delete';
+export type ConfirmPromptKind =
+  | 'email_send'
+  | 'calendar_delete'
+  | 'email_recipient';
 
 export type ConfirmPrompt = {
   kind: ConfirmPromptKind;
@@ -8,7 +11,11 @@ export type ConfirmPrompt = {
   cancelText: string;
 };
 
-const CONFIRM_KINDS = new Set<string>(['email_send', 'calendar_delete']);
+const CONFIRM_KINDS = new Set<string>([
+  'email_send',
+  'calendar_delete',
+  'email_recipient',
+]);
 
 export function parseConfirmPrompt(
   value: unknown,
