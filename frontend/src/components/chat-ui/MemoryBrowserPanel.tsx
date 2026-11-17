@@ -1,8 +1,8 @@
 'use client';
 
+import { SuccessToast } from './SuccessToast';
 import { MemoryDeleteDialog } from './memory-browser/MemoryDeleteDialog';
 import { MemoryListItem } from './memory-browser/MemoryListItem';
-import { MemorySuccessToast } from './memory-browser/MemorySuccessToast';
 import { useMemoryBrowser } from './memory-browser/useMemoryBrowser';
 
 type Props = {
@@ -52,14 +52,11 @@ export function MemoryBrowserPanel({ open, onClose, sessionReady }: Props) {
       />
 
       {editSavedFlash ? (
-        <MemorySuccessToast
-          message="Memory updated."
-          onDismiss={clearEditFlash}
-        />
+        <SuccessToast message="Memory updated." onDismiss={clearEditFlash} />
       ) : null}
 
       {deleteSavedFlash ? (
-        <MemorySuccessToast
+        <SuccessToast
           message="Memory deleted."
           onDismiss={clearDeleteFlash}
         />
