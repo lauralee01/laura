@@ -1,12 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import {
-  deleteMemory,
-  listMemories,
-  updateMemory,
-  type MemoryItem,
-} from '@/lib/memory-api';
+import { MemoryDeleteDialog } from './memory-browser/MemoryDeleteDialog';
+import { MemoryListItem } from './memory-browser/MemoryListItem';
+import { MemorySuccessToast } from './memory-browser/MemorySuccessToast';
+import { useMemoryBrowser } from './memory-browser/useMemoryBrowser';
 
 type Props = {
   open: boolean;
@@ -14,141 +11,27 @@ type Props = {
   sessionReady: boolean;
 };
 
-function formatMemoryDate(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return '';
-  }
-  return date.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
-
 export function MemoryBrowserPanel({ open, onClose, sessionReady }: Props) {
-  const [memories, setMemories] = useState<MemoryItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editDraft, setEditDraft] = useState('');
-  const [savingId, setSavingId] = useState<number | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<MemoryItem | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const [editSavedFlash, setEditSavedFlash] = useState(false);
-  const [deleteSavedFlash, setDeleteSavedFlash] = useState(false);
-
-  const load = useCallback(async () => {
-    if (!sessionReady) {
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const items = await listMemories();
-      setMemories(items);
-    } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : 'Could not load memories.',
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [sessionReady]);
-
-  useEffect(() => {
-    if (!open) {
-      setEditingId(null);
-      setEditDraft('');
-      setDeleteTarget(null);
-      setError(null);
-      setEditSavedFlash(false);
-      setDeleteSavedFlash(false);
-      return;
-    }
-    void load();
-  }, [open, load]);
-
-  useEffect(() => {
-    if (!editSavedFlash) {
-      return;
-    }
-    const id = window.setTimeout(() => setEditSavedFlash(false), 4000);
-    return () => window.clearTimeout(id);
-  }, [editSavedFlash]);
-
-  useEffect(() => {
-    if (!deleteSavedFlash) {
-      return;
-    }
-    const id = window.setTimeout(() => setDeleteSavedFlash(false), 4000);
-    return () => window.clearTimeout(id);
-  }, [deleteSavedFlash]);
-
-  const startEdit = (item: MemoryItem) => {
-    setEditingId(item.id);
-    setEditDraft(item.content);
-    setError(null);
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditDraft('');
-  };
-
-  const saveEdit = async () => {
-    if (editingId === null) {
-      return;
-    }
-    const content = editDraft.trim();
-    if (!content) {
-      setError('Memory text cannot be empty.');
-      return;
-    }
-
-    setSavingId(editingId);
-    setError(null);
-    setEditSavedFlash(false);
-    try {
-      const updated = await updateMemory(editingId, content);
-      setMemories((prev) =>
-        prev.map((m) => (m.id === updated.id ? updated : m)),
-      );
-      setEditingId(null);
-      setEditDraft('');
-      setEditSavedFlash(true);
-    } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : 'Could not save memory.',
-      );
-    } finally {
-      setSavingId(null);
-    }
-  };
-
-  const confirmDelete = async () => {
-    if (!deleteTarget) {
-      return;
-    }
-    setDeleting(true);
-    setError(null);
-    setDeleteSavedFlash(false);
-    try {
-      await deleteMemory(deleteTarget.id);
-      setMemories((prev) => prev.filter((m) => m.id !== deleteTarget.id));
-      if (editingId === deleteTarget.id) {
-        cancelEdit();
-      }
-      setDeleteTarget(null);
-      setDeleteSavedFlash(true);
-    } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : 'Could not delete memory.',
-      );
-    } finally {
-      setDeleting(false);
-    }
-  };
+  const {
+    memories,
+    loading,
+    error,
+    editingId,
+    editDraft,
+    setEditDraft,
+    savingId,
+    deleteTarget,
+    setDeleteTarget,
+    deleting,
+    editSavedFlash,
+    deleteSavedFlash,
+    clearEditFlash,
+    clearDeleteFlash,
+    startEdit,
+    cancelEdit,
+    saveEdit,
+    confirmDelete,
+  } = useMemoryBrowser(open, sessionReady);
 
   if (!open) {
     return null;
@@ -169,41 +52,17 @@ export function MemoryBrowserPanel({ open, onClose, sessionReady }: Props) {
       />
 
       {editSavedFlash ? (
-        <div
-          role="status"
-          className="fixed top-4 left-1/2 z-[80] max-w-md -translate-x-1/2 rounded-[var(--radius-lg)] border border-success/30 bg-success-soft px-4 py-3 text-sm shadow-soft"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <p className="leading-snug text-ink">Memory updated.</p>
-            <button
-              type="button"
-              onClick={() => setEditSavedFlash(false)}
-              className="shrink-0 rounded-[var(--radius-sm)] px-1.5 py-0.5 text-ink-muted transition hover:bg-canvas-mid hover:text-ink"
-              aria-label="Dismiss"
-            >
-              ×
-            </button>
-          </div>
-        </div>
+        <MemorySuccessToast
+          message="Memory updated."
+          onDismiss={clearEditFlash}
+        />
       ) : null}
 
       {deleteSavedFlash ? (
-        <div
-          role="status"
-          className="fixed top-4 left-1/2 z-[80] max-w-md -translate-x-1/2 rounded-[var(--radius-lg)] border border-success/30 bg-success-soft px-4 py-3 text-sm shadow-soft"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <p className="leading-snug text-ink">Memory deleted.</p>
-            <button
-              type="button"
-              onClick={() => setDeleteSavedFlash(false)}
-              className="shrink-0 rounded-[var(--radius-sm)] px-1.5 py-0.5 text-ink-muted transition hover:bg-canvas-mid hover:text-ink"
-              aria-label="Dismiss"
-            >
-              ×
-            </button>
-          </div>
-        </div>
+        <MemorySuccessToast
+          message="Memory deleted."
+          onDismiss={clearDeleteFlash}
+        />
       ) : null}
 
       <aside className="relative flex h-full w-full max-w-[24rem] flex-col border-l border-border-subtle bg-surface shadow-soft">
@@ -249,129 +108,32 @@ export function MemoryBrowserPanel({ open, onClose, sessionReady }: Props) {
 
           {!loading && memories.length > 0 ? (
             <ul className="flex flex-col gap-2.5">
-              {memories.map((item) => {
-                const isEditing = editingId === item.id;
-                return (
-                  <li
-                    key={item.id}
-                    className="rounded-[var(--radius-md)] border border-border-subtle bg-surface-elevated/80 px-3 py-2.5"
-                  >
-                    {isEditing ? (
-                      <div className="space-y-2">
-                        <textarea
-                          value={editDraft}
-                          onChange={(e) => setEditDraft(e.target.value)}
-                          rows={4}
-                          className="w-full resize-y rounded-[var(--radius-sm)] border border-border bg-canvas px-2.5 py-2 text-sm text-ink outline-none focus:border-accent/50"
-                          disabled={savingId === item.id}
-                        />
-                        <div className="flex justify-end gap-2">
-                          <button
-                            type="button"
-                            disabled={savingId === item.id}
-                            className="rounded-[var(--radius-md)] px-2.5 py-1.5 text-xs text-ink-muted transition hover:bg-canvas-mid disabled:opacity-50"
-                            onClick={cancelEdit}
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="button"
-                            disabled={savingId === item.id}
-                            className="rounded-[var(--radius-md)] bg-accent px-2.5 py-1.5 text-xs font-medium text-surface-elevated transition hover:bg-accent-hover disabled:opacity-50"
-                            onClick={() => void saveEdit()}
-                          >
-                            {savingId === item.id ? 'Saving…' : 'Save'}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
-                          {item.content}
-                        </p>
-                        <div className="mt-2 flex items-center justify-between gap-2">
-                          <span className="text-[11px] text-ink-muted">
-                            {formatMemoryDate(item.createdAt)}
-                          </span>
-                          <div className="flex gap-1">
-                            <button
-                              type="button"
-                              className="rounded-[var(--radius-sm)] px-2 py-1 text-[11px] font-medium text-ink-muted transition hover:bg-canvas-mid hover:text-ink"
-                              onClick={() => startEdit(item)}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              className="rounded-[var(--radius-sm)] px-2 py-1 text-[11px] font-medium text-danger transition hover:bg-danger-soft"
-                              onClick={() => setDeleteTarget(item)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </li>
-                );
-              })}
+              {memories.map((item) => (
+                <MemoryListItem
+                  key={item.id}
+                  item={item}
+                  isEditing={editingId === item.id}
+                  editDraft={editDraft}
+                  saving={savingId === item.id}
+                  onEditDraftChange={setEditDraft}
+                  onStartEdit={() => startEdit(item)}
+                  onCancelEdit={cancelEdit}
+                  onSaveEdit={() => void saveEdit()}
+                  onRequestDelete={() => setDeleteTarget(item)}
+                />
+              ))}
             </ul>
           ) : null}
         </div>
       </aside>
 
       {deleteTarget ? (
-        <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-4 backdrop-blur-[1px]"
-          role="alertdialog"
-          aria-modal="true"
-          aria-labelledby="delete-memory-title"
-          aria-describedby="delete-memory-desc"
-          onClick={() => !deleting && setDeleteTarget(null)}
-        >
-          <div
-            className="w-full max-w-sm rounded-[var(--radius-lg)] border border-border bg-surface-elevated p-5 shadow-soft"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3
-              id="delete-memory-title"
-              className="text-base font-semibold text-ink"
-            >
-              Delete memory?
-            </h3>
-            <p
-              id="delete-memory-desc"
-              className="mt-2 text-sm leading-relaxed text-ink-muted"
-            >
-              Laura will forget this:{' '}
-              <span className="font-medium text-ink">
-                “
-                {deleteTarget.content.length > 120
-                  ? `${deleteTarget.content.slice(0, 120)}…`
-                  : deleteTarget.content}
-                ”
-              </span>
-            </p>
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                disabled={deleting}
-                className="rounded-[var(--radius-md)] px-3 py-2 text-sm text-ink-muted transition hover:bg-canvas-mid disabled:opacity-50"
-                onClick={() => setDeleteTarget(null)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={deleting}
-                className="rounded-[var(--radius-md)] bg-danger px-3 py-2 text-sm font-medium text-surface-elevated transition hover:opacity-90 disabled:opacity-50"
-                onClick={() => void confirmDelete()}
-              >
-                {deleting ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <MemoryDeleteDialog
+          target={deleteTarget}
+          deleting={deleting}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={() => void confirmDelete()}
+        />
       ) : null}
     </div>
   );
