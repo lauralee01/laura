@@ -70,7 +70,7 @@ export function useSettingsPanel(open: boolean, sessionReady: boolean) {
       return;
     }
     if (!timeZone.trim()) {
-      setError('Please choose a timezone.');
+      setError('Timezone is required (IANA, e.g. America/Chicago).');
       return;
     }
 
