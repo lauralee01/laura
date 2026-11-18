@@ -25,6 +25,13 @@ const EVENING_WIND_DOWN: Suggestion = {
   action: 'send',
 };
 
+const WEEKLY_REVIEW: Suggestion = {
+  id: 'weekly-review',
+  label: 'Weekly review',
+  prompt: 'Help me with a weekly review',
+  action: 'send',
+};
+
 const BASE_SUGGESTIONS: Suggestion[] = [
   {
     id: 'calendar',
@@ -52,14 +59,23 @@ const BASE_SUGGESTIONS: Suggestion[] = [
   },
 ];
 
-/** Local hour → put the matching daily ritual first. */
+/**
+ * Local hour → matching daily ritual first.
+ * Fri–Sun (day 5/6/0) → weekly review leads the ritual chips.
+ */
 export function buildEmptyStateSuggestions(
   hour = new Date().getHours(),
+  day = new Date().getDay(),
 ): Suggestion[] {
-  const ritualFirst =
+  const dailyRitual =
     hour >= 17 || hour < 5
       ? [EVENING_WIND_DOWN, MORNING_BRIEFING]
       : [MORNING_BRIEFING, EVENING_WIND_DOWN];
+
+  const isWeekendReviewWindow = day === 5 || day === 6 || day === 0;
+  const ritualFirst = isWeekendReviewWindow
+    ? [WEEKLY_REVIEW, ...dailyRitual]
+    : [...dailyRitual, WEEKLY_REVIEW];
 
   return [...ritualFirst, ...BASE_SUGGESTIONS];
 }
