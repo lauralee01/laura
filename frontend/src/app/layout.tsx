@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "laura — personalized AI agent",
+  title: "laura — personalized AI assistant",
   description: "Chat with laura, your personalized AI assistant.",
   icons: {
     icon: [
