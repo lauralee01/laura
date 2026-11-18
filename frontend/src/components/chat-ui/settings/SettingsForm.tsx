@@ -2,6 +2,7 @@ import {
   SESSION_TONE_PRESETS,
   type SessionTone,
 } from '@/lib/session-prefs';
+import { isUsTimeZone, US_TIMEZONES } from './us-timezones';
 
 const TONE_LABELS: Record<SessionTone, string> = {
   warm: 'Warm & professional',
@@ -35,6 +36,8 @@ export function SettingsForm({
   onTimeZoneChange,
   onMeetingMinutesChange,
 }: Props) {
+  const knownUsZone = isUsTimeZone(timeZone);
+
   return (
     <div className="space-y-4">
       <label className="block text-left">
@@ -70,16 +73,28 @@ export function SettingsForm({
 
       <label className="block text-left">
         <span className="text-xs font-medium text-ink-muted">Timezone</span>
-        <input
-          type="text"
+        <select
           className={fieldClass}
           value={timeZone}
           disabled={disabled}
-          placeholder="America/Chicago"
           onChange={(e) => onTimeZoneChange(e.target.value)}
-        />
+        >
+          {!timeZone ? (
+            <option value="" disabled>
+              Select a timezone
+            </option>
+          ) : null}
+          {!knownUsZone && timeZone ? (
+            <option value={timeZone}>{timeZone} (current)</option>
+          ) : null}
+          {US_TIMEZONES.map((zone) => (
+            <option key={zone.value} value={zone.value}>
+              {zone.label}
+            </option>
+          ))}
+        </select>
         <span className="mt-1 block text-[11px] text-ink-muted">
-          IANA name (calendar and local time).
+          Used for calendar and local time. US zones for now.
         </span>
       </label>
 
