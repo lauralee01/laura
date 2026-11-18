@@ -3,41 +3,13 @@ import {
   formatCurrentDateTime,
   resolveSessionTimeZone,
 } from '../../datetime-context';
-import type { IntentEnvelope } from '../../intent/intent.types';
-import { INTENT_CLASSIFICATION_SCHEMA_VERSION } from '../../intent/intent.types';
 import { CALENDAR_TIMEZONE_PROMPT } from '../calendar/calendar-timezone.service';
 import { CalendarListHandler } from '../calendar/calendar-list.handler';
 import { WebSearchToolHandler } from '../web-search/web-search-tool.handler';
-
-function todayCalendarEnvelope(): IntentEnvelope {
-  return {
-    version: INTENT_CLASSIFICATION_SCHEMA_VERSION,
-    intent: 'calendar_list',
-    confidence: 1,
-    confidenceKnown: true,
-    missingSlots: [],
-    slots: {
-      mode: 'day',
-      dayOffset: 0,
-    },
-  };
-}
-
-function weatherEnvelope(location: string): IntentEnvelope {
-  return {
-    version: INTENT_CLASSIFICATION_SCHEMA_VERSION,
-    intent: 'web_search',
-    confidence: 1,
-    confidenceKnown: true,
-    missingSlots: [],
-    slots: {
-      query: 'weather today',
-      freshness: 'live',
-      locationHint: location,
-      searchDepth: 'basic',
-    },
-  };
-}
+import {
+  loadCalendarDaySection,
+  loadWeatherSection,
+} from './briefing-shared';
 
 @Injectable()
 export class MorningBriefingHandler {
@@ -50,21 +22,23 @@ export class MorningBriefingHandler {
     sessionId: string,
     sessionTz: string | null,
     storedLocation: string | null,
+    googleConnected = false,
   ): Promise<string> {
     const timeZone = resolveSessionTimeZone(sessionTz);
     const formattedNow = formatCurrentDateTime(timeZone);
 
-    const calendarText =
-      await this.calendarListHandler.handleCalendarListIntent(
-        sessionId,
-        todayCalendarEnvelope(),
-      );
+    const calendar = await loadCalendarDaySection({
+      calendarListHandler: this.calendarListHandler,
+      sessionId,
+      dayOffset: 0,
+      googleConnected,
+    });
 
     /*
      * Timezone ask must win alone — pending resume completes calendar_list,
      * same as a normal list turn. Don't tack on weather yet.
      */
-    if (calendarText.trim() === CALENDAR_TIMEZONE_PROMPT.trim()) {
+    if (calendar.kind === 'needs_timezone') {
       return (
         `I can put together your morning briefing once I know your timezone.\n\n` +
         CALENDAR_TIMEZONE_PROMPT
@@ -78,45 +52,30 @@ export class MorningBriefingHandler {
       `${formattedNow} (${timeZone})`,
       ``,
       `**Today's calendar**`,
-      calendarText.trim(),
+      calendar.kind === 'ok' ? calendar.text : calendar.reason,
     ];
 
     const location = storedLocation?.trim() ?? '';
     if (location) {
-      const weatherText = await this.tryWeatherSection(
+      const weatherText = await loadWeatherSection({
+        webSearchTools: this.webSearchTools,
         sessionId,
         location,
         sessionTz,
-      );
+        query: 'weather today',
+        userMessage: `weather today in ${location}`,
+      });
       if (weatherText) {
         sections.push(``, `**Weather in ${location}**`, weatherText);
       }
     }
 
+    sections.push(
+      ``,
+      `**Make today count**`,
+      `What's the one thing that would make today a win? Tell me and I'll help you protect time for it.`,
+    );
+
     return sections.join('\n');
-  }
-
-  private async tryWeatherSection(
-    sessionId: string,
-    location: string,
-    sessionTz: string | null,
-  ): Promise<string | null> {
-    try {
-      const result = await this.webSearchTools.handleWebSearchIntent(
-        sessionId,
-        `weather today in ${location}`,
-        weatherEnvelope(location),
-        undefined,
-        { location, timeZone: sessionTz },
-      );
-
-      if (result.kind !== 'reply' || !result.text?.trim()) {
-        return null;
-      }
-
-      return result.text.trim();
-    } catch {
-      return null;
-    }
   }
 }

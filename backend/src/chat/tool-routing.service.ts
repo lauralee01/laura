@@ -100,17 +100,29 @@ export class ToolRoutingService {
       envelope?.intent === 'calendar_create' ||
       envelope?.intent === 'calendar_update' ||
       envelope?.intent === 'calendar_delete' ||
-      envelope?.intent === 'morning_briefing' ||
       envelope?.intent === 'email_draft' ||
       envelope?.intent === 'email_draft_revise' ||
       envelope?.intent === 'email_draft_delete';
 
-    if (isGoogleIntent && sessionId && replyBox.value === null) {
-      const isConnected =
+    /*
+     * Briefings (morning / evening) are not hard-gated: they degrade without
+     * Google and still offer time, weather, and reflection prompts.
+     */
+    let resolvedGoogleConnected = googleConnected;
+    const needsGoogleStatus =
+      isGoogleIntent ||
+      envelope?.intent === 'morning_briefing' ||
+      envelope?.intent === 'evening_wind_down';
+
+    if (needsGoogleStatus && sessionId && replyBox.value === null) {
+      resolvedGoogleConnected =
         googleConnected !== undefined
           ? googleConnected
           : await this.googleOAuthService.isConnected(sessionId);
-      if (!isConnected) {
+    }
+
+    if (isGoogleIntent && sessionId && replyBox.value === null) {
+      if (!resolvedGoogleConnected) {
         const action =
           envelope?.intent === 'email_draft' ||
           envelope?.intent === 'email_draft_revise' ||
@@ -233,6 +245,18 @@ export class ToolRoutingService {
               sessionId,
               sessionTz,
               storedLocation,
+              Boolean(resolvedGoogleConnected),
+            ),
+          );
+          break;
+        }
+        case 'evening_wind_down': {
+          take(
+            await this.toolOrchestrator.handleEveningWindDownIntent(
+              sessionId,
+              sessionTz,
+              storedLocation,
+              Boolean(resolvedGoogleConnected),
             ),
           );
           break;

@@ -148,11 +148,24 @@ Use when the user wants a morning briefing, daily brief, or
 calendar (and optionally local weather). Prefer this over a bare
 calendar_list when they ask to be briefed / catch up on the day,
 not merely "what's on my calendar today".
+Do not use this for evening wind-down / end-of-day reflection.
 
 Examples:
 "What's my morning briefing?"
 "Brief me for today"
 "Catch me up on my day"
+
+evening_wind_down:
+Use when the user wants an evening wind-down, end-of-day wrap-up,
+nightly debrief, or "help me close out today" ritual — often with
+tomorrow's outlook and reflective prompts. Prefer this over
+morning_briefing or bare calendar_list for evening / tonight language.
+
+Examples:
+"Evening wind-down"
+"Help me wrap up the day"
+"Nightly debrief"
+"What's still open before I log off?"
 
 EMAIL
 
