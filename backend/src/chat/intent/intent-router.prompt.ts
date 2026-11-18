@@ -167,6 +167,19 @@ Examples:
 "Nightly debrief"
 "What's still open before I log off?"
 
+weekly_review:
+Use when the user wants a weekly review, week-in-review, weekend
+recap, or guided look back across the last several days — chats,
+memories, open loops, and next-week focus. Prefer this over
+morning_briefing / evening_wind_down when the scope is the week,
+not a single day.
+
+Examples:
+"Weekly review"
+"Help me do a week in review"
+"Recap my week"
+"What did we cover this week?"
+
 EMAIL
 
 email_draft:

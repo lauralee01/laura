@@ -261,6 +261,15 @@ export class ToolRoutingService {
           );
           break;
         }
+        case 'weekly_review': {
+          take(
+            await this.toolOrchestrator.handleWeeklyReviewIntent(
+              sessionId,
+              sessionTz,
+            ),
+          );
+          break;
+        }
         case 'calendar_create': {
           take(
             await this.toolOrchestrator.handleCalendarCreateIntent(

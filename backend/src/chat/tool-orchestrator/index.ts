@@ -8,5 +8,6 @@ export { CalendarPendingUpdateFlow } from './calendar/calendar-pending-update.fl
 export { CalendarPendingTimezoneFlow } from './calendar/calendar-pending-timezone.flow';
 export { MorningBriefingHandler } from './briefing/morning-briefing.handler';
 export { EveningWindDownHandler } from './briefing/evening-wind-down.handler';
+export { WeeklyReviewHandler } from './briefing/weekly-review.handler';
 export { EmailToolHandler } from './email/email-tool.handler';
 export { ToolPendingFlowService } from './tool-pending-flow.service';
