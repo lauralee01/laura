@@ -4,18 +4,28 @@ import { BrandLockup } from '@/components/BrandLockup';
 
 type SuggestionAction = 'send' | 'fill';
 
-const SUGGESTIONS: Array<{
+type Suggestion = {
   id: string;
   label: string;
   prompt: string;
   action: SuggestionAction;
-}> = [
-  {
-    id: 'briefing',
-    label: 'Morning briefing',
-    prompt: "What's my morning briefing?",
-    action: 'send',
-  },
+};
+
+const MORNING_BRIEFING: Suggestion = {
+  id: 'briefing',
+  label: 'Morning briefing',
+  prompt: "What's my morning briefing?",
+  action: 'send',
+};
+
+const EVENING_WIND_DOWN: Suggestion = {
+  id: 'wind-down',
+  label: 'Evening wind-down',
+  prompt: 'Help me with an evening wind-down',
+  action: 'send',
+};
+
+const BASE_SUGGESTIONS: Suggestion[] = [
   {
     id: 'calendar',
     label: "This week's calendar",
@@ -42,6 +52,18 @@ const SUGGESTIONS: Array<{
   },
 ];
 
+/** Local hour → put the matching daily ritual first. */
+export function buildEmptyStateSuggestions(
+  hour = new Date().getHours(),
+): Suggestion[] {
+  const ritualFirst =
+    hour >= 17 || hour < 5
+      ? [EVENING_WIND_DOWN, MORNING_BRIEFING]
+      : [MORNING_BRIEFING, EVENING_WIND_DOWN];
+
+  return [...ritualFirst, ...BASE_SUGGESTIONS];
+}
+
 type Props = {
   onSuggestion: (prompt: string) => void;
   onSendSuggestion?: (prompt: string) => void;
@@ -53,6 +75,8 @@ export function ChatEmptyState({
   onSendSuggestion,
   disabled,
 }: Props) {
+  const suggestions = buildEmptyStateSuggestions();
+
   return (
     <div className="laura-empty-enter mx-auto flex max-w-2xl flex-col items-center px-2 py-10 text-center md:py-16">
       <BrandLockup size="hero" className="justify-center" />
@@ -60,7 +84,7 @@ export function ChatEmptyState({
         What can I take care of today?
       </p>
       <ul className="mt-8 flex w-full flex-wrap items-center justify-center gap-2">
-        {SUGGESTIONS.map((item) => (
+        {suggestions.map((item) => (
           <li key={item.id}>
             <button
               type="button"
