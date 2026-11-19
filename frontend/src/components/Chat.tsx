@@ -10,6 +10,7 @@ import {
   ChatMobileDrawer,
   GoogleConnectTip,
   MemoryBrowserPanel,
+  WritingDeskPanel,
   SettingsPanel,
   MobileChatHeader,
 } from '@/components/chat-ui';
@@ -45,6 +46,7 @@ export function Chat() {
   } = useChat();
 
   const [memoriesOpen, setMemoriesOpen] = useState(false);
+  const [writingDeskOpen, setWritingDeskOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   /*
@@ -90,6 +92,7 @@ export function Chat() {
   const onOpenMemories = useCallback(() => {
     setSidebarOpen(false);
     setSettingsOpen(false);
+    setWritingDeskOpen(false);
     setMemoriesOpen(true);
   }, [setSidebarOpen]);
 
@@ -97,9 +100,21 @@ export function Chat() {
     setMemoriesOpen(false);
   }, []);
 
+  const onOpenWritingDesk = useCallback(() => {
+    setSidebarOpen(false);
+    setSettingsOpen(false);
+    setMemoriesOpen(false);
+    setWritingDeskOpen(true);
+  }, [setSidebarOpen]);
+
+  const onCloseWritingDesk = useCallback(() => {
+    setWritingDeskOpen(false);
+  }, []);
+
   const onOpenSettings = useCallback(() => {
     setSidebarOpen(false);
     setMemoriesOpen(false);
+    setWritingDeskOpen(false);
     setSettingsOpen(true);
   }, [setSidebarOpen]);
 
@@ -116,6 +131,7 @@ export function Chat() {
     onDelete,
     disabled: sidebarDisabled,
     onOpenMemories,
+    onOpenWritingDesk,
     onOpenSettings,
   };
 
@@ -185,6 +201,12 @@ export function Chat() {
       <MemoryBrowserPanel
         open={memoriesOpen}
         onClose={onCloseMemories}
+        sessionReady={sessionReady}
+      />
+
+      <WritingDeskPanel
+        open={writingDeskOpen}
+        onClose={onCloseWritingDesk}
         sessionReady={sessionReady}
       />
 

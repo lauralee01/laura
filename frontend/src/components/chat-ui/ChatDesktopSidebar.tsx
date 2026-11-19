@@ -14,12 +14,14 @@ type Props = {
   onDelete: (id: string) => void | Promise<void>;
   disabled: boolean;
   onOpenMemories?: () => void;
+  onOpenWritingDesk?: () => void;
   onOpenSettings?: () => void;
 };
 
 export const ChatDesktopSidebar = memo(function ChatDesktopSidebar({
   sessionReady,
   onOpenMemories,
+  onOpenWritingDesk,
   onOpenSettings,
   ...props
 }: Props) {
@@ -42,6 +44,16 @@ export const ChatDesktopSidebar = memo(function ChatDesktopSidebar({
               className="w-full rounded-[var(--radius-md)] border border-border-subtle bg-surface-elevated px-3 py-2 text-left text-xs font-medium text-ink transition hover:border-accent/30 hover:bg-accent-soft/40 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Settings
+            </button>
+          ) : null}
+          {onOpenWritingDesk ? (
+            <button
+              type="button"
+              onClick={onOpenWritingDesk}
+              disabled={!sessionReady}
+              className="w-full rounded-[var(--radius-md)] border border-border-subtle bg-surface-elevated px-3 py-2 text-left text-xs font-medium text-ink transition hover:border-accent/30 hover:bg-accent-soft/40 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Writing desk
             </button>
           ) : null}
           {onOpenMemories ? (

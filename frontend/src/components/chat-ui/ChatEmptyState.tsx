@@ -42,6 +42,12 @@ const BASE_SUGGESTIONS: Suggestion[] = [
     action: 'fill',
   },
   {
+    id: 'writing',
+    label: 'Write something',
+    prompt: 'Help me write a ',
+    action: 'fill',
+  },
+  {
     id: 'email',
     label: 'Draft an email',
     prompt: 'Help me draft a short email',

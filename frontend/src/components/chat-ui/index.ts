@@ -8,6 +8,7 @@ export { ChatErrorBanner } from './ChatErrorBanner';
 export { ActionReceiptStrip } from './ActionReceiptStrip';
 export { ConfirmChipStrip } from './ConfirmChipStrip';
 export { MemoryBrowserPanel } from './MemoryBrowserPanel';
+export { WritingDeskPanel } from './WritingDeskPanel';
 export { SettingsPanel } from './SettingsPanel';
 export { GoogleConnectButton } from './GoogleConnectButton';
 export { GoogleConnectTip } from './GoogleConnectTip';
