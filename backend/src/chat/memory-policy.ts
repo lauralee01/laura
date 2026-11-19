@@ -34,6 +34,8 @@ const SKIP_EXTRACT_INTENTS = new Set<IntentId>([
   'morning_briefing',
   'evening_wind_down',
   'weekly_review',
+  'writing_desk_save',
+  'writing_desk_list',
   'set_timezone',
   'pending_confirm',
   'pending_cancel',

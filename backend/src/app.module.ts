@@ -5,6 +5,7 @@ import { SessionPreferencesService } from './chat/session-preferences.service';
 import { ChatModule } from './chat/chat.module';
 import { ConfigModule } from '@nestjs/config';
 import { MemoryModule } from './memory/memory.module';
+import { WritingDeskModule } from './writing-desk/writing-desk.module';
 import { EmailModule } from './integrations/email/email.module';
 import { CalendarModule } from './integrations/calendar/calendar.module';
 import { GoogleOAuthModule } from './integrations/google/google-oauth.module';
@@ -18,6 +19,7 @@ import { SessionCookieMiddleware } from './common/session/session-cookie.middlew
     ConfigModule.forRoot({ isGlobal: true }),
     ChatModule,
     MemoryModule,
+    WritingDeskModule,
     EmailModule,
     CalendarModule,
     GoogleOAuthModule,

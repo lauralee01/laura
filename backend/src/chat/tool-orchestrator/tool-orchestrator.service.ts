@@ -7,6 +7,7 @@ import { CalendarListHandler } from './calendar/calendar-list.handler';
 import { CalendarCreateHandler } from './calendar/calendar-create.handler';
 import { CalendarMutationHandler } from './calendar/calendar-mutation.handler';
 import { EmailToolHandler } from './email/email-tool.handler';
+import { WritingDeskToolHandler } from './writing-desk/writing-desk-tool.handler';
 import { WebSearchToolHandler } from './web-search/web-search-tool.handler';
 import type {
   WebSearchSessionContext,
@@ -20,6 +21,7 @@ import type { IntentEnvelope } from '../intent/intent.types';
  * - CalendarHandlers — list/create/update/delete via Google Calendar + LLM extractors
  * - {@link EmailToolHandler} — Gmail drafts, send, revise while pending
  * - {@link MorningBriefingHandler} / {@link EveningWindDownHandler} / {@link WeeklyReviewHandler} — rituals
+ * - {@link WritingDeskToolHandler} — durable writing artifacts
  * - {@link ToolPendingFlowService} — multi-turn pending state and `set_timezone` resumes
  *
  * ChatService calls these methods directly for LLM-routed intents; `tryHandle` covers everything else.
@@ -35,6 +37,7 @@ export class ToolOrchestratorService {
     private readonly morningBriefingHandler: MorningBriefingHandler,
     private readonly eveningWindDownHandler: EveningWindDownHandler,
     private readonly weeklyReviewHandler: WeeklyReviewHandler,
+    private readonly writingDeskTools: WritingDeskToolHandler,
     private readonly pendingFlow: ToolPendingFlowService,
   ) { }
 
@@ -71,6 +74,17 @@ export class ToolOrchestratorService {
     sessionTz: string | null,
   ): Promise<string> {
     return this.weeklyReviewHandler.handleWeeklyReview(sessionId, sessionTz);
+  }
+
+  handleWritingDeskSaveIntent(
+    sessionId: string,
+    envelope?: IntentEnvelope,
+  ): Promise<ToolReplyInput> {
+    return this.writingDeskTools.handleSave(sessionId, envelope);
+  }
+
+  handleWritingDeskListIntent(sessionId: string): Promise<ToolReplyInput> {
+    return this.writingDeskTools.handleList(sessionId);
   }
 
   handleCalendarListIntent(

@@ -9,5 +9,6 @@ export { CalendarPendingTimezoneFlow } from './calendar/calendar-pending-timezon
 export { MorningBriefingHandler } from './briefing/morning-briefing.handler';
 export { EveningWindDownHandler } from './briefing/evening-wind-down.handler';
 export { WeeklyReviewHandler } from './briefing/weekly-review.handler';
+export { WritingDeskToolHandler } from './writing-desk/writing-desk-tool.handler';
 export { EmailToolHandler } from './email/email-tool.handler';
 export { ToolPendingFlowService } from './tool-pending-flow.service';

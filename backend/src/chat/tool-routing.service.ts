@@ -270,6 +270,23 @@ export class ToolRoutingService {
           );
           break;
         }
+        case 'writing_desk_save': {
+          take(
+            await this.toolOrchestrator.handleWritingDeskSaveIntent(
+              sessionId,
+              envelope,
+            ),
+          );
+          break;
+        }
+        case 'writing_desk_list': {
+          take(
+            await this.toolOrchestrator.handleWritingDeskListIntent(
+              sessionId,
+            ),
+          );
+          break;
+        }
         case 'calendar_create': {
           take(
             await this.toolOrchestrator.handleCalendarCreateIntent(

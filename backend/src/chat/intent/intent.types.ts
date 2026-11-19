@@ -14,7 +14,7 @@
 export const INTENT_CLASSIFICATION_SCHEMA_VERSION = 1 as const;
 
 /** Prompt / parser version for logs and regression tests (increment when JSON shape changes). */
-export const INTENT_CLASSIFICATION_PROMPT_VERSION = 'batch-g-v11';
+export const INTENT_CLASSIFICATION_PROMPT_VERSION = 'batch-g-v12';
 
 export const INTENT_IDS = [
   'general_chat',
@@ -29,6 +29,8 @@ export const INTENT_IDS = [
   'morning_briefing',
   'evening_wind_down',
   'weekly_review',
+  'writing_desk_save',
+  'writing_desk_list',
   'pending_confirm',
   'pending_cancel',
   'set_timezone',

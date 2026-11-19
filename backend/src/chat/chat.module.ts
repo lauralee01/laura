@@ -3,6 +3,7 @@ import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
 import { LlmModule } from '../llm/llm.module';
 import { MemoryModule } from '../memory/memory.module';
+import { WritingDeskModule } from '../writing-desk/writing-desk.module';
 import { EmailModule } from '../integrations/email/email.module';
 import { CalendarModule } from '../integrations/calendar/calendar.module';
 import { WebSearchModule } from '../integrations/web-search/web-search.module';
@@ -18,6 +19,7 @@ import {
   MorningBriefingHandler,
   EveningWindDownHandler,
   WeeklyReviewHandler,
+  WritingDeskToolHandler,
   EmailToolHandler,
   ToolOrchestratorService,
   ToolPendingFlowService,
@@ -32,7 +34,15 @@ import { ToolRoutingService } from './tool-routing.service';
 import { AccountabilityNudgeService } from './accountability-nudge.service';
 
 @Module({
-  imports: [LlmModule, MemoryModule, EmailModule, CalendarModule, WebSearchModule, GoogleOAuthModule],
+  imports: [
+    LlmModule,
+    MemoryModule,
+    WritingDeskModule,
+    EmailModule,
+    CalendarModule,
+    WebSearchModule,
+    GoogleOAuthModule,
+  ],
   controllers: [ChatController],
   providers: [
     ChatService,
@@ -51,6 +61,7 @@ import { AccountabilityNudgeService } from './accountability-nudge.service';
     MorningBriefingHandler,
     EveningWindDownHandler,
     WeeklyReviewHandler,
+    WritingDeskToolHandler,
     EmailToolHandler,
     ToolPendingFlowService,
     ToolOrchestratorService,

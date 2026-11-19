@@ -8,7 +8,8 @@ export type ActionReceiptKind =
   | 'email_draft_deleted'
   | 'calendar_created'
   | 'calendar_updated'
-  | 'calendar_deleted';
+  | 'calendar_deleted'
+  | 'writing_draft_saved';
 
 export type ActionReceipt = {
   kind: ActionReceiptKind;

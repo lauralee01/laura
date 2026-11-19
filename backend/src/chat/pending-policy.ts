@@ -26,6 +26,8 @@ const INTENT_FAMILY: Record<IntentId, IntentFamily> = {
   morning_briefing: 'calendar',
   evening_wind_down: 'chat',
   weekly_review: 'chat',
+  writing_desk_save: 'chat',
+  writing_desk_list: 'chat',
   web_search: 'web_search',
   current_datetime: 'chat',
   general_chat: 'chat',

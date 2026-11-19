@@ -11,6 +11,8 @@ const INTENT_STATUS_LABELS: Partial<Record<IntentId, string>> = {
   morning_briefing: 'Preparing your briefing…',
   evening_wind_down: 'Preparing your wind-down…',
   weekly_review: 'Preparing your weekly review…',
+  writing_desk_save: 'Saving to your writing desk…',
+  writing_desk_list: 'Checking your writing desk…',
   email_draft: 'Working on your email…',
   email_draft_revise: 'Working on your email…',
   email_draft_delete: 'Working on your email…',

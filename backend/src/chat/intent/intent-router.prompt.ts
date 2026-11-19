@@ -180,6 +180,29 @@ Examples:
 "Recap my week"
 "What did we cover this week?"
 
+writing_desk_save:
+Use when the user wants to save or update a durable writing piece
+on Laura's Writing desk (cover letter, LinkedIn post, apology,
+bio, etc.) — NOT a Gmail draft. Prefer this over email_draft when
+they say writing desk, "save this draft", or non-email writing
+artifacts. Put title in slots.title, full text in slots.body,
+optional tone in slots.tone, and slots.draftId when updating an
+existing piece.
+
+Examples:
+"Save this to my writing desk as Cover letter"
+"Save that LinkedIn post to my drafts"
+"Update my bio draft with this text"
+
+writing_desk_list:
+Use when the user asks what's on their Writing desk / saved writing
+drafts / writing pieces Laura is keeping.
+
+Examples:
+"What's on my writing desk?"
+"Show my saved drafts"
+"List my writing pieces"
+
 EMAIL
 
 email_draft:
