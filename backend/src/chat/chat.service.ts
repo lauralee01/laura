@@ -39,6 +39,7 @@ import {
   DEFAULT_MEETING_MINUTES,
   DEFAULT_SESSION_TONE,
 } from './session-prefs.types';
+import { inferWritingDeskEnvelopeFromMessage } from './writing-desk-intent-fallback';
 
 type ChatReply = {
   reply: string;
@@ -174,7 +175,13 @@ export class ChatService {
       })
       .then(
         (result) => ({ ok: true as const, result }),
-        () => ({ ok: false as const, result: undefined }),
+        (err: unknown) => {
+          console.warn(
+            '[intent-classify] failed:',
+            err instanceof Error ? err.message : String(err),
+          );
+          return { ok: false as const, result: undefined };
+        },
       );
 
     const [classifyOutcome, googleConnected] = await Promise.all([
@@ -182,9 +189,17 @@ export class ChatService {
       googleConnectedPromise.catch(() => false),
     ]);
     const routingClassifyFailed = !classifyOutcome.ok;
-    const precomputedEnvelope = classifyOutcome.ok
+    const classifiedEnvelope = classifyOutcome.ok
       ? classifyOutcome.result
       : undefined;
+    /*
+     * Classify often fails when Gemini truncates JSON (MAX_TOKENS) after
+     * stuffing a long draft into slots.body. Fall back for clear desk phrases.
+     */
+    const precomputedEnvelope =
+      classifiedEnvelope ??
+      inferWritingDeskEnvelopeFromMessage(message) ??
+      undefined;
     const intentMs = Math.round(performance.now() - intentStart);
 
     /*

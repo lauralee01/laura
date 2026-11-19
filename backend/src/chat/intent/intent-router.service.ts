@@ -34,7 +34,11 @@ function buildClassifierUserMessage(
       const speaker =
         turn.role === 'user' ? 'User' : 'Assistant';
 
-      lines.push(`${speaker}: ${turn.content}`);
+      /*
+       * Cap turn size so the classifier does not echo huge draft bodies
+       * into slots and blow MAX_TOKENS on the tiny IntentEnvelope budget.
+       */
+      lines.push(`${speaker}: ${truncateForClassifier(turn.content)}`);
     }
 
     lines.push('');
@@ -115,10 +119,11 @@ export class IntentRouterService {
       temperature: 0,
 
       /*
-       * IntentEnvelope is tiny. Keeping this low reduces unnecessary
-       * generation while leaving enough room for structured slots.
+       * IntentEnvelope is small, but titles / short slot strings still need
+       * headroom. Keep draft bodies out of slots (see prompt) so this stays
+       * well under the cap — 250 was truncating and failing the whole route.
        */
-      maxOutputTokens: 250,
+      maxOutputTokens: 512,
 
       /*
        * Thinking tokens eat the output budget and delay JSON. Router
@@ -131,4 +136,14 @@ export class IntentRouterService {
 
     return parseIntentEnvelopeFromModelText(raw);
   }
+}
+
+const CLASSIFIER_HISTORY_TURN_MAX = 400;
+
+function truncateForClassifier(text: string): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= CLASSIFIER_HISTORY_TURN_MAX) {
+    return trimmed;
+  }
+  return `${trimmed.slice(0, CLASSIFIER_HISTORY_TURN_MAX - 1).trimEnd()}…`;
 }

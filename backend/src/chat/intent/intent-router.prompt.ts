@@ -185,12 +185,15 @@ Use when the user wants to save or update a durable writing piece
 on Laura's Writing desk (cover letter, LinkedIn post, apology,
 bio, etc.) — NOT a Gmail draft. Prefer this over email_draft when
 they say writing desk, "save this draft", or non-email writing
-artifacts. Put title in slots.title, full text in slots.body,
-optional tone in slots.tone, and slots.draftId when updating an
-existing piece.
+artifacts.
+slots.title = short title if known; slots.tone optional; slots.draftId
+when updating. Do NOT put long draft prose in slots.body — leave
+slots.body empty/omitted. The runtime uses the current user message
+(or a follow-up paste) as the draft body. Echoing long text into
+slots will truncate your JSON.
 When pending context says Writing desk is waiting for draft text,
-classify the user's pasted content as writing_desk_save and put the
-entire message in slots.body (even if they do not repeat "save").
+classify the paste as writing_desk_save with empty slots.body even
+if they do not repeat "save".
 
 Examples:
 "Save this to my writing desk as Cover letter"
