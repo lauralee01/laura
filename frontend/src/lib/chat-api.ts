@@ -25,6 +25,66 @@ export type ConversationSummary = {
   preview: string;
 };
 
+export type AccountabilityNudgeSuggestion = {
+  memoryId: number;
+  label: string;
+  prompt: string;
+};
+
+/** Soft empty-state accountability chip (feature #22). */
+export async function fetchAccountabilityNudge(): Promise<AccountabilityNudgeSuggestion | null> {
+  const url = `${getApiBaseUrl()}/chat/accountability-nudge`;
+  const res = await fetch(url, { method: 'GET', ...cred });
+  const rawText = await res.text();
+  if (!res.ok) {
+    throw new Error(
+      `Accountability nudge failed (${res.status}). ${rawText ? rawText.slice(0, 200) : ''}`,
+    );
+  }
+  if (!rawText.trim()) {
+    return null;
+  }
+
+  let data: unknown;
+  try {
+    data = JSON.parse(rawText) as unknown;
+  } catch {
+    throw new Error('Accountability nudge response was not valid JSON.');
+  }
+
+  if (typeof data !== 'object' || data === null) {
+    return null;
+  }
+
+  const suggestionRaw = (data as { suggestion?: unknown }).suggestion;
+  if (typeof suggestionRaw !== 'object' || suggestionRaw === null) {
+    return null;
+  }
+
+  const raw = suggestionRaw as {
+    memoryId?: unknown;
+    label?: unknown;
+    prompt?: unknown;
+  };
+  const memoryId =
+    typeof raw.memoryId === 'number' ? raw.memoryId : Number(raw.memoryId);
+  if (!Number.isFinite(memoryId) || memoryId <= 0) {
+    return null;
+  }
+  if (typeof raw.label !== 'string' || !raw.label.trim()) {
+    return null;
+  }
+  if (typeof raw.prompt !== 'string' || !raw.prompt.trim()) {
+    return null;
+  }
+
+  return {
+    memoryId,
+    label: raw.label.trim(),
+    prompt: raw.prompt.trim(),
+  };
+}
+
 /**
  * Calls `POST /chat` on the NestJS backend.
  *

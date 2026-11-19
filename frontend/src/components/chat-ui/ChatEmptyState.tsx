@@ -1,6 +1,8 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { BrandLockup } from '@/components/BrandLockup';
+import { fetchAccountabilityNudge } from '@/lib/chat-api';
 
 type SuggestionAction = 'send' | 'fill';
 
@@ -62,10 +64,12 @@ const BASE_SUGGESTIONS: Suggestion[] = [
 /**
  * Local hour → matching daily ritual first.
  * Fri–Sun (day 5/6/0) → weekly review leads the ritual chips.
+ * Optional accountability nudge leads everything (at most one).
  */
 export function buildEmptyStateSuggestions(
   hour = new Date().getHours(),
   day = new Date().getDay(),
+  accountability?: Suggestion | null,
 ): Suggestion[] {
   const dailyRitual =
     hour >= 17 || hour < 5
@@ -77,7 +81,11 @@ export function buildEmptyStateSuggestions(
     ? [WEEKLY_REVIEW, ...dailyRitual]
     : [...dailyRitual, WEEKLY_REVIEW];
 
-  return [...ritualFirst, ...BASE_SUGGESTIONS];
+  const base = [...ritualFirst, ...BASE_SUGGESTIONS];
+  if (accountability) {
+    return [accountability, ...base];
+  }
+  return base;
 }
 
 type Props = {
@@ -91,7 +99,39 @@ export function ChatEmptyState({
   onSendSuggestion,
   disabled,
 }: Props) {
-  const suggestions = buildEmptyStateSuggestions();
+  const [accountability, setAccountability] = useState<Suggestion | null>(
+    null,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void fetchAccountabilityNudge()
+      .then((nudge) => {
+        if (cancelled || !nudge) {
+          return;
+        }
+        setAccountability({
+          id: `accountability-${nudge.memoryId}`,
+          label: nudge.label,
+          prompt: nudge.prompt,
+          action: 'send',
+        });
+      })
+      .catch(() => {
+        /* Soft feature — empty state still works without it. */
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const suggestions = buildEmptyStateSuggestions(
+    undefined,
+    undefined,
+    accountability,
+  );
 
   return (
     <div className="laura-empty-enter mx-auto flex max-w-2xl flex-col items-center px-2 py-10 text-center md:py-16">
