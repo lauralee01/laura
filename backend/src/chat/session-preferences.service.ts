@@ -11,6 +11,7 @@ import {
   type SessionPendingDocument,
   type ToolPendingMap,
   type WebSearchMissingLocationPending,
+  type WritingDeskAwaitingBodyPending,
 } from './session-pending.types';
 import {
   DEFAULT_MEETING_MINUTES,
@@ -28,6 +29,7 @@ export type ChatSessionBootstrap = {
   tone: SessionTone;
   defaultMeetingMinutes: number;
   webSearch: WebSearchMissingLocationPending | null;
+  writingDesk: WritingDeskAwaitingBodyPending | null;
   tools: ToolPendingMap;
 };
 
@@ -84,6 +86,7 @@ export class SessionPreferencesService implements OnModuleDestroy {
         row.default_meeting_minutes,
       ),
       webSearch: doc.webSearch ?? null,
+      writingDesk: doc.writingDesk ?? null,
       tools: { ...(doc.tools ?? {}) },
     };
   }
@@ -105,6 +108,7 @@ export class SessionPreferencesService implements OnModuleDestroy {
       tone: DEFAULT_SESSION_TONE,
       defaultMeetingMinutes: DEFAULT_MEETING_MINUTES,
       webSearch: null,
+      writingDesk: null,
       tools: {},
     };
   }
@@ -149,12 +153,14 @@ export class SessionPreferencesService implements OnModuleDestroy {
     const hasLastEmailDraft = Boolean(doc.lastEmailDraft?.draftId);
     const hasEmailContacts = Boolean(doc.emailContacts?.length);
     const hasAccountabilityNudge = Boolean(doc.accountabilityNudge?.memoryId);
+    const hasWritingDesk = Boolean(doc.writingDesk?.type);
     const value =
       hasWebSearch ||
       hasTools ||
       hasLastEmailDraft ||
       hasEmailContacts ||
-      hasAccountabilityNudge
+      hasAccountabilityNudge ||
+      hasWritingDesk
         ? doc
         : null;
 
@@ -460,6 +466,33 @@ export class SessionPreferencesService implements OnModuleDestroy {
     if (!sid) return;
     const doc = await this.readPendingDocument(sid);
     doc.accountabilityNudge = state;
+    await this.writePendingDocument(sid, doc);
+  }
+
+  async getWritingDeskPending(
+    sessionId: string,
+  ): Promise<WritingDeskAwaitingBodyPending | null> {
+    const doc = await this.readPendingDocument(sessionId);
+    return doc.writingDesk ?? null;
+  }
+
+  async setWritingDeskPending(
+    sessionId: string,
+    pending: WritingDeskAwaitingBodyPending,
+  ): Promise<void> {
+    const sid = sessionId.trim();
+    if (!sid) return;
+    const doc = await this.readPendingDocument(sid);
+    doc.writingDesk = pending;
+    await this.writePendingDocument(sid, doc);
+  }
+
+  async clearWritingDeskPending(sessionId: string): Promise<void> {
+    const sid = sessionId.trim();
+    if (!sid) return;
+    const doc = await this.readPendingDocument(sid);
+    if (!doc.writingDesk) return;
+    doc.writingDesk = null;
     await this.writePendingDocument(sid, doc);
   }
 }

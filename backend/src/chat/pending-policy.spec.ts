@@ -3,7 +3,9 @@ import {
   hasCalendarPending,
   pendingActionsInterruptedByIntent,
   shouldClearWebSearchLocationPending,
+  shouldClearWritingDeskBodyPending,
   shouldResumeWebSearchLocation,
+  shouldResumeWritingDeskBody,
 } from './pending-policy';
 import type { ToolPendingMap } from './session-pending.types';
 
@@ -81,6 +83,14 @@ describe('pending-policy', () => {
     );
   });
 
+  it('resumes writing-desk body for pasted chat but clears for calendar/email', () => {
+    expect(shouldResumeWritingDeskBody('general_chat')).toBe(true);
+    expect(shouldResumeWritingDeskBody('writing_desk_save')).toBe(true);
+    expect(shouldClearWritingDeskBodyPending('calendar_list')).toBe(true);
+    expect(shouldResumeWritingDeskBody('calendar_list')).toBe(false);
+    expect(shouldClearWritingDeskBodyPending('email_draft')).toBe(true);
+  });
+
   it('builds a single hint from one snapshot', () => {
     const hint = buildPendingHintFromSnapshot({
       tools: {
@@ -98,10 +108,15 @@ describe('pending-policy', () => {
         type: 'web_search_missing_location',
         message: 'coffee near me',
       },
+      writingDesk: {
+        type: 'writing_desk_awaiting_body',
+        createdAt: Date.now(),
+      },
     });
 
     expect(hint).toContain('web search waiting');
     expect(hint).toContain('email draft');
+    expect(hint).toContain('writing desk waiting');
   });
 
   it('detects calendar pending from the map', () => {

@@ -17,7 +17,9 @@ import { ToolOrchestratorService } from './tool-orchestrator';
 import {
   pendingActionsInterruptedByIntent,
   shouldClearWebSearchLocationPending,
+  shouldClearWritingDeskBodyPending,
   shouldResumeWebSearchLocation,
+  shouldResumeWritingDeskBody,
 } from './pending-policy';
 import {
   envelopeNeedsMemory,
@@ -25,9 +27,10 @@ import {
 } from './memory-policy';
 import { buildLauraChatSystemPrompt } from './laura-system-prompt';
 import { ToolRoutingService } from './tool-routing.service';
-import type {
-  ActionReceipt,
-  ConfirmPrompt,
+import {
+  coerceToolReply,
+  type ActionReceipt,
+  type ConfirmPrompt,
 } from './action-receipt.types';
 import { logChatPerf } from './chat-perf';
 import type { ToolPendingMap } from './session-pending.types';
@@ -108,10 +111,12 @@ export class ChatService {
             tone: DEFAULT_SESSION_TONE,
             defaultMeetingMinutes: DEFAULT_MEETING_MINUTES,
             webSearch: null,
+            writingDesk: null,
             tools: {} as ToolPendingMap,
           }),
     ]);
     const pendingAction = sessionBootstrap.webSearch;
+    const writingDeskPending = sessionBootstrap.writingDesk ?? null;
     const sessionTz = sessionBootstrap.timeZone;
     const storedLocation = sessionBootstrap.location;
     const sessionTone = sessionBootstrap.tone ?? DEFAULT_SESSION_TONE;
@@ -148,6 +153,7 @@ export class ChatService {
     const pendingHint = buildPendingHintFromSnapshot({
       tools: toolPending,
       webSearch: pendingAction,
+      writingDesk: writingDeskPending,
     });
 
     /*
@@ -288,6 +294,68 @@ export class ChatService {
       shouldClearWebSearchLocationPending(envelope?.intent)
     ) {
       await this.sessionPreferences.clearPendingAction(sessionId);
+    }
+
+    /*
+     * Writing desk awaiting body: the next paste often classifies as
+     * general_chat. Resume the save tool so Laura cannot hallucinate a save.
+     */
+    if (
+      writingDeskPending?.type === 'writing_desk_awaiting_body' &&
+      shouldResumeWritingDeskBody(envelope?.intent)
+    ) {
+      const resumedEnvelope = {
+        version: 1,
+        intent: 'writing_desk_save',
+        confidence: 1,
+        confidenceKnown: true,
+        missingSlots: [],
+        slots: {
+          title: writingDeskPending.title,
+          tone: writingDeskPending.tone ?? undefined,
+          draftId: writingDeskPending.draftId ?? undefined,
+          body: message,
+        },
+      } as IntentEnvelope;
+
+      if (!signal?.aborted) {
+        onStatus?.('Saving to your writing desk…');
+      }
+
+      const saveReply = coerceToolReply(
+        await this.toolOrchestrator.handleWritingDeskSaveIntent(
+          sessionId,
+          message,
+          resumedEnvelope,
+        ),
+      );
+      const reply = saveReply?.text ?? 'Could not save that draft.';
+
+      if (dbConversationId) {
+        await this.chatHistoryService.appendMessage(
+          dbConversationId,
+          'assistant',
+          reply,
+        );
+      }
+
+      if (trackedOnChunk) {
+        trackedOnChunk(reply);
+      }
+
+      return {
+        reply,
+        conversationId: dbConversationId ?? undefined,
+        receipt: saveReply?.receipt,
+        confirmPrompt: saveReply?.confirmPrompt,
+      };
+    }
+
+    if (
+      writingDeskPending?.type === 'writing_desk_awaiting_body' &&
+      shouldClearWritingDeskBodyPending(envelope?.intent)
+    ) {
+      await this.sessionPreferences.clearWritingDeskPending(sessionId);
     }
 
     const minToolConfidence =

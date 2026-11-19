@@ -78,9 +78,10 @@ export class ToolOrchestratorService {
 
   handleWritingDeskSaveIntent(
     sessionId: string,
+    message: string,
     envelope?: IntentEnvelope,
   ): Promise<ToolReplyInput> {
-    return this.writingDeskTools.handleSave(sessionId, envelope);
+    return this.writingDeskTools.handleSave(sessionId, message, envelope);
   }
 
   handleWritingDeskListIntent(sessionId: string): Promise<ToolReplyInput> {

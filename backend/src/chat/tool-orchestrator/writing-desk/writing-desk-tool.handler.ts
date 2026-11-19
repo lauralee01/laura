@@ -1,27 +1,50 @@
 import { Injectable } from '@nestjs/common';
 import { WritingDeskService } from '../../../writing-desk/writing-desk.service';
+import { SessionPreferencesService } from '../../session-preferences.service';
 import { toolOk, toolText, type ToolReplyInput } from '../../action-receipt.types';
 import type { IntentEnvelope } from '../../intent/intent.types';
 
+/** Short commands are not draft bodies; pasted content usually is longer. */
+const MIN_INLINE_BODY_CHARS = 40;
+
 @Injectable()
 export class WritingDeskToolHandler {
-  constructor(private readonly writingDesk: WritingDeskService) {}
+  constructor(
+    private readonly writingDesk: WritingDeskService,
+    private readonly sessionPreferences: SessionPreferencesService,
+  ) {}
 
   async handleSave(
     sessionId: string,
+    message: string,
     envelope?: IntentEnvelope,
   ): Promise<ToolReplyInput> {
     const slots = envelope?.slots ?? {};
     const title = slotString(slots.title) || 'Untitled draft';
-    const body = slotString(slots.body);
+    let body = slotString(slots.body);
     const tone = slotString(slots.tone) || null;
     const draftId = slotId(slots.draftId);
 
+    if (!body && looksLikeDraftBody(message)) {
+      body = message.trim();
+    }
+
     if (!body) {
+      await this.sessionPreferences.setWritingDeskPending(sessionId, {
+        type: 'writing_desk_awaiting_body',
+        title: title !== 'Untitled draft' ? title : undefined,
+        tone,
+        draftId,
+        createdAt: Date.now(),
+      });
       return toolText(
         `I can save that to your Writing desk — paste the text (and a title if you like), or open **Writing desk** in the sidebar to create a draft.`,
       );
     }
+
+    await this.sessionPreferences
+      .clearWritingDeskPending(sessionId)
+      .catch(() => undefined);
 
     if (draftId) {
       const updated = await this.writingDesk.updateDraft(sessionId, draftId, {
@@ -77,6 +100,23 @@ export class WritingDeskToolHandler {
       `Here's what's on your Writing desk:\n\n${lines.join('\n')}\n\nOpen **Writing desk** in the sidebar to edit or copy any of these.`,
     );
   }
+}
+
+export function looksLikeDraftBody(message: string): boolean {
+  const trimmed = message.trim();
+  if (trimmed.length < MIN_INLINE_BODY_CHARS) {
+    return false;
+  }
+  // Short save/list commands should not be treated as the draft itself.
+  if (
+    /^(can you |please )?(add|save|put|show|list|open)\b[\s\S]{0,80}\b(writing desk|drafts?)\b/i.test(
+      trimmed,
+    ) &&
+    trimmed.length < 160
+  ) {
+    return false;
+  }
+  return true;
 }
 
 function slotString(value: unknown): string {

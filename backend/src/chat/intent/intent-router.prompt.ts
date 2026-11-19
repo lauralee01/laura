@@ -188,11 +188,15 @@ they say writing desk, "save this draft", or non-email writing
 artifacts. Put title in slots.title, full text in slots.body,
 optional tone in slots.tone, and slots.draftId when updating an
 existing piece.
+When pending context says Writing desk is waiting for draft text,
+classify the user's pasted content as writing_desk_save and put the
+entire message in slots.body (even if they do not repeat "save").
 
 Examples:
 "Save this to my writing desk as Cover letter"
 "Save that LinkedIn post to my drafts"
 "Update my bio draft with this text"
+(pasted multi-paragraph text after Laura asked them to paste)
 
 writing_desk_list:
 Use when the user asks what's on their Writing desk / saved writing

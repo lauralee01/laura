@@ -3,6 +3,7 @@ import type {
   PendingActionType,
   ToolPendingMap,
   WebSearchMissingLocationPending,
+  WritingDeskAwaitingBodyPending,
 } from './session-pending.types';
 
 export type IntentFamily =
@@ -61,6 +62,7 @@ export function familyForPendingAction(
 export type SessionPendingSnapshot = {
   tools: ToolPendingMap;
   webSearch: WebSearchMissingLocationPending | null;
+  writingDesk?: WritingDeskAwaitingBodyPending | null;
 };
 
 /**
@@ -129,15 +131,48 @@ export function shouldResumeWebSearchLocation(
   );
 }
 
+/** Clear writing-desk body pending when the user clearly switched topics. */
+export function shouldClearWritingDeskBodyPending(
+  intent?: IntentId,
+): boolean {
+  const family = familyForIntent(intent);
+  if (family === 'pending_control' && intent === 'pending_cancel') {
+    return true;
+  }
+  return family === 'calendar' || family === 'email' || family === 'web_search';
+}
+
+/**
+ * Resume writing-desk awaiting-body when the next turn is still chat-like
+ * (including a pasted draft classified as general_chat).
+ */
+export function shouldResumeWritingDeskBody(intent?: IntentId): boolean {
+  if (!intent) return true;
+  if (shouldClearWritingDeskBodyPending(intent)) return false;
+  if (intent === 'writing_desk_save') return true;
+  const family = familyForIntent(intent);
+  return (
+    family === 'chat' ||
+    family === 'pending_control' ||
+    family === 'timezone' ||
+    family === 'unknown'
+  );
+}
+
 export function buildPendingHintFromSnapshot(
   snapshot: SessionPendingSnapshot,
 ): string | undefined {
   const parts: string[] = [];
-  const { tools, webSearch } = snapshot;
+  const { tools, webSearch, writingDesk } = snapshot;
 
   if (webSearch?.type === 'web_search_missing_location') {
     parts.push(
       'Pending: web search waiting for the user town/city location.',
+    );
+  }
+  if (writingDesk?.type === 'writing_desk_awaiting_body') {
+    parts.push(
+      'Pending: writing desk waiting for the user to paste draft text to save. Prefer writing_desk_save with slots.body set to their message.',
     );
   }
   if (tools.email_send) {

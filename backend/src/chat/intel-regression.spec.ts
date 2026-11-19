@@ -120,6 +120,7 @@ describe('chat pipeline intelligence regressions', () => {
               tone: 'warm',
               defaultMeetingMinutes: 60,
               webSearch: null,
+              writingDesk: null,
               tools: { ...toolPending },
             })),
             getPendingAction: jest.fn().mockResolvedValue(null),

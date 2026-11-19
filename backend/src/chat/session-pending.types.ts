@@ -40,6 +40,15 @@ export type WebSearchMissingLocationPending = {
   };
 };
 
+/** Waiting for the user to paste draft text after writing_desk_save asked for it. */
+export type WritingDeskAwaitingBodyPending = {
+  type: 'writing_desk_awaiting_body';
+  title?: string;
+  tone?: string | null;
+  draftId?: number | null;
+  createdAt: number;
+};
+
 export type ToolPendingMap = Partial<
   Record<PendingActionType, PendingRequest<unknown>>
 >;
@@ -87,6 +96,7 @@ export type SessionPendingDocument = {
   lastEmailDraft?: LastEmailDraft | null;
   emailContacts?: ConversationEmailContact[];
   accountabilityNudge?: AccountabilityNudgeState | null;
+  writingDesk?: WritingDeskAwaitingBodyPending | null;
 };
 
 export function emptyPendingDocument(): SessionPendingDocument {
@@ -97,6 +107,7 @@ export function emptyPendingDocument(): SessionPendingDocument {
     lastEmailDraft: null,
     emailContacts: [],
     accountabilityNudge: null,
+    writingDesk: null,
   };
 }
 
@@ -140,6 +151,7 @@ export function parsePendingDocument(raw: unknown): SessionPendingDocument {
     const accountabilityNudge = parseAccountabilityNudge(
       obj['accountabilityNudge'],
     );
+    const writingDesk = parseWritingDeskPending(obj['writingDesk']);
 
     return {
       version: 1,
@@ -148,10 +160,47 @@ export function parsePendingDocument(raw: unknown): SessionPendingDocument {
       lastEmailDraft,
       emailContacts,
       accountabilityNudge,
+      writingDesk,
     };
   }
 
   return emptyPendingDocument();
+}
+
+function parseWritingDeskPending(
+  raw: unknown,
+): WritingDeskAwaitingBodyPending | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return null;
+  }
+  const obj = raw as Record<string, unknown>;
+  if (obj.type !== 'writing_desk_awaiting_body') {
+    return null;
+  }
+  const title = typeof obj.title === 'string' ? obj.title.trim() : undefined;
+  const tone =
+    typeof obj.tone === 'string'
+      ? obj.tone
+      : obj.tone === null
+        ? null
+        : undefined;
+  const draftIdRaw =
+    typeof obj.draftId === 'number' ? obj.draftId : Number(obj.draftId);
+  const draftId =
+    Number.isFinite(draftIdRaw) && draftIdRaw > 0
+      ? Math.floor(draftIdRaw)
+      : null;
+  const createdAt =
+    typeof obj.createdAt === 'number' && Number.isFinite(obj.createdAt)
+      ? obj.createdAt
+      : Date.now();
+  return {
+    type: 'writing_desk_awaiting_body',
+    title: title || undefined,
+    tone: tone === undefined ? undefined : tone,
+    draftId,
+    createdAt,
+  };
 }
 
 function parseAccountabilityNudge(

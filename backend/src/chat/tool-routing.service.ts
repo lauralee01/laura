@@ -274,6 +274,7 @@ export class ToolRoutingService {
           take(
             await this.toolOrchestrator.handleWritingDeskSaveIntent(
               sessionId,
+              message,
               envelope,
             ),
           );
