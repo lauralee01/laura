@@ -29,12 +29,14 @@ import { PendingRequestService } from './pending-request.service';
 import { IntentRouterService, IntentShadowService } from './intent';
 import { GoogleOAuthModule } from '../integrations/google/google-oauth.module';
 import { ToolRoutingService } from './tool-routing.service';
+import { AccountabilityNudgeService } from './accountability-nudge.service';
 
 @Module({
   imports: [LlmModule, MemoryModule, EmailModule, CalendarModule, WebSearchModule, GoogleOAuthModule],
   controllers: [ChatController],
   providers: [
     ChatService,
+    AccountabilityNudgeService,
     ToolRoutingService,
     IntentRouterService,
     IntentShadowService,

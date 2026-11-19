@@ -5,6 +5,7 @@ import {
 } from '../../datetime-context';
 import { ChatHistoryService } from '../../chat-history.service';
 import { MemoryService } from '../../../memory/memory.service';
+import { searchOpenLoopMemories } from '../../open-loop-memories';
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const MEMORY_LOOKBACK_MS = 14 * 24 * 60 * 60 * 1000;
@@ -97,14 +98,11 @@ export class WeeklyReviewHandler {
     try {
       const [listed, searched] = await Promise.all([
         this.memoryService.listMemories(sessionId),
-        this.memoryService
-          .searchMemories({
-            userId: sessionId,
-            query:
-              'goals commitments plans unfinished follow-up open loops priorities',
-            topK: MAX_MEMORY_LINES,
-          })
-          .catch(() => []),
+        searchOpenLoopMemories(
+          this.memoryService,
+          sessionId,
+          MAX_MEMORY_LINES,
+        ),
       ]);
 
       const cutoff = now.getTime() - MEMORY_LOOKBACK_MS;

@@ -16,6 +16,7 @@ import type { Request, Response } from 'express';
 import { getSessionId } from '../common/session/session.util';
 import { ChatService } from './chat.service';
 import { ChatHistoryService } from './chat-history.service';
+import { AccountabilityNudgeService } from './accountability-nudge.service';
 
 type ChatMessage = {
   role: 'user' | 'assistant';
@@ -96,7 +97,23 @@ export class ChatController {
   constructor(
     private readonly chatService: ChatService,
     private readonly chatHistoryService: ChatHistoryService,
+    private readonly accountabilityNudge: AccountabilityNudgeService,
   ) {}
+
+  /**
+   * Soft empty-state accountability chip (feature #22).
+   * Returns null suggestion when none / cooldown active.
+   */
+  @Get('accountability-nudge')
+  async accountabilityNudgeSuggestion(
+    @Req() req: Request,
+  ): Promise<{
+    suggestion: { memoryId: number; label: string; prompt: string } | null;
+  }> {
+    const sessionId = getSessionId(req);
+    const suggestion = await this.accountabilityNudge.getSuggestion(sessionId);
+    return { suggestion };
+  }
 
   @Get('history')
   async history(

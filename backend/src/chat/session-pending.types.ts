@@ -68,6 +68,15 @@ export type ConversationEmailContact = {
 };
 
 /**
+ * Soft accountability nudge anti-nag state (feature #22).
+ * Session-scoped; not a tool pending confirm flow.
+ */
+export type AccountabilityNudgeState = {
+  memoryId: number;
+  shownAt: number;
+};
+
+/**
  * Unified `session_preferences.pending_action` document.
  * Replaces the old single web-search-only JSON blob and the in-memory tool map.
  */
@@ -77,6 +86,7 @@ export type SessionPendingDocument = {
   tools?: ToolPendingMap;
   lastEmailDraft?: LastEmailDraft | null;
   emailContacts?: ConversationEmailContact[];
+  accountabilityNudge?: AccountabilityNudgeState | null;
 };
 
 export function emptyPendingDocument(): SessionPendingDocument {
@@ -86,6 +96,7 @@ export function emptyPendingDocument(): SessionPendingDocument {
     tools: {},
     lastEmailDraft: null,
     emailContacts: [],
+    accountabilityNudge: null,
   };
 }
 
@@ -126,11 +137,43 @@ export function parsePendingDocument(raw: unknown): SessionPendingDocument {
 
     const lastEmailDraft = parseLastEmailDraft(obj['lastEmailDraft']);
     const emailContacts = parseEmailContacts(obj['emailContacts']);
+    const accountabilityNudge = parseAccountabilityNudge(
+      obj['accountabilityNudge'],
+    );
 
-    return { version: 1, webSearch, tools, lastEmailDraft, emailContacts };
+    return {
+      version: 1,
+      webSearch,
+      tools,
+      lastEmailDraft,
+      emailContacts,
+      accountabilityNudge,
+    };
   }
 
   return emptyPendingDocument();
+}
+
+function parseAccountabilityNudge(
+  raw: unknown,
+): AccountabilityNudgeState | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return null;
+  }
+  const obj = raw as Record<string, unknown>;
+  const memoryId =
+    typeof obj.memoryId === 'number'
+      ? obj.memoryId
+      : Number(obj.memoryId);
+  const shownAt =
+    typeof obj.shownAt === 'number' ? obj.shownAt : Number(obj.shownAt);
+  if (!Number.isFinite(memoryId) || memoryId <= 0) {
+    return null;
+  }
+  if (!Number.isFinite(shownAt) || shownAt <= 0) {
+    return null;
+  }
+  return { memoryId, shownAt };
 }
 
 function parseLastEmailDraft(raw: unknown): LastEmailDraft | null {

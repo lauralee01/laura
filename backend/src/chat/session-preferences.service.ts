@@ -5,6 +5,7 @@ import {
   emptyPendingDocument,
   normalizeContactName,
   parsePendingDocument,
+  type AccountabilityNudgeState,
   type ConversationEmailContact,
   type LastEmailDraft,
   type SessionPendingDocument,
@@ -147,8 +148,13 @@ export class SessionPreferencesService implements OnModuleDestroy {
     const hasTools = Boolean(doc.tools && Object.keys(doc.tools).length > 0);
     const hasLastEmailDraft = Boolean(doc.lastEmailDraft?.draftId);
     const hasEmailContacts = Boolean(doc.emailContacts?.length);
+    const hasAccountabilityNudge = Boolean(doc.accountabilityNudge?.memoryId);
     const value =
-      hasWebSearch || hasTools || hasLastEmailDraft || hasEmailContacts
+      hasWebSearch ||
+      hasTools ||
+      hasLastEmailDraft ||
+      hasEmailContacts ||
+      hasAccountabilityNudge
         ? doc
         : null;
 
@@ -436,6 +442,24 @@ export class SessionPreferencesService implements OnModuleDestroy {
       contacts.push(next);
     }
     doc.emailContacts = contacts;
+    await this.writePendingDocument(sid, doc);
+  }
+
+  async getAccountabilityNudge(
+    sessionId: string,
+  ): Promise<AccountabilityNudgeState | null> {
+    const doc = await this.readPendingDocument(sessionId);
+    return doc.accountabilityNudge ?? null;
+  }
+
+  async setAccountabilityNudge(
+    sessionId: string,
+    state: AccountabilityNudgeState,
+  ): Promise<void> {
+    const sid = sessionId.trim();
+    if (!sid) return;
+    const doc = await this.readPendingDocument(sid);
+    doc.accountabilityNudge = state;
     await this.writePendingDocument(sid, doc);
   }
 }
