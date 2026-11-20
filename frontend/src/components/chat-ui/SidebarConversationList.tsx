@@ -97,7 +97,7 @@ export function SidebarConversationList({
           type="button"
           onClick={onNewChat}
           disabled={disabled}
-          className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] bg-accent px-2.5 py-1.5 text-xs font-medium text-surface-elevated transition hover:bg-accent-hover disabled:opacity-40"
+          className="inline-flex cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] bg-accent px-2.5 py-1.5 text-xs font-medium text-surface-elevated transition hover:bg-accent-hover disabled:opacity-40"
           aria-label="New chat"
         >
           <IconPlus className="h-3.5 w-3.5" />
