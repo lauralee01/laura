@@ -148,7 +148,7 @@ export function SidebarConversationList({
                         e.stopPropagation();
                         setMenuId((prev) => (prev === c.id ? null : c.id));
                       }}
-                      className="flex h-full items-center rounded-r-[var(--radius-md)] px-2 text-ink-muted transition hover:bg-canvas-deep/50 hover:text-ink disabled:opacity-40"
+                      className="flex h-full cursor-pointer items-center rounded-r-[var(--radius-md)] px-2 text-ink-muted transition hover:bg-canvas-deep/50 hover:text-ink disabled:opacity-40"
                       aria-label={`Chat options: ${c.preview}`}
                       aria-expanded={menuId === c.id}
                     >
