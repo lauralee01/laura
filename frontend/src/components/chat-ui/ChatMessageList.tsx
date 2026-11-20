@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { ActionReceiptStrip } from '@/components/chat-ui/ActionReceiptStrip';
 import { ConfirmChipStrip } from '@/components/chat-ui/ConfirmChipStrip';
 import { ChatEmptyState } from '@/components/chat-ui/ChatEmptyState';
+import { MessageCopyButton } from '@/components/chat-ui/MessageCopyButton';
 import type { StoredChatMessage } from '@/lib/session';
 
 type Props = {
@@ -121,7 +122,7 @@ export const ChatMessageList = memo(function ChatMessageList({
           return (
             <li
               key={`${i}-${m.role}`}
-              className={`laura-message-enter flex min-w-0 ${
+              className={`laura-message-enter group flex min-w-0 ${
                 m.role === 'user' ? 'justify-end' : 'justify-start'
               }`}
             >
@@ -160,6 +161,12 @@ export const ChatMessageList = memo(function ChatMessageList({
                     </span>
                   )}
                 </div>
+                {!isStreamingAssistant && m.content.trim() ? (
+                  <MessageCopyButton
+                    content={m.content}
+                    align={m.role === 'user' ? 'end' : 'start'}
+                  />
+                ) : null}
                 {m.role === 'assistant' && m.receipt && !isStreamingAssistant ? (
                   <ActionReceiptStrip receipt={m.receipt} />
                 ) : null}

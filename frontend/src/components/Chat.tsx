@@ -40,7 +40,6 @@ export function Chat() {
     selectConversation,
     renameConversation,
     deleteConversation,
-    copyConversation,
     initializing,
     isBusy,
     isGenerating,
@@ -73,11 +72,6 @@ export function Chat() {
       void deleteConversation(id);
     },
     [deleteConversation],
-  );
-
-  const onCopy = useCallback(
-    (id: string) => copyConversation(id),
-    [copyConversation],
   );
 
   const onCloseSidebar = useCallback(() => {
@@ -135,7 +129,6 @@ export function Chat() {
     onNewChat,
     onRename,
     onDelete,
-    onCopy,
     disabled: sidebarDisabled,
     onOpenMemories,
     onOpenWritingDesk,
