@@ -15,6 +15,7 @@ type Props = {
   onNewChat: () => void;
   onRename: (id: string, title: string) => void | Promise<void>;
   onDelete: (id: string) => void | Promise<void>;
+  onCopy: (id: string) => boolean | Promise<boolean>;
   disabled: boolean;
   onOpenMemories?: () => void;
   onOpenWritingDesk?: () => void;

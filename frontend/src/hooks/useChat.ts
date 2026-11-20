@@ -119,5 +119,6 @@ export function useChat() {
     selectConversation: threads.selectConversation,
     renameConversation: threads.renameConversation,
     deleteConversation: threads.deleteConversation,
+    copyConversation: threads.copyConversation,
   };
 }

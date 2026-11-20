@@ -12,6 +12,7 @@ type Props = {
   onNewChat: () => void;
   onRename: (id: string, title: string) => void | Promise<void>;
   onDelete: (id: string) => void | Promise<void>;
+  onCopy: (id: string) => boolean | Promise<boolean>;
   disabled: boolean;
 };
 
@@ -22,6 +23,7 @@ export function SidebarConversationList({
   onNewChat,
   onRename,
   onDelete,
+  onCopy,
   disabled,
 }: Props) {
   const [menuId, setMenuId] = useState<string | null>(null);
@@ -34,7 +36,10 @@ export function SidebarConversationList({
     preview: string;
   } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [copyingId, setCopyingId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!menuId) {
@@ -64,6 +69,41 @@ export function SidebarConversationList({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) {
+        clearTimeout(copiedTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleCopy = useCallback(
+    async (id: string) => {
+      if (copyingId) {
+        return;
+      }
+      setCopyingId(id);
+      try {
+        const ok = await Promise.resolve(onCopy(id));
+        if (!ok) {
+          setMenuId(null);
+          return;
+        }
+        setCopiedId(id);
+        if (copiedTimerRef.current) {
+          clearTimeout(copiedTimerRef.current);
+        }
+        copiedTimerRef.current = setTimeout(() => {
+          setCopiedId((prev) => (prev === id ? null : prev));
+          setMenuId((prev) => (prev === id ? null : prev));
+        }, 1200);
+      } finally {
+        setCopyingId(null);
+      }
+    },
+    [copyingId, onCopy],
+  );
 
   const submitRename = useCallback(async () => {
     if (!renameTarget) {
@@ -163,7 +203,24 @@ export function SidebarConversationList({
                           <button
                             type="button"
                             role="menuitem"
-                            className="w-full px-3 py-2 text-left text-ink transition hover:bg-canvas-mid"
+                            disabled={copyingId === c.id}
+                            className="w-full cursor-pointer px-3 py-2 text-left text-ink transition hover:bg-canvas-mid disabled:opacity-50"
+                            onClick={() => {
+                              void handleCopy(c.id);
+                            }}
+                          >
+                            {copiedId === c.id
+                              ? 'Copied'
+                              : copyingId === c.id
+                                ? 'Copying…'
+                                : 'Copy'}
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="w-full cursor-pointer px-3 py-2 text-left text-ink transition hover:bg-canvas-mid"
                             onClick={() => {
                               setMenuId(null);
                               setRenameTarget({
@@ -179,7 +236,7 @@ export function SidebarConversationList({
                           <button
                             type="button"
                             role="menuitem"
-                            className="w-full px-3 py-2 text-left text-danger transition hover:bg-danger-soft"
+                            className="w-full cursor-pointer px-3 py-2 text-left text-danger transition hover:bg-danger-soft"
                             onClick={() => {
                               setMenuId(null);
                               setDeleteConfirm({

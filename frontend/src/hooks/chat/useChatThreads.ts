@@ -9,6 +9,7 @@ import {
   renameConversation as renameConversationApi,
   type ConversationSummary,
 } from '@/lib/chat-api';
+import { formatChatTranscript } from '@/lib/format-chat-transcript';
 import type { StoredChatMessage } from '@/lib/session';
 
 type Options = {
@@ -274,6 +275,40 @@ export function useChatThreads({
     ],
   );
 
+  const copyConversation = useCallback(
+    async (id: string): Promise<boolean> => {
+      if (!sessionReady) {
+        return false;
+      }
+
+      setError(null);
+
+      try {
+        const messages =
+          conversationId === id && messagesRef.current.length > 0
+            ? messagesRef.current
+            : (await fetchChatHistory(id)).messages;
+
+        const transcript = formatChatTranscript(messages);
+        if (!transcript) {
+          setError('Nothing to copy yet.');
+          return false;
+        }
+
+        await navigator.clipboard.writeText(transcript);
+        return true;
+      } catch (copyError: unknown) {
+        setError(
+          copyError instanceof Error
+            ? copyError.message
+            : 'Could not copy chat.',
+        );
+        return false;
+      }
+    },
+    [conversationId, messagesRef, sessionReady, setError],
+  );
+
   return {
     creatingConversation,
     sidebarOpen,
@@ -283,5 +318,6 @@ export function useChatThreads({
     selectConversation,
     renameConversation,
     deleteConversation,
+    copyConversation,
   };
 }
