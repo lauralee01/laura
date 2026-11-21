@@ -16,6 +16,7 @@ import {
   handleUniqueMutationMatch,
 } from './calendar-mutation-match-flows';
 import { filterEventsForMutation } from './calendar-mutation-replies';
+import { resolveReminderMinutesBefore } from './calendar-reminder-minutes';
 import { resolveMutationSearchRange } from './calendar-mutation-search-range';
 import {
   getIntentTitleHint,
@@ -100,6 +101,16 @@ export class CalendarMutationHandler {
       );
     }
 
+    if (extractedMutation.operation === 'update') {
+      const resolvedReminder = resolveReminderMinutesBefore({
+        extracted: extractedMutation.reminderMinutesBefore,
+        slotReminder: envelope?.slots?.reminder,
+        userMessage,
+      });
+      extractedMutation.reminderMinutesBefore =
+        resolvedReminder !== undefined ? resolvedReminder : null;
+    }
+
     const resolvedTitleKeywords = resolveMutationTitleKeywords({
       extractedTitleKeyword: extractedMutation.titleKeywords,
       intentTitleHint: getIntentTitleHint(envelope),
@@ -109,7 +120,8 @@ export class CalendarMutationHandler {
       extractedMutation.operation === 'update' &&
       !extractedMutation.newTitle &&
       !extractedMutation.newStart &&
-      !extractedMutation.newEnd;
+      !extractedMutation.newEnd &&
+      extractedMutation.reminderMinutesBefore === null;
 
     const { startLocal, endLocal } = resolveMutationSearchRange(
       extractedMutation,
@@ -149,7 +161,8 @@ export class CalendarMutationHandler {
         Boolean(
           extractedMutation.newTitle ||
             extractedMutation.newStart ||
-            extractedMutation.newEnd,
+            extractedMutation.newEnd ||
+            extractedMutation.reminderMinutesBefore !== null,
         );
 
       if (

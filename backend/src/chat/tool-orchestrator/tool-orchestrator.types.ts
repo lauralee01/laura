@@ -75,6 +75,7 @@ export type PendingCalendarUpdatePayload =
     newTitle: string | null;
     newStart: string | null;
     newEnd: string | null;
+    reminderMinutesBefore?: number | null;
     options: Array<{
       index: number;
       eventId: string;

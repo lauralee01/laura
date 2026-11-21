@@ -152,7 +152,8 @@ titleHint, startTime, endTime, roughTimeHint, dayOffset, timeZone.
 
 calendar_update:
 Use when an existing calendar event should be moved, edited,
-changed, or rescheduled.
+changed, rescheduled, or have its reminder/lead time changed
+(e.g. "remind me one hour before the event").
 
 calendar_delete:
 Use when an existing calendar event should be removed or cancelled.

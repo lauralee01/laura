@@ -215,6 +215,8 @@ export type CalendarMutationExtraction = {
   newTitle: string | null;
   newStart: string | null;
   newEnd: string | null;
+  /** Popup minutes before start; set for reminder-only updates. */
+  reminderMinutesBefore: number | null;
 };
 
 export async function extractCalendarMutationArgs(
@@ -242,7 +244,8 @@ export async function extractCalendarMutationArgs(
     `  "searchNextDays": number | null,\n` +
     `  "newTitle": string | null,\n` +
     `  "newStart": string | null,\n` +
-    `  "newEnd": string | null\n` +
+    `  "newEnd": string | null,\n` +
+    `  "reminderMinutesBefore": number | null\n` +
     `}\n` +
     `Rules:\n` +
     `- Today in ${timeZone} is ${todayInZone}.\n` +
@@ -251,8 +254,9 @@ export async function extractCalendarMutationArgs(
     `- weekOffset: 0=this week, 1=next week, null if unclear.\n` +
     `- searchWholeWeek: true for "this week" / "the week" without a specific day.\n` +
     `- searchNextDays: days ahead to search when vague (default 14).\n` +
-    `- delete: set newTitle, newStart, newEnd to null.\n` +
-    `- update: set newTitle/newStart/newEnd as LOCAL ISO (YYYY-MM-DDTHH:mm:ss, no Z).` +
+    `- delete: set newTitle, newStart, newEnd, reminderMinutesBefore to null.\n` +
+    `- update: set newTitle/newStart/newEnd as LOCAL ISO (YYYY-MM-DDTHH:mm:ss, no Z).\n` +
+    `- update reminder-only requests (e.g. "remind me one hour before"): keep times null and set reminderMinutesBefore (60 for one hour, 30 for half hour, 0 for at start).` +
     lockedOperationNote;
 
   const raw = await llm.generate({
@@ -304,5 +308,7 @@ export async function extractCalendarMutationArgs(
       operation === 'delete'
         ? null
         : cleanNullableString(parsed['newEnd']),
+    reminderMinutesBefore:
+      operation === 'delete' ? null : cleanNumber(parsed['reminderMinutesBefore']),
   };
 }

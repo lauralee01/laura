@@ -13,6 +13,7 @@ import {
   looksLikeBareEventPick,
   pickUniqueTitleMatch,
 } from './calendar-event-pick';
+import { resolveReminderMinutesBefore } from './calendar-reminder-minutes';
 
 @Injectable()
 export class CalendarPendingUpdateFlow {
@@ -43,21 +44,33 @@ export class CalendarPendingUpdateFlow {
         this.llmService,
         message,
         pendingUpdatePayload.timeZone,
+        'update',
       );
+
+      if (extractedUpdateDetails?.operation === 'update') {
+        const resolvedReminder = resolveReminderMinutesBefore({
+          extracted: extractedUpdateDetails.reminderMinutesBefore,
+          slotReminder: envelope?.slots?.reminder,
+          userMessage: message,
+        });
+        extractedUpdateDetails.reminderMinutesBefore =
+          resolvedReminder !== undefined ? resolvedReminder : null;
+      }
 
       const validUpdateDetails =
         extractedUpdateDetails?.operation === 'update' &&
         Boolean(
           extractedUpdateDetails.newTitle ||
             extractedUpdateDetails.newStart ||
-            extractedUpdateDetails.newEnd,
+            extractedUpdateDetails.newEnd ||
+            extractedUpdateDetails.reminderMinutesBefore !== null,
         );
 
       if (!validUpdateDetails || !extractedUpdateDetails) {
         return (
           `What should I change for **${pendingUpdatePayload.title}**—` +
-          'the title, time, or both?\n\n' +
-          'For example: “rename it to Budget review” or “move it to 4pm”.'
+          'the title, time, reminder, or a mix?\n\n' +
+          'For example: “rename it to Budget review”, “move it to 4pm”, or “remind me one hour before”.'
         );
       }
 
@@ -70,6 +83,7 @@ export class CalendarPendingUpdateFlow {
         title: extractedUpdateDetails.newTitle,
         newStart: extractedUpdateDetails.newStart,
         newEnd: extractedUpdateDetails.newEnd,
+        reminderMinutesBefore: extractedUpdateDetails.reminderMinutesBefore,
         eventStartLocalIso: pendingUpdatePayload.startLocalIso,
         eventEndLocalIso: pendingUpdatePayload.endLocalIso,
         mergeUserMessage: message,
@@ -114,35 +128,55 @@ export class CalendarPendingUpdateFlow {
     let savedNewTitle = pendingUpdatePayload.newTitle ?? null;
     let savedNewStart = pendingUpdatePayload.newStart ?? null;
     let savedNewEnd = pendingUpdatePayload.newEnd ?? null;
+    let savedReminderMinutesBefore =
+      pendingUpdatePayload.reminderMinutesBefore ?? null;
 
     if (
       !savedNewTitle &&
       !savedNewStart &&
       !savedNewEnd &&
+      savedReminderMinutesBefore === null &&
       !looksLikeBareEventPick(message)
     ) {
       const extractedTurnUpdate = await extractCalendarMutationArgs(
         this.llmService,
         message,
         pendingUpdatePayload.timeZone,
+        'update',
       );
+
+      if (extractedTurnUpdate?.operation === 'update') {
+        const resolvedReminder = resolveReminderMinutesBefore({
+          extracted: extractedTurnUpdate.reminderMinutesBefore,
+          slotReminder: envelope?.slots?.reminder,
+          userMessage: message,
+        });
+        extractedTurnUpdate.reminderMinutesBefore =
+          resolvedReminder !== undefined ? resolvedReminder : null;
+      }
 
       if (
         extractedTurnUpdate?.operation === 'update' &&
         Boolean(
           extractedTurnUpdate.newTitle ||
             extractedTurnUpdate.newStart ||
-            extractedTurnUpdate.newEnd,
+            extractedTurnUpdate.newEnd ||
+            extractedTurnUpdate.reminderMinutesBefore !== null,
         )
       ) {
         savedNewTitle = extractedTurnUpdate.newTitle ?? null;
         savedNewStart = extractedTurnUpdate.newStart ?? null;
         savedNewEnd = extractedTurnUpdate.newEnd ?? null;
+        savedReminderMinutesBefore =
+          extractedTurnUpdate.reminderMinutesBefore ?? null;
       }
     }
 
     const updateDetailsAreStillMissing =
-      !savedNewTitle && !savedNewStart && !savedNewEnd;
+      !savedNewTitle &&
+      !savedNewStart &&
+      !savedNewEnd &&
+      savedReminderMinutesBefore === null;
 
     if (updateDetailsAreStillMissing) {
       await this.pendingRequestService.setPending<PendingCalendarUpdatePayload>(
@@ -168,7 +202,7 @@ export class CalendarPendingUpdateFlow {
       return (
         `I found **${selectedCalendarEvent.title}** scheduled for ` +
         `${selectedCalendarEvent.startText}.\n\n` +
-        'What should I change—the title, time, or both?'
+        'What should I change—the title, time, reminder, or a mix?'
       );
     }
 
@@ -181,6 +215,7 @@ export class CalendarPendingUpdateFlow {
       title: savedNewTitle,
       newStart: savedNewStart,
       newEnd: savedNewEnd,
+      reminderMinutesBefore: savedReminderMinutesBefore,
       eventStartLocalIso: selectedCalendarEvent.startLocalIso,
       eventEndLocalIso: selectedCalendarEvent.endLocalIso,
       mergeUserMessage: pendingUpdate.originalMessage,

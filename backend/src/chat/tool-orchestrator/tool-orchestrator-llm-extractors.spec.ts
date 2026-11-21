@@ -203,6 +203,44 @@ describe('ToolOrchestratorLlmExtractors', () => {
         newTitle: null,
         newStart: null,
         newEnd: null,
+        reminderMinutesBefore: null,
+      });
+    });
+
+    it('extracts reminder-only update args', async () => {
+      mockLlmService.generate.mockResolvedValue(
+        JSON.stringify({
+          operation: 'update',
+          titleKeywords: 'any',
+          dayOffset: null,
+          weekOffset: null,
+          searchWholeWeek: false,
+          searchNextDays: 14,
+          newTitle: null,
+          newStart: null,
+          newEnd: null,
+          reminderMinutesBefore: 60,
+        }),
+      );
+
+      const result = await extractCalendarMutationArgs(
+        mockLlmService,
+        'Remind me one hour before the event',
+        'America/New_York',
+        'update',
+      );
+
+      expect(result).toEqual({
+        operation: 'update',
+        titleKeywords: 'any',
+        dayOffset: null,
+        weekOffset: null,
+        searchWholeWeek: false,
+        searchNextDays: 14,
+        newTitle: null,
+        newStart: null,
+        newEnd: null,
+        reminderMinutesBefore: 60,
       });
     });
 
@@ -218,6 +256,7 @@ describe('ToolOrchestratorLlmExtractors', () => {
           newTitle: 'New title',
           newStart: null,
           newEnd: null,
+          reminderMinutesBefore: null,
         }),
       );
 

@@ -15,6 +15,7 @@ export type ApplyCalendarUpdateInput = {
   title?: string | null;
   newStart?: string | null;
   newEnd?: string | null;
+  reminderMinutesBefore?: number | null;
   eventStartLocalIso?: string;
   eventEndLocalIso?: string;
   /**
@@ -27,15 +28,27 @@ export type ApplyCalendarUpdateInput = {
 export function formatCalendarUpdateSuccess(input: {
   title: string;
   url?: string;
+  reminderMinutesBefore?: number | null;
 }): ToolReplyPayload {
+  const reminderLine =
+    input.reminderMinutesBefore !== undefined &&
+    input.reminderMinutesBefore !== null
+      ? `\nReminder: ${input.reminderMinutesBefore} min before`
+      : '';
+
   const text =
     `Done — I updated **${input.title}** in your Google Calendar.` +
+    reminderLine +
     (input.url ? `\n\nOpen in Calendar: ${input.url}` : '');
 
   return toolOk(text, {
     kind: 'calendar_updated',
     title: 'Event updated',
-    detail: input.title,
+    detail:
+      input.reminderMinutesBefore !== undefined &&
+      input.reminderMinutesBefore !== null
+        ? `${input.title} · reminder ${input.reminderMinutesBefore} min before`
+        : input.title,
   });
 }
 
@@ -80,11 +93,13 @@ export async function applyCalendarUpdate(
       title: input.title ?? undefined,
       start: resolvedUpdatedStart,
       end: resolvedUpdatedEnd,
+      reminderMinutesBefore: input.reminderMinutesBefore,
     });
 
     const success = formatCalendarUpdateSuccess({
       title: updated.title,
       url: updated.url,
+      reminderMinutesBefore: input.reminderMinutesBefore,
     });
 
     return {

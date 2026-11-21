@@ -36,6 +36,7 @@ export async function continuePendingDetailsUpdate(
     title: extracted.newTitle,
     newStart: extracted.newStart,
     newEnd: extracted.newEnd,
+    reminderMinutesBefore: extracted.reminderMinutesBefore,
     eventStartLocalIso: pending.startLocalIso,
     eventEndLocalIso: pending.endLocalIso,
     mergeUserMessage: deps.userMessage,
@@ -118,8 +119,8 @@ export async function handleUniqueMutationMatch(
     return (
       `I found **${matched.title}** scheduled for ` +
       `${matched.startText}.\n\n` +
-      'What should I change—the title, time, or both? For example, ' +
-      '“rename it to Budget review” or “move it to 4pm”.'
+      'What should I change—the title, time, reminder, or a mix? For example, ' +
+      '“rename it to Budget review”, “move it to 4pm”, or “remind me one hour before”.'
     );
   }
 
@@ -132,6 +133,7 @@ export async function handleUniqueMutationMatch(
     title: extracted.newTitle,
     newStart: extracted.newStart,
     newEnd: extracted.newEnd,
+    reminderMinutesBefore: extracted.reminderMinutesBefore,
     eventStartLocalIso: matched.isAllDay
       ? undefined
       : matched.startLocalIso,
@@ -195,6 +197,7 @@ export async function handleAmbiguousMutationMatches(
           newTitle: extracted.newTitle,
           newStart: extracted.newStart,
           newEnd: extracted.newEnd,
+          reminderMinutesBefore: extracted.reminderMinutesBefore,
           options: eventSelectionOptions,
         },
         missingSlots: ['targetEvent'],
