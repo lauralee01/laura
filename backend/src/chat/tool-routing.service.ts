@@ -123,16 +123,29 @@ export class ToolRoutingService {
 
     if (isGoogleIntent && sessionId && replyBox.value === null) {
       if (!resolvedGoogleConnected) {
-        const action =
+        const isEmailIntent =
           envelope?.intent === 'email_draft' ||
           envelope?.intent === 'email_draft_revise' ||
-          envelope?.intent === 'email_draft_delete'
-            ? 'use Gmail'
-            : 'access Google Calendar';
-        take(
-          `I couldn't ${action}. Google is not connected for this session. ` +
-            `Use 'Connect Google' in the app, then try again.`,
-        );
+          envelope?.intent === 'email_draft_delete';
+
+        if (isEmailIntent) {
+          take(
+            `I couldn't use Gmail. Google is not connected for this session. ` +
+              `Use 'Connect Google' in the app, then try again.`,
+          );
+        } else if (envelope?.intent === 'calendar_create') {
+          take(
+            `I couldn't add that to your calendar — Google is not connected for this session. ` +
+              `I don't keep a separate to-do list; timed reminders and deadlines go on Google Calendar. ` +
+              `Use 'Connect Google' in the app, then ask me again. ` +
+              `If you want, I can still remember this as a note for now.`,
+          );
+        } else {
+          take(
+            `I couldn't access Google Calendar. Google is not connected for this session. ` +
+              `Use 'Connect Google' in the app, then try again.`,
+          );
+        }
 
         if (envelope?.intent === 'email_draft') {
           await this.pendingRequestService.clearPending(

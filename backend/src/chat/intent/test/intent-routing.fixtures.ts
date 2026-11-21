@@ -43,3 +43,32 @@ export const DATETIME_ROUTING_FIXTURES: IntentRoutingFixture[] = [
     note: 'Forward date arithmetic',
   },
 ];
+
+/** Reminder / todo language → calendar_create (prompt batch-g-v15+). */
+export const REMINDER_ROUTING_FIXTURES: IntentRoutingFixture[] = [
+  {
+    userMessage: 'Remind me Friday to send the invoice',
+    expectedIntent: 'calendar_create',
+    note: 'Timed reminder is calendar-backed',
+  },
+  {
+    userMessage: 'Add a todo for The Outlier screenings Tuesday evening',
+    expectedIntent: 'calendar_create',
+    note: 'Todo-with-deadline is calendar_create',
+  },
+  {
+    userMessage: 'Put a deadline on my calendar for Tuesday evening',
+    expectedIntent: 'calendar_create',
+    note: 'Explicit deadline on calendar',
+  },
+  {
+    userMessage: 'Schedule a reminder tomorrow at 5pm to call Mom',
+    expectedIntent: 'calendar_create',
+    note: 'Schedule a reminder phrasing',
+  },
+  {
+    userMessage: 'Remind me what I said about interviews',
+    expectedIntent: 'general_chat',
+    note: 'Memory recall — not a calendar reminder',
+  },
+];

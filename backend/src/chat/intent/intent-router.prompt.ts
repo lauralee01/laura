@@ -130,7 +130,22 @@ Never use mode "upcoming" for "today" / "tomorrow" / a specific day.
 
 calendar_create:
 Use when the user wants an actual event added, scheduled, booked,
-or blocked on their calendar.
+or blocked on their calendar — including reminders, follow-ups,
+deadlines, and "add a to-do / task" when they give (or clearly
+imply) a day or time to put on the calendar.
+
+Laura has no separate to-do list; timed reminders and deadlines
+are calendar_create.
+
+Examples that are calendar_create:
+"Remind me Friday to send the invoice"
+"Add a todo for The Outlier screenings Tuesday evening"
+"Put a deadline on my calendar for Tuesday evening"
+"Schedule a reminder tomorrow at 5pm to call Mom"
+
+Do NOT use calendar_create for memory recall such as
+"Remind me what I said about interviews" (that is general_chat
+with needsMemory, not a calendar reminder).
 
 Slots use camelCase:
 titleHint, startTime, endTime, roughTimeHint, dayOffset, timeZone.
@@ -254,7 +269,7 @@ prior statements, goals, roles, or "what do you know about me".
 
 Examples that need memory:
 "What restaurants would I like?"
-"Remind me what I said about interviews"
+"Remind me what I said about interviews" (memory recall — not calendar)
 "Based on what you know about me, draft a bio"
 
 Set needsMemory false for pure tool lookups, clock/date questions,

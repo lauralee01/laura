@@ -37,6 +37,8 @@ describe('chat pipeline intelligence regressions', () => {
   let clearMany: jest.Mock;
   let snapshotTools: jest.Mock;
   let handleWebSearchIntent: jest.Mock;
+  let handleCalendarCreateIntent: jest.Mock;
+  let isConnected: jest.Mock;
   let llmGenerate: jest.Mock;
   let writeExtracted: jest.Mock;
   let toolPending: ToolPendingMap;
@@ -51,6 +53,16 @@ describe('chat pipeline intelligence regressions', () => {
       kind: 'reply',
       text: 'Here is the weather outlook.',
     });
+    handleCalendarCreateIntent = jest.fn().mockResolvedValue({
+      kind: 'reply',
+      text: 'Done — I added it to your Google Calendar.',
+      receipt: {
+        kind: 'calendar_created',
+        title: 'Event added to Calendar',
+        detail: 'Send invoice · 2026-11-21T17:00:00 – 2026-11-21T17:30:00',
+      },
+    });
+    isConnected = jest.fn().mockResolvedValue(true);
     llmGenerate = jest.fn().mockResolvedValue(
       'Could you tell me which calendar event you mean?',
     );
@@ -76,7 +88,7 @@ describe('chat pipeline intelligence regressions', () => {
           useValue: {
             handleWebSearchIntent,
             handleCalendarListIntent: jest.fn(),
-            handleCalendarCreateIntent: jest.fn(),
+            handleCalendarCreateIntent,
             handleCalendarMutationIntent: jest.fn(),
             handleEmailDraftIntent: jest.fn(),
             handleEmailDraftFollowUp: jest.fn(),
@@ -146,12 +158,67 @@ describe('chat pipeline intelligence regressions', () => {
         },
         {
           provide: GoogleOAuthService,
-          useValue: { isConnected: jest.fn().mockResolvedValue(true) },
+          useValue: { isConnected },
         },
       ],
     }).compile();
 
     chat = module.get(ChatService);
+  });
+
+  it('routes calendar_create reminders through the create handler with a receipt', async () => {
+    classify.mockResolvedValue(
+      envelope('calendar_create', { titleHint: 'Send invoice' }),
+    );
+
+    const result = await chat.replyTo(
+      'sess-1',
+      'Remind me Friday to send the invoice',
+      [],
+    );
+
+    expect(handleCalendarCreateIntent).toHaveBeenCalled();
+    expect(result.reply).toContain('Google Calendar');
+    expect(result.receipt?.kind).toBe('calendar_created');
+    expect(llmGenerate).not.toHaveBeenCalled();
+  });
+
+  it('honestly declines calendar_create reminders when Google is disconnected', async () => {
+    isConnected.mockResolvedValue(false);
+    classify.mockResolvedValue(
+      envelope('calendar_create', { titleHint: 'Outlier screenings' }),
+    );
+
+    const result = await chat.replyTo(
+      'sess-1',
+      'Add a todo for The Outlier screenings Tuesday evening',
+      [],
+    );
+
+    expect(handleCalendarCreateIntent).not.toHaveBeenCalled();
+    expect(result.reply).toMatch(/not connected/i);
+    expect(result.reply).toMatch(/separate to-do list/i);
+    expect(result.reply).toMatch(/Connect Google/i);
+    expect(result.receipt).toBeUndefined();
+    expect(llmGenerate).not.toHaveBeenCalled();
+  });
+
+  it('keeps general_chat anti-hallucination guidance for fake todos', async () => {
+    classify.mockResolvedValue(envelope('general_chat', {}));
+    llmGenerate.mockResolvedValue(
+      "I don't keep a separate to-do list — want this on your calendar?",
+    );
+
+    await chat.replyTo(
+      'sess-1',
+      'A to-do list and a reminder would be great',
+      [],
+    );
+
+    expect(llmGenerate).toHaveBeenCalled();
+    const systemPrompt = llmGenerate.mock.calls[0][0].systemPrompt as string;
+    expect(systemPrompt).toMatch(/separate to-do list/i);
+    expect(systemPrompt).toMatch(/Do not invent that you already completed/i);
   });
 
   it('clears calendar pending when Stage-1 switches to web_search', async () => {

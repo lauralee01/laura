@@ -51,12 +51,19 @@ export class CalendarCreateHandler {
     end: string;
     timeZone: string;
     url?: string;
+    reminderMinutesBefore?: number;
   }): ToolReplyInput {
+    const reminderLine =
+      input.reminderMinutesBefore !== undefined
+        ? `\nReminder: ${input.reminderMinutesBefore} min before`
+        : '';
+
     const text =
       `Done — I added it to your Google Calendar.\n\n` +
       `**${input.title}**\n` +
       `When: ${input.start} – ${input.end}\n` +
       `Time zone: ${input.timeZone}` +
+      reminderLine +
       (input.url ? `\n\nOpen in Calendar: ${input.url}` : '');
 
     return toolOk(text, {
@@ -164,6 +171,7 @@ export class CalendarCreateHandler {
         end: args.end,
         timeZone,
         url: event.url,
+        reminderMinutesBefore: args.reminderMinutesBefore,
       });
     } catch (e: unknown) {
       return formatToolFailureMessage('create the calendar event', e);
@@ -225,6 +233,7 @@ export class CalendarCreateHandler {
         end: args.end,
         timeZone,
         url: event.url,
+        reminderMinutesBefore: args.reminderMinutesBefore,
       });
     } catch (e: unknown) {
       return formatToolFailureMessage('create the calendar event', e);

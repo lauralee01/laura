@@ -165,7 +165,8 @@ export async function extractCalendarEventArgs(
     `- Month+day without year: pick NEXT occurrence on/after ${todayInZone}.\n` +
     `- start/end: ISO datetime strings in LOCAL time for ${timeZone} (format: YYYY-MM-DDTHH:mm:ss, NO 'Z' or offset).\n` +
     `- ${durationRule}\n` +
-    `- If start undetermined, set start & end to null.` +
+    `- If start undetermined, set start & end to null.\n` +
+    `- For "remind me" / deadline / follow-up / todo-with-a-time requests, set reminderMinutesBefore to a sensible popup lead time (often 0 or 30) unless the user specified otherwise.` +
     (knownBits.length
       ? `\n- Prefer these Stage-1 hints when filling gaps:\n  ${knownBits.join('\n  ')}`
       : '');
