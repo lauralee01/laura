@@ -21,6 +21,8 @@ type Props = {
   onOpenSettings?: () => void;
 };
 
+/** Mobile-only sidebar for chat history. */
+
 export const ChatMobileDrawer = memo(function ChatMobileDrawer({
   sessionReady,
   open,
