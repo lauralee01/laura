@@ -129,34 +129,7 @@ export function AuthCard() {
           </h1>
           <p className="mt-1.5 text-sm text-ink-muted">{subtitle}</p>
 
-          {view !== 'code' ? (
-            <>
-              <button
-                type="button"
-                onClick={() =>
-                  setNotice(
-                    'Preview only: Google sign-in isn’t connected yet.',
-                  )
-                }
-                className="mt-6 flex w-full cursor-pointer items-center justify-center gap-2.5 rounded-[var(--radius-md)] border border-border bg-canvas px-3 py-2.5 text-sm font-medium text-ink transition hover:border-accent/40"
-              >
-                <GoogleMark />
-                Continue with Google
-              </button>
-
-              <div className="my-5 flex items-center gap-3" aria-hidden="true">
-                <span className="h-px flex-1 bg-border-subtle" />
-                <span className="text-[11px] uppercase tracking-wide text-ink-muted">
-                  or
-                </span>
-                <span className="h-px flex-1 bg-border-subtle" />
-              </div>
-            </>
-          ) : (
-            <div className="mt-6" />
-          )}
-
-          <form onSubmit={onSubmit} className="space-y-4" noValidate>
+          <form onSubmit={onSubmit} className="mt-6 space-y-4" noValidate>
             {view === 'signup' ? (
               <Field id="auth-name" label="Name">
                 <input
@@ -274,6 +247,31 @@ export function AuthCard() {
               </p>
             ) : null}
           </form>
+
+          {view !== 'code' ? (
+            <>
+              <div className="my-5 flex items-center gap-3" aria-hidden="true">
+                <span className="h-px flex-1 bg-border-subtle" />
+                <span className="text-[11px] uppercase tracking-wide text-ink-muted">
+                  or
+                </span>
+                <span className="h-px flex-1 bg-border-subtle" />
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setNotice(
+                    'Preview only: Google sign-in isn’t connected yet.',
+                  )
+                }
+                className="flex w-full cursor-pointer items-center justify-center gap-2.5 rounded-[var(--radius-md)] border border-border bg-canvas px-3 py-2.5 text-sm font-medium text-ink transition hover:border-accent/40"
+              >
+                <GoogleMark />
+                Continue with Google
+              </button>
+            </>
+          ) : null}
 
           <div className="mt-5 space-y-2 text-center text-xs text-ink-muted">
             {view === 'signin' ? (
