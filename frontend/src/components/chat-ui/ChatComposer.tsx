@@ -30,6 +30,14 @@ export function ChatComposer({
 }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
+  /*
+   * Use readOnly (not disabled) while locked: a disabled textarea loses
+   * focus and the browser never gives it back, so the user would have to
+   * click into the field again after every reply. readOnly keeps focus
+   * (and the mobile keyboard) while still blocking edits and sends.
+   */
+  const locked = disabled || isGenerating;
+
   const syncHeight = useCallback(() => {
     const el = textareaRef.current;
     if (!el) {
@@ -60,15 +68,16 @@ export function ChatComposer({
           value={input}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => {
-            if (isGenerating) {
-              return;
-            }
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
+              if (locked) {
+                return;
+              }
               e.currentTarget.form?.requestSubmit();
             }
           }}
-          disabled={disabled || isGenerating}
+          readOnly={locked}
+          aria-busy={locked}
           autoComplete="off"
           aria-label="Message"
         />
