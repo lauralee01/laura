@@ -66,14 +66,14 @@ export function MemoryListItem({
             <div className="flex gap-1">
               <button
                 type="button"
-                className="rounded-[var(--radius-sm)] px-2 py-1 text-[11px] font-medium text-ink-muted transition hover:bg-canvas-mid hover:text-ink"
+                className="cursor-pointer rounded-[var(--radius-sm)] px-2 py-1 text-[11px] font-medium text-ink-muted transition hover:bg-canvas-mid hover:text-ink"
                 onClick={onStartEdit}
               >
                 Edit
               </button>
               <button
                 type="button"
-                className="rounded-[var(--radius-sm)] px-2 py-1 text-[11px] font-medium text-danger transition hover:bg-danger-soft"
+                className="cursor-pointer rounded-[var(--radius-sm)] px-2 py-1 text-[11px] font-medium text-danger transition hover:bg-danger-soft"
                 onClick={onRequestDelete}
               >
                 Delete
