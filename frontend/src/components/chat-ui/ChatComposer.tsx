@@ -7,7 +7,6 @@ import {
   type FormEvent,
 } from 'react';
 import { IconSend, IconStop } from '@/components/chat-ui/ChatIcons';
-import { COMPOSER_INPUT_ID } from '@/components/chat-ui/LocationChipStrip';
 
 const MAX_HEIGHT_PX = 192; // matches max-h-48
 
@@ -63,7 +62,6 @@ export function ChatComposer({
       <div className="laura-composer-shell mx-auto flex max-w-2xl items-center gap-2 rounded-[var(--radius-lg)] border border-border bg-surface-elevated px-3 py-2 shadow-soft">
         <textarea
           ref={textareaRef}
-          id={COMPOSER_INPUT_ID}
           rows={1}
           className="max-h-48 min-h-[2.75rem] min-w-0 flex-1 resize-none bg-transparent py-2 pl-1 text-base leading-relaxed text-ink outline-none ring-0 placeholder:text-ink-muted"
           placeholder="Talk to laura…"

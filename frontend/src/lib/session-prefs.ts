@@ -79,44 +79,6 @@ export async function fetchSessionPrefs(): Promise<SessionPrefs> {
   return parsePrefs(data);
 }
 
-/**
- * Sends browser coordinates to the backend, which reverse-geocodes them to a
- * city label, stores only that label as the session location, and discards the
- * coordinates. Returns the label (e.g. "Boston, MA").
- */
-export async function detectSessionLocation(
-  latitude: number,
-  longitude: number,
-): Promise<string> {
-  const url = `${getApiBaseUrl()}/session/location/detect`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    ...cred,
-    body: JSON.stringify({ latitude, longitude }),
-  });
-  const rawText = await res.text();
-  if (!res.ok) {
-    throw new Error(`Location lookup failed (${res.status}).`);
-  }
-  let data: unknown;
-  try {
-    data = JSON.parse(rawText) as unknown;
-  } catch {
-    throw new Error('Location lookup response was not valid JSON.');
-  }
-  const location =
-    typeof data === 'object' &&
-    data !== null &&
-    typeof (data as { location?: unknown }).location === 'string'
-      ? (data as { location: string }).location.trim()
-      : '';
-  if (!location) {
-    throw new Error('Location lookup returned no city.');
-  }
-  return location;
-}
-
 export async function patchSessionPrefs(
   patch: SessionPrefsPatch,
 ): Promise<SessionPrefs> {

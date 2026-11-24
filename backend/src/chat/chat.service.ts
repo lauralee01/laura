@@ -29,8 +29,6 @@ import { buildLauraChatSystemPrompt } from './laura-system-prompt';
 import { ToolRoutingService } from './tool-routing.service';
 import {
   coerceToolReply,
-  USE_LOCATION_PROMPT,
-  WEB_SEARCH_LOCATION_QUESTION,
   type ActionReceipt,
   type ConfirmPrompt,
 } from './action-receipt.types';
@@ -270,7 +268,7 @@ export class ChatService {
 
       const reply =
         searchResult.kind === 'needs_location'
-          ? WEB_SEARCH_LOCATION_QUESTION
+          ? 'Which town or city should I use for this search?'
           : searchResult.text;
 
       if (searchResult.kind === 'needs_location') {
@@ -303,10 +301,6 @@ export class ChatService {
       return {
         reply,
         conversationId: dbConversationId ?? undefined,
-        confirmPrompt:
-          searchResult.kind === 'needs_location'
-            ? USE_LOCATION_PROMPT
-            : undefined,
       };
     }
 

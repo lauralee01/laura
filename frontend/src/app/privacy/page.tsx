@@ -7,7 +7,7 @@ export default function PrivacyPage() {
   return (
     <LegalPageShell
       title="Privacy Policy"
-      updated="Last updated: November 23, 2026"
+      updated="Last updated: June 29, 2026"
     >
       <LegalSection title="Introduction">
         <p>
@@ -33,41 +33,6 @@ export default function PrivacyPage() {
             Optional long-term memories that Laura stores to personalize future
             conversations.
           </li>
-          <li>
-            A city-level location (for example, &quot;Boston, MA&quot;) that
-            you type in or choose to share from your browser, used for local
-            searches and weather. See &quot;Location&quot; below.
-          </li>
-        </ul>
-      </LegalSection>
-
-      <LegalSection title="Location">
-        <p>
-          Laura only asks for your browser location when you choose{' '}
-          <strong>Use my current location</strong>, and never when the page
-          loads. Your browser will ask for permission, and you can decline or
-          change that at any time in your browser&apos;s site settings.
-        </p>
-        <ul>
-          <li>
-            Your device&apos;s coordinates are rounded to roughly 1 km and sent
-            once to a reverse-geocoding service (OpenStreetMap Nominatim) to
-            find the nearest city.
-          </li>
-          <li>
-            Laura saves only the resulting city name. Exact coordinates are
-            not stored or logged.
-          </li>
-          <li>
-            If you have already allowed location in your browser, Laura may
-            refresh your saved city when you open the app. You can turn this
-            off in Settings, or by typing a different city there.
-          </li>
-          <li>
-            The saved city may be included in web searches (for example,
-            &quot;weather in Boston, MA&quot;) and in the context Laura gives
-            the AI model. You can change or clear it in Settings at any time.
-          </li>
         </ul>
       </LegalSection>
 
@@ -77,7 +42,6 @@ export default function PrivacyPage() {
           <li>Create, edit, or list calendar events.</li>
           <li>Create and send Gmail drafts upon your request.</li>
           <li>Improve conversation continuity using stored memories.</li>
-          <li>Answer location-aware questions such as weather and nearby places.</li>
         </ul>
       </LegalSection>
 

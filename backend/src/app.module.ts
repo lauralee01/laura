@@ -10,7 +10,6 @@ import { EmailModule } from './integrations/email/email.module';
 import { CalendarModule } from './integrations/calendar/calendar.module';
 import { GoogleOAuthModule } from './integrations/google/google-oauth.module';
 import { WebSearchModule } from './integrations/web-search/web-search.module';
-import { GeocodeModule } from './integrations/geocode/geocode.module';
 import { SessionCookieMiddleware } from './common/session/session-cookie.middleware';
 
 @Module({
@@ -25,7 +24,6 @@ import { SessionCookieMiddleware } from './common/session/session-cookie.middlew
     CalendarModule,
     GoogleOAuthModule,
     WebSearchModule,
-    GeocodeModule,
   ],
   controllers: [AppController],
   providers: [AppService, SessionPreferencesService, SessionCookieMiddleware],

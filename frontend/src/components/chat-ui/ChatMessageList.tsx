@@ -3,7 +3,6 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ActionReceiptStrip } from '@/components/chat-ui/ActionReceiptStrip';
 import { ConfirmChipStrip } from '@/components/chat-ui/ConfirmChipStrip';
-import { LocationChipStrip } from '@/components/chat-ui/LocationChipStrip';
 import { ChatEmptyState } from '@/components/chat-ui/ChatEmptyState';
 import { MessageCopyButton } from '@/components/chat-ui/MessageCopyButton';
 import type { StoredChatMessage } from '@/lib/session';
@@ -175,20 +174,12 @@ export const ChatMessageList = memo(function ChatMessageList({
                 m.confirmPrompt &&
                 !isStreamingAssistant &&
                 onConfirmChip ? (
-                  m.confirmPrompt.kind === 'use_location' ? (
-                    <LocationChipStrip
-                      prompt={m.confirmPrompt}
-                      disabled={chipsDisabled}
-                      onLocation={onConfirmChip}
-                    />
-                  ) : (
-                    <ConfirmChipStrip
-                      prompt={m.confirmPrompt}
-                      disabled={chipsDisabled}
-                      onConfirm={onConfirmChip}
-                      onCancel={onConfirmChip}
-                    />
-                  )
+                  <ConfirmChipStrip
+                    prompt={m.confirmPrompt}
+                    disabled={chipsDisabled}
+                    onConfirm={onConfirmChip}
+                    onCancel={onConfirmChip}
+                  />
                 ) : null}
               </div>
             </li>

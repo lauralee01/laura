@@ -2,12 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
-  describeLocationError,
-  detectBrowserLocation,
-  isAutoLocationEnabled,
-  setAutoLocationEnabled,
-} from '@/lib/browser-location';
-import {
   fetchSessionPrefs,
   patchSessionPrefs,
   type SessionPrefs,
@@ -20,9 +14,6 @@ export function useSettingsPanel(open: boolean, sessionReady: boolean) {
   const [location, setLocation] = useState('');
   const [timeZone, setTimeZone] = useState('');
   const [meetingMinutes, setMeetingMinutes] = useState('60');
-  const [autoLocation, setAutoLocation] = useState(true);
-  const [loadedAutoLocation, setLoadedAutoLocation] = useState(true);
-  const [detectingLocation, setDetectingLocation] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,9 +37,6 @@ export function useSettingsPanel(open: boolean, sessionReady: boolean) {
     setError(null);
     try {
       applyPrefs(await fetchSessionPrefs());
-      const auto = isAutoLocationEnabled();
-      setAutoLocation(auto);
-      setLoadedAutoLocation(auto);
     } catch (err: unknown) {
       setError(
         err instanceof Error ? err.message : 'Could not load settings.',
@@ -75,25 +63,6 @@ export function useSettingsPanel(open: boolean, sessionReady: boolean) {
     return () => window.clearTimeout(id);
   }, [savedFlash, clearSavedFlash]);
 
-  /** Asks the browser for the current city and fills the Home city field. */
-  const detectLocationNow = useCallback(async () => {
-    setDetectingLocation(true);
-    setError(null);
-    try {
-      const city = await detectBrowserLocation();
-      setLocation(city);
-      // The backend already stored it, so treat it as the saved value:
-      // saving must not read this as a manual edit.
-      setPrefs((current) => (current ? { ...current, location: city } : current));
-      // They just opted in to device location, so keep it fresh.
-      setAutoLocation(true);
-    } catch (err: unknown) {
-      setError(describeLocationError(err));
-    } finally {
-      setDetectingLocation(false);
-    }
-  }, []);
-
   const save = useCallback(async () => {
     const minutes = Number(meetingMinutes);
     if (!Number.isFinite(minutes) || minutes < 15 || minutes > 180) {
@@ -109,31 +78,12 @@ export function useSettingsPanel(open: boolean, sessionReady: boolean) {
     setError(null);
     setSavedFlash(false);
     try {
-      const trimmedLocation = location.trim();
       const next = await patchSessionPrefs({
         tone,
         timeZone: timeZone.trim(),
-        location: trimmedLocation ? trimmedLocation : null,
+        location: location.trim() ? location.trim() : null,
         defaultMeetingMinutes: Math.round(minutes),
       });
-
-      /*
-       * Typing a different city means "use this one": switch off the quiet
-       * device refresh so it doesn't overwrite it on the next page load
-       * (unless they explicitly changed the toggle in the same save).
-       */
-      const locationEdited =
-        trimmedLocation !== (prefs?.location ?? '').trim();
-      const nextAuto =
-        locationEdited &&
-        trimmedLocation &&
-        autoLocation === loadedAutoLocation
-          ? false
-          : autoLocation;
-      setAutoLocationEnabled(nextAuto);
-      setAutoLocation(nextAuto);
-      setLoadedAutoLocation(nextAuto);
-
       applyPrefs(next);
       setSavedFlash(true);
     } catch (err: unknown) {
@@ -143,16 +93,7 @@ export function useSettingsPanel(open: boolean, sessionReady: boolean) {
     } finally {
       setSaving(false);
     }
-  }, [
-    meetingMinutes,
-    timeZone,
-    tone,
-    location,
-    prefs,
-    autoLocation,
-    loadedAutoLocation,
-    applyPrefs,
-  ]);
+  }, [meetingMinutes, timeZone, tone, location, applyPrefs]);
 
   return {
     prefs,
@@ -164,10 +105,6 @@ export function useSettingsPanel(open: boolean, sessionReady: boolean) {
     setTimeZone,
     meetingMinutes,
     setMeetingMinutes,
-    autoLocation,
-    setAutoLocation,
-    detectingLocation,
-    detectLocationNow,
     loading,
     saving,
     error,
