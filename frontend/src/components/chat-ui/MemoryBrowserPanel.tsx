@@ -78,7 +78,7 @@ export function MemoryBrowserPanel({ open, onClose, sessionReady }: Props) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-[var(--radius-sm)] px-2 py-1.5 text-xs font-medium text-ink-muted transition hover:bg-canvas-mid hover:text-ink"
+            className="cursor-pointer rounded-[var(--radius-sm)] px-2 py-1.5 text-xs font-medium text-ink-muted transition hover:bg-canvas-mid hover:text-ink"
           >
             Close
           </button>
