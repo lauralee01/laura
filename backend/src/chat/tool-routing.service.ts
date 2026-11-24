@@ -2,6 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { GoogleOAuthService } from '../integrations/google/google-oauth.service';
 import {
   coerceToolReply,
+  toolConfirm,
+  USE_LOCATION_PROMPT,
+  WEB_SEARCH_LOCATION_QUESTION,
   type ActionReceipt,
   type ConfirmPrompt,
   type ToolReplyInput,
@@ -236,7 +239,9 @@ export class ToolRoutingService {
               message,
               envelope,
             });
-            take('Which town or city should I use for this search?');
+            take(
+              toolConfirm(WEB_SEARCH_LOCATION_QUESTION, USE_LOCATION_PROMPT),
+            );
           } else {
             take(searchResult.text);
             alreadyStreamed = Boolean(searchResult.streamed);

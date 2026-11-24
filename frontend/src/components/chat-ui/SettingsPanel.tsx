@@ -21,6 +21,10 @@ export function SettingsPanel({ open, onClose, sessionReady }: Props) {
     setTimeZone,
     meetingMinutes,
     setMeetingMinutes,
+    autoLocation,
+    setAutoLocation,
+    detectingLocation,
+    detectLocationNow,
     loading,
     saving,
     error,
@@ -94,9 +98,13 @@ export function SettingsPanel({ open, onClose, sessionReady }: Props) {
               location={location}
               timeZone={timeZone}
               meetingMinutes={meetingMinutes}
+              autoLocation={autoLocation}
+              detectingLocation={detectingLocation}
               disabled={saving}
               onToneChange={setTone}
               onLocationChange={setLocation}
+              onAutoLocationChange={setAutoLocation}
+              onDetectLocation={() => void detectLocationNow()}
               onTimeZoneChange={setTimeZone}
               onMeetingMinutesChange={setMeetingMinutes}
             />

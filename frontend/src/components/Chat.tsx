@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import { useChat } from '@/hooks/useChat';
+import { useAutoLocationRefresh } from '@/hooks/useAutoLocationRefresh';
 import {
   ChatComposer,
   ChatDesktopSidebar,
@@ -44,6 +45,9 @@ export function Chat() {
     isBusy,
     isGenerating,
   } = useChat();
+
+  // Quietly refresh the stored city if the browser already allowed location.
+  useAutoLocationRefresh(sessionReady);
 
   const [memoriesOpen, setMemoriesOpen] = useState(false);
   const [writingDeskOpen, setWritingDeskOpen] = useState(false);

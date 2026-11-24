@@ -25,7 +25,8 @@ export type ActionReceipt = {
 export type ConfirmPromptKind =
   | 'email_send'
   | 'calendar_delete'
-  | 'email_recipient';
+  | 'email_recipient'
+  | 'use_location';
 
 export type ConfirmPrompt = {
   kind: ConfirmPromptKind;
@@ -57,6 +58,24 @@ export const EMAIL_RECIPIENT_CONFIRM_PROMPT: ConfirmPrompt = {
   cancelLabel: 'Different address',
   confirmText: 'yes',
   cancelText: 'different address',
+};
+
+/** Question Laura asks when a search needs a place and none is known. */
+export const WEB_SEARCH_LOCATION_QUESTION =
+  'Which town or city should I use for this search?';
+
+/**
+ * "Use my current location" chip shown with the location question.
+ * Unlike the yes/no chips, the client handles this one locally (it asks the
+ * browser for permission, then answers the question with the detected city),
+ * so the *Text fields are unused for this kind.
+ */
+export const USE_LOCATION_PROMPT: ConfirmPrompt = {
+  kind: 'use_location',
+  confirmLabel: 'Use my current location',
+  cancelLabel: 'Type a city',
+  confirmText: 'use my current location',
+  cancelText: 'type a city',
 };
 
 /** Tool handler reply: chat text plus optional receipt / confirm chips for the UI. */

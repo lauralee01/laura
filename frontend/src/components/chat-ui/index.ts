@@ -7,6 +7,7 @@ export { ChatComposer } from './ChatComposer';
 export { ChatErrorBanner } from './ChatErrorBanner';
 export { ActionReceiptStrip } from './ActionReceiptStrip';
 export { ConfirmChipStrip } from './ConfirmChipStrip';
+export { LocationChipStrip } from './LocationChipStrip';
 export { MemoryBrowserPanel } from './MemoryBrowserPanel';
 export { WritingDeskPanel } from './WritingDeskPanel';
 export { SettingsPanel } from './SettingsPanel';
