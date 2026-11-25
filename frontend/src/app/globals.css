@@ -212,7 +212,9 @@ body {
 
 /* Keep focus on the shell only — no nested outline on the textarea. */
 .laura-composer-shell textarea:focus,
-.laura-composer-shell textarea:focus-visible {
+.laura-composer-shell textarea:focus-visible,
+.laura-composer-shell input:focus,
+.laura-composer-shell input:focus-visible {
   outline: none;
 }
 

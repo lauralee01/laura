@@ -223,7 +223,7 @@ export function ConversationalAuth() {
                   onKeyDown={enterSubmits}
                   disabled={submitting}
                   autoFocus
-                  className="min-h-[2.75rem] min-w-0 flex-1 bg-transparent text-lg text-ink outline-none [&:focus-visible]:outline-none placeholder:text-ink-muted"
+                  className="min-h-[2.75rem] min-w-0 flex-1 bg-transparent text-lg text-ink outline-none placeholder:text-ink-muted"
                 />
                 <button
                   type="submit"
