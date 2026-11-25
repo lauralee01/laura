@@ -1,116 +1,54 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   useEffect,
   useEffectEvent,
-  useReducer,
-  useRef,
   useState,
   useSyncExternalStore,
   type FormEvent,
-  type ReactNode,
+  type KeyboardEvent,
 } from 'react';
-import { BrandLockup } from '@/components/BrandLockup';
+import { IconSend } from '@/components/chat-ui/ChatIcons';
 import { GoogleMark } from '@/components/auth/AuthCard';
 
 /**
  * PREVIEW ONLY — conversational sign-in prototype. Nothing is sent anywhere.
- * Passwords are never shown as text (they appear as dots in the transcript).
+ * Laura "speaks" in large typed text; the matching field appears underneath.
+ * After the password step the user goes straight to the chat.
  */
 
-type Step = 'email' | 'password' | 'code' | 'signing';
-type Line = { id: number; text: string };
-type Message = Line & { from: 'laura' | 'user' };
+type Step = 'email' | 'password';
+type TypedLine = { text: string; className: string };
 
-type State = {
-  messages: Message[];
-  queue: Line[];
-  typing: Line | null;
-  nextId: number;
+const BIG_LINE =
+  'text-3xl font-semibold leading-tight tracking-tight text-ink sm:text-5xl';
+const SUB_LINE = 'text-xl leading-snug text-ink-muted sm:text-3xl';
+
+const STEP_LINES: Record<Step, TypedLine[]> = {
+  email: [
+    { text: "Hi, I'm laura, your personal assistant.", className: BIG_LINE },
+    {
+      text: 'Kindly give me your email to help you get started.',
+      className: `mt-4 ${SUB_LINE}`,
+    },
+  ],
+  password: [
+    { text: 'Thank you.', className: BIG_LINE },
+    {
+      text: 'Please give me your password to help you get started.',
+      className: `mt-4 ${SUB_LINE}`,
+    },
+  ],
 };
 
-type Action =
-  | { type: 'say'; texts: string[] }
-  | { type: 'user'; text: string }
-  | { type: 'finishLine' }
-  | { type: 'reset' };
-
-const INTRO = [
-  "Hi, I'm laura.",
-  "I'm your personal assistant. I'm here to help you get through your day.",
-  "What's your email?",
-];
-
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const TYPE_MS = 24;
-const FIRST_CHAR_MS = 450;
-const LINE_PAUSE_MS = 300;
+const TYPE_MS = 28;
+const FIRST_LINE_START_MS = 500;
+const NEXT_LINE_START_MS = 150;
+const LINE_PAUSE_MS = 350;
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
-
-const inputClass =
-  'w-full rounded-[var(--radius-md)] border border-border bg-canvas px-3 py-2.5 text-sm text-ink outline-none transition placeholder:text-ink-muted focus:border-accent/60';
-
-const primaryButtonClass =
-  'w-full cursor-pointer rounded-[var(--radius-md)] bg-accent px-3 py-2.5 text-sm font-medium text-surface-elevated transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50';
-
-const linkButtonClass =
-  'cursor-pointer text-xs font-medium text-accent underline-offset-2 transition hover:text-accent-hover hover:underline';
-
-/* ---------- state: a tiny queue so Laura's lines type out one at a time ---------- */
-
-function startNext(s: State): State {
-  if (s.typing !== null || s.queue.length === 0) {
-    return s;
-  }
-  const [first, ...rest] = s.queue;
-  return { ...s, typing: first, queue: rest };
-}
-
-function initialState(): State {
-  return startNext({
-    messages: [],
-    queue: INTRO.map((text, id) => ({ id, text })),
-    typing: null,
-    nextId: INTRO.length,
-  });
-}
-
-function reducer(s: State, action: Action): State {
-  switch (action.type) {
-    case 'say':
-      return startNext({
-        ...s,
-        queue: [
-          ...s.queue,
-          ...action.texts.map((text, i) => ({ id: s.nextId + i, text })),
-        ],
-        nextId: s.nextId + action.texts.length,
-      });
-    case 'user':
-      return {
-        ...s,
-        messages: [
-          ...s.messages,
-          { id: s.nextId, text: action.text, from: 'user' },
-        ],
-        nextId: s.nextId + 1,
-      };
-    case 'finishLine':
-      if (!s.typing) {
-        return s;
-      }
-      return startNext({
-        ...s,
-        messages: [...s.messages, { ...s.typing, from: 'laura' }],
-        typing: null,
-      });
-    case 'reset':
-      return initialState();
-  }
-}
-
-/* ---------- accessibility + motion ---------- */
 
 function usePrefersReducedMotion(): boolean {
   return useSyncExternalStore(
@@ -124,390 +62,227 @@ function usePrefersReducedMotion(): boolean {
   );
 }
 
-/* ---------- bubbles ---------- */
-
-function LauraBubble({ children }: { children: ReactNode }) {
-  return (
-    <div className="laura-message-enter flex justify-start">
-      <div className="max-w-[85%] rounded-[var(--radius-lg)] bg-surface-elevated/90 px-4 py-2.5 text-sm leading-relaxed text-ink shadow-soft">
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function UserBubble({ children }: { children: ReactNode }) {
-  return (
-    <div className="laura-message-enter flex justify-end">
-      <div className="max-w-[85%] break-words rounded-[var(--radius-lg)] bg-accent-soft px-4 py-2.5 text-sm leading-relaxed text-ink">
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function TypingDots() {
-  return (
-    <span className="inline-flex gap-1 py-1" aria-hidden="true">
-      <span className="laura-think-dot h-1.5 w-1.5 rounded-full bg-accent/80" />
-      <span className="laura-think-dot h-1.5 w-1.5 rounded-full bg-accent/80" />
-      <span className="laura-think-dot h-1.5 w-1.5 rounded-full bg-accent/80" />
-    </span>
-  );
-}
-
 /**
- * One of Laura's lines, typed out character by character. The full text stays
- * in the DOM for screen readers; the visible typing is hidden from them.
+ * Types out Laura's lines one after another as big text on the page.
+ * The full text is exposed to screen readers immediately; the typing is
+ * visual only. Calls onComplete once everything is on screen.
  */
-function TypingLine({ text, onDone }: { text: string; onDone: () => void }) {
+function TypedLines({
+  lines,
+  onComplete,
+}: {
+  lines: TypedLine[];
+  onComplete: () => void;
+}) {
   const reduceMotion = usePrefersReducedMotion();
+  const [lineIndex, setLineIndex] = useState(0);
   const [count, setCount] = useState(0);
-  const finished = reduceMotion || count >= text.length;
+  const handleComplete = useEffectEvent(() => onComplete());
 
-  // Reading the latest callback from an effect event keeps the typing timer
-  // from restarting on every parent render.
-  const handleDone = useEffectEvent(() => onDone());
+  const allDone = reduceMotion || lineIndex >= lines.length;
+  const current = allDone ? null : lines[lineIndex];
+  const lineDone = current !== null && count >= current.text.length;
 
   useEffect(() => {
-    const delay = finished
-      ? reduceMotion
-        ? 0
-        : LINE_PAUSE_MS
+    if (allDone) {
+      const timer = window.setTimeout(handleComplete, reduceMotion ? 0 : 150);
+      return () => window.clearTimeout(timer);
+    }
+
+    const delay = lineDone
+      ? LINE_PAUSE_MS
       : count === 0
-        ? FIRST_CHAR_MS
+        ? lineIndex === 0
+          ? FIRST_LINE_START_MS
+          : NEXT_LINE_START_MS
         : TYPE_MS;
+
     const timer = window.setTimeout(() => {
-      if (finished) {
-        handleDone();
+      if (lineDone) {
+        setLineIndex((i) => i + 1);
+        setCount(0);
       } else {
         setCount((c) => c + 1);
       }
     }, delay);
     return () => window.clearTimeout(timer);
-  }, [count, finished, reduceMotion]);
+  }, [allDone, lineDone, count, lineIndex, reduceMotion]);
 
-  const visible = finished ? text : text.slice(0, count);
-  const showDots = !finished && count === 0;
-
-  return (
-    <>
-      <LauraBubble>
-        <span className="sr-only">{text}</span>
-        <span aria-hidden="true">
-          {showDots ? (
-            <TypingDots />
-          ) : (
-            <>
-              {visible}
-              {finished ? null : (
-                <span className="ml-0.5 inline-block h-3.5 w-1.5 translate-y-[2px] rounded-sm bg-accent animate-pulse" />
-              )}
-            </>
-          )}
-        </span>
-      </LauraBubble>
-      {!finished && count > 0 ? (
-        <div className="-mt-1 flex justify-start">
-          <button
-            type="button"
-            onClick={() => setCount(text.length)}
-            className="cursor-pointer px-1 text-[11px] text-ink-muted transition hover:text-ink"
-          >
-            Skip
-          </button>
-        </div>
-      ) : null}
-    </>
-  );
-}
-
-/* ---------- controls ---------- */
-
-function Card({ children }: { children: ReactNode }) {
-  return (
-    <div className="laura-message-enter rounded-[var(--radius-lg)] border border-border-subtle bg-surface-elevated/90 p-4 shadow-soft">
-      {children}
-    </div>
-  );
-}
-
-function OrDivider() {
-  return (
-    <div className="my-4 flex items-center gap-3" aria-hidden="true">
-      <span className="h-px flex-1 bg-border-subtle" />
-      <span className="text-[11px] uppercase tracking-wide text-ink-muted">
-        or
-      </span>
-      <span className="h-px flex-1 bg-border-subtle" />
-    </div>
-  );
-}
-
-function GoogleButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex w-full cursor-pointer items-center justify-center gap-2.5 rounded-[var(--radius-md)] border border-border bg-canvas px-3 py-2.5 text-sm font-medium text-ink transition hover:border-accent/40"
-    >
-      <GoogleMark />
-      Continue with Google
-    </button>
-  );
-}
-
-/* ---------- main ---------- */
-
-export function ConversationalAuth() {
-  const [state, dispatch] = useReducer(reducer, undefined, initialState);
-  const [step, setStep] = useState<Step>('email');
-  const [value, setValue] = useState('');
-  const [email, setEmail] = useState('');
-  const bottomRef = useRef<HTMLDivElement | null>(null);
-  const reduceMotion = usePrefersReducedMotion();
-
-  const inputReady = state.typing === null && state.queue.length === 0;
-  const signedIn = step === 'signing' && inputReady;
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({
-      behavior: reduceMotion ? 'auto' : 'smooth',
-      block: 'end',
-    });
-  }, [state.messages.length, state.typing, inputReady, step, reduceMotion]);
-
-  const onEmailSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    const trimmed = value.trim();
-    if (!EMAIL_RE.test(trimmed)) {
-      dispatch({
-        type: 'say',
-        texts: ["That doesn't look like an email yet. Could you check it?"],
-      });
-      return;
-    }
-    setEmail(trimmed);
-    setValue('');
-    setStep('password');
-    dispatch({ type: 'user', text: trimmed });
-    dispatch({
-      type: 'say',
-      texts: ['Thanks. Enter your password to continue.'],
-    });
+  const skip = () => {
+    setLineIndex(lines.length);
+    setCount(0);
   };
 
-  const onPasswordSubmit = (e: FormEvent) => {
+  const finishedLines = allDone ? lines : lines.slice(0, lineIndex);
+
+  return (
+    <div>
+      <h1 className="sr-only">{lines.map((l) => l.text).join(' ')}</h1>
+
+      <div aria-hidden="true">
+        {finishedLines.map((line) => (
+          <p key={line.text} className={line.className}>
+            {line.text}
+          </p>
+        ))}
+        {current ? (
+          <p className={current.className}>
+            {current.text.slice(0, count)}
+            <span className="ml-1 inline-block h-[0.85em] w-[0.12em] translate-y-[0.08em] rounded-sm bg-accent animate-pulse" />
+          </p>
+        ) : null}
+      </div>
+
+      {!allDone && (lineIndex > 0 || count > 0) ? (
+        <button
+          type="button"
+          onClick={skip}
+          className="mt-4 cursor-pointer text-xs text-ink-muted transition hover:text-ink"
+        >
+          Skip
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function enterSubmits(e: KeyboardEvent<HTMLInputElement>) {
+  if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
     e.preventDefault();
+    e.currentTarget.form?.requestSubmit();
+  }
+}
+
+export function ConversationalAuth() {
+  const router = useRouter();
+  const [step, setStep] = useState<Step>('email');
+  const [readyStep, setReadyStep] = useState<Step | null>(null);
+  const [value, setValue] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const ready = readyStep === step;
+  const isEmail = step === 'email';
+
+  const onSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    if (submitting) {
+      return;
+    }
+
+    if (isEmail) {
+      if (!EMAIL_RE.test(value.trim())) {
+        setError("That doesn't look like an email yet. Could you check it?");
+        return;
+      }
+      setError(null);
+      setNotice(null);
+      setValue('');
+      setStep('password');
+      return;
+    }
+
     if (!value) {
       return;
     }
+    // Preview only: no request is made. Straight into the chat.
+    setSubmitting(true);
     setValue('');
-    setStep('signing');
-    dispatch({ type: 'user', text: '••••••••' });
-    dispatch({
-      type: 'say',
-      texts: ['Perfect. Signing you in…', "You're all set."],
-    });
+    router.push('/');
   };
-
-  const onCodeSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    const trimmed = value.trim();
-    if (!/^\d{6}$/.test(trimmed)) {
-      dispatch({
-        type: 'say',
-        texts: ['That code should be 6 digits. Try again?'],
-      });
-      return;
-    }
-    setValue('');
-    setStep('signing');
-    dispatch({ type: 'user', text: trimmed });
-    dispatch({
-      type: 'say',
-      texts: ['Code accepted. Signing you in…', "You're all set."],
-    });
-  };
-
-  const onEmailCode = () => {
-    setValue('');
-    setStep('code');
-    dispatch({ type: 'user', text: 'Email me a code instead' });
-    dispatch({
-      type: 'say',
-      texts: [
-        `No problem. I'll send a 6-digit code to ${email}. Type it here when it arrives.`,
-      ],
-    });
-  };
-
-  const onGoogle = () => {
-    dispatch({ type: 'user', text: 'Continue with Google' });
-    dispatch({
-      type: 'say',
-      texts: [
-        'Google sign-in would open here. This is a preview, so nothing was sent.',
-      ],
-    });
-  };
-
-  const onReset = () => {
-    dispatch({ type: 'reset' });
-    setStep('email');
-    setValue('');
-    setEmail('');
-  };
-
-  let controls: ReactNode = null;
-
-  if (signedIn) {
-    controls = (
-      <Card>
-        <p className="text-sm text-ink">
-          You&apos;re signed in as <strong>{email}</strong>.
-        </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Link
-            href="/"
-            className="cursor-pointer rounded-[var(--radius-md)] bg-accent px-3 py-2 text-sm font-medium text-surface-elevated transition hover:bg-accent-hover"
-          >
-            Continue to chat
-          </Link>
-          <button
-            type="button"
-            onClick={onReset}
-            className="cursor-pointer rounded-[var(--radius-md)] border border-border bg-canvas px-3 py-2 text-sm font-medium text-ink transition hover:border-accent/40"
-          >
-            Start over
-          </button>
-        </div>
-        <p className="mt-3 text-[11px] text-ink-muted">
-          Preview only. Nothing was saved.
-        </p>
-      </Card>
-    );
-  } else if (inputReady && step === 'email') {
-    controls = (
-      <Card>
-        <form onSubmit={onEmailSubmit} className="space-y-3" noValidate>
-          <input
-            type="email"
-            autoComplete="email"
-            inputMode="email"
-            placeholder="you@example.com"
-            aria-label="Email"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            autoFocus
-            className={inputClass}
-          />
-          <button type="submit" className={primaryButtonClass}>
-            Continue
-          </button>
-        </form>
-        <OrDivider />
-        <GoogleButton onClick={onGoogle} />
-      </Card>
-    );
-  } else if (inputReady && step === 'password') {
-    controls = (
-      <Card>
-        <form onSubmit={onPasswordSubmit} className="space-y-3">
-          <input
-            type="password"
-            autoComplete="current-password"
-            placeholder="Your password"
-            aria-label="Password"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            autoFocus
-            required
-            className={inputClass}
-          />
-          <button type="submit" className={primaryButtonClass}>
-            Continue
-          </button>
-        </form>
-        <div className="mt-3 flex justify-end">
-          <button type="button" onClick={onEmailCode} className={linkButtonClass}>
-            Email me a code instead
-          </button>
-        </div>
-        <OrDivider />
-        <GoogleButton onClick={onGoogle} />
-      </Card>
-    );
-  } else if (inputReady && step === 'code') {
-    controls = (
-      <Card>
-        <form onSubmit={onCodeSubmit} className="space-y-3" noValidate>
-          <input
-            type="text"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={6}
-            placeholder="123456"
-            aria-label="6-digit code"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            autoFocus
-            className={`${inputClass} text-center font-mono text-lg tracking-[0.5em]`}
-          />
-          <button type="submit" className={primaryButtonClass}>
-            Verify and continue
-          </button>
-        </form>
-      </Card>
-    );
-  }
 
   return (
-    <main className="flex min-h-[100dvh] items-center justify-center px-4 py-10 text-ink">
-      <div className="w-full max-w-md">
-        <div className="mb-8 flex justify-center">
-          <BrandLockup size="md" />
-        </div>
+    <main className="flex min-h-[100dvh] flex-col items-center px-6 pb-8 pt-[18vh] text-ink sm:pt-[22vh]">
+      <div className="w-full max-w-2xl">
+        <TypedLines
+          key={step}
+          lines={STEP_LINES[step]}
+          onComplete={() => setReadyStep(step)}
+        />
 
-        <div className="flex flex-col gap-3">
-          {state.messages.map((m) =>
-            m.from === 'laura' ? (
-              <LauraBubble key={m.id}>{m.text}</LauraBubble>
-            ) : (
-              <UserBubble key={m.id}>{m.text}</UserBubble>
-            ),
-          )}
-          {state.typing ? (
-            <TypingLine
-              key={state.typing.id}
-              text={state.typing.text}
-              onDone={() => dispatch({ type: 'finishLine' })}
-            />
-          ) : null}
-        </div>
+        {ready ? (
+          <div className="laura-empty-enter mt-10">
+            <form onSubmit={onSubmit} noValidate>
+              <div className="laura-composer-shell flex items-center gap-2 rounded-[var(--radius-lg)] border border-border bg-surface-elevated px-4 py-2 shadow-soft">
+                <input
+                  key={step}
+                  type={isEmail ? 'email' : 'password'}
+                  autoComplete={isEmail ? 'email' : 'current-password'}
+                  inputMode={isEmail ? 'email' : undefined}
+                  placeholder={isEmail ? 'you@example.com' : 'Your password'}
+                  aria-label={isEmail ? 'Email' : 'Password'}
+                  aria-invalid={error ? true : undefined}
+                  value={value}
+                  onChange={(e) => {
+                    setValue(e.target.value);
+                    if (error) {
+                      setError(null);
+                    }
+                  }}
+                  onKeyDown={enterSubmits}
+                  disabled={submitting}
+                  autoFocus
+                  className="min-h-[2.75rem] min-w-0 flex-1 bg-transparent text-lg text-ink outline-none placeholder:text-ink-muted"
+                />
+                <button
+                  type="submit"
+                  disabled={submitting || !value}
+                  aria-label={isEmail ? 'Continue' : 'Sign in'}
+                  className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-[var(--radius-md)] bg-accent text-surface-elevated transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  <IconSend />
+                </button>
+              </div>
+            </form>
 
-        <div ref={bottomRef} className="mt-4">
-          {controls}
-        </div>
+            {error ? (
+              <p role="alert" className="mt-3 text-sm text-danger">
+                {error}
+              </p>
+            ) : null}
 
-        <p className="mt-6 text-center text-[11px] leading-relaxed text-ink-muted">
-          By continuing, you agree to Laura&apos;s{' '}
-          <Link
-            href="/terms"
-            className="underline underline-offset-2 transition hover:text-ink"
-          >
-            Terms
-          </Link>{' '}
-          and{' '}
-          <Link
-            href="/privacy"
-            className="underline underline-offset-2 transition hover:text-ink"
-          >
-            Privacy Policy
-          </Link>
-          .
-        </p>
+            <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setNotice(
+                    'Google sign-in would open here. This is a preview, so nothing was sent.',
+                  )
+                }
+                className="inline-flex cursor-pointer items-center gap-2 rounded-[var(--radius-md)] border border-border bg-surface-elevated/60 px-3 py-2 text-sm font-medium text-ink transition hover:border-accent/40"
+              >
+                <GoogleMark />
+                Or continue with Google
+              </button>
+            </div>
+
+            {notice ? (
+              <p role="status" className="mt-3 text-sm text-ink-muted">
+                {notice}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </div>
+
+      <p className="mt-auto pt-12 text-center text-[11px] leading-relaxed text-ink-muted">
+        By continuing, you agree to Laura&apos;s{' '}
+        <Link
+          href="/terms"
+          className="underline underline-offset-2 transition hover:text-ink"
+        >
+          Terms
+        </Link>{' '}
+        and{' '}
+        <Link
+          href="/privacy"
+          className="underline underline-offset-2 transition hover:text-ink"
+        >
+          Privacy Policy
+        </Link>
+        .
+      </p>
     </main>
   );
 }
