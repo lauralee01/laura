@@ -1,10 +1,9 @@
 import type { Metadata } from 'next';
-import { AuthCard } from '@/components/auth/AuthCard';
+import { ConversationalAuth } from '@/components/auth/ConversationalAuth';
 
 /**
- * TEMPORARY route for previewing the sign in / sign up design.
- * UI only — not wired to any backend. Move/rename (e.g. /login) once auth
- * is built, and remove this route.
+ * TEMPORARY route for previewing the conversational sign-in design.
+ * UI only — not wired to any backend. Remove once real auth exists.
  */
 export const metadata: Metadata = {
   title: 'Sign in — laura',
@@ -12,5 +11,5 @@ export const metadata: Metadata = {
 };
 
 export default function AuthPreviewPage() {
-  return <AuthCard />;
+  return <ConversationalAuth />;
 }

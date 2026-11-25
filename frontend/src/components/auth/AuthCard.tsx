@@ -20,7 +20,7 @@ const primaryButtonClass =
 const linkButtonClass =
   'cursor-pointer text-xs font-medium text-accent underline-offset-2 transition hover:text-accent-hover hover:underline';
 
-function GoogleMark() {
+export function GoogleMark() {
   return (
     <svg
       width="18"
