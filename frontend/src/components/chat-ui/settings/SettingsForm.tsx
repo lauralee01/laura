@@ -9,6 +9,8 @@ const TONE_LABELS: Record<SessionTone, string> = {
   casual: 'Casual',
 };
 
+/** settings form for chat ui */
+
 const fieldClass =
   'mt-1 w-full rounded-[var(--radius-sm)] border border-border bg-canvas px-2.5 py-2 text-sm text-ink outline-none focus:border-accent/50';
 
