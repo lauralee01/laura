@@ -7,6 +7,10 @@ type Props = {
   onConfirm: () => void;
 };
 
+/**
+ * Memory Delete Dialog
+ */
+
 export function MemoryDeleteDialog({
   target,
   deleting,
