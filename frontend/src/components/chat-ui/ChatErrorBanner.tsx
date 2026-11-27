@@ -3,6 +3,8 @@ type Props = {
   onDismiss?: () => void;
 };
 
+/** error banner for chat ui */
+
 export function ChatErrorBanner({ message, onDismiss }: Props) {
   return (
     <div className="mx-auto mb-1 flex w-full max-w-2xl shrink-0 items-start justify-between gap-3 rounded-[var(--radius-md)] border border-danger/25 bg-danger-soft px-4 py-2.5 text-sm text-danger">
