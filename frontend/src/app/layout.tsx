@@ -12,6 +12,10 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+/**
+ * Metadata
+ */
+
 export const metadata: Metadata = {
   title: "laura — personalized AI assistant",
   description: "Chat with laura, your personalized AI assistant.",
