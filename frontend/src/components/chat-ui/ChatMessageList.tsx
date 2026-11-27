@@ -7,6 +7,8 @@ import { ChatEmptyState } from '@/components/chat-ui/ChatEmptyState';
 import { MessageCopyButton } from '@/components/chat-ui/MessageCopyButton';
 import type { StoredChatMessage } from '@/lib/session';
 
+/** message list for chat ui */
+
 type Props = {
   messages: StoredChatMessage[];
   showThinking: boolean;
