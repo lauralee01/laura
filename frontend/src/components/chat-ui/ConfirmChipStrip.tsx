@@ -7,6 +7,8 @@ type Props = {
   onCancel: (text: string) => void;
 };
 
+/** confirm chip strip for chat ui */
+
 export function ConfirmChipStrip({
   prompt,
   disabled,
