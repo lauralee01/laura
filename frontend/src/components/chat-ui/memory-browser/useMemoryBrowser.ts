@@ -8,6 +8,10 @@ import {
   type MemoryItem,
 } from '@/lib/memory-api';
 
+/**
+ * Use Memory Browser
+ */
+
 function useAutoClearFlash(active: boolean, clear: () => void) {
   useEffect(() => {
     if (!active) {
